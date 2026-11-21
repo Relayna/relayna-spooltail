@@ -1,4 +1,6 @@
 /target/
 /data/
 /.venv/
+/python/.venv/
+/python/dist/
 __pycache__/
