@@ -1,0 +1,1359 @@
+{
+  "started_utc": "2026-11-20T08:30:36.063277+00:00",
+  "settings": {
+    "workload": "random-reads",
+    "trials": 3,
+    "timeout": 3600,
+    "read_tasks": 10000,
+    "statuses": 6,
+    "readers": 16,
+    "reads_per_reader": 160,
+    "seed": 1729
+  },
+  "sdk_revision": "de4c60f052a9af7cd5d5543430c6f4e8b47cd327",
+  "spooltail_revision": "6fcc9675e0e30d8606b6f5db0808ff0113e7c3b9",
+  "broker_source_sha256": {
+    "main.rs": "a86c03a48fa66f85b268f4adf6cc8a34f4b4546c2342c916c91a59cfbd473861",
+    "store.rs": "7c9721ae3dafe96e2b617411d2c079f0e0bbfae7911ce943bfe5d86a7e1bc025",
+    "subscriptions.rs": "33e3839d3f3155aab687b93949591c46d5c168027a0c30f9934264fcf8124d61",
+    "tests.rs": "e848c7567e27632030208af38d45a7c0b6fd5095449c1d8b9105901465d6cf57"
+  },
+  "engine": {
+    "version": "29.9.3",
+    "architecture": "aarch64",
+    "cpus": 10,
+    "memory_bytes": 20940046336
+  },
+  "service_images": {
+    "rabbit": "rabbitmq:4.3.6@sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd sha256:95cbcc81abe46d919d2ae2c783025a2f4e2a147108bb86e5b441ea8008af6596",
+    "redis": "redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f sha256:c90c016450904cc9c63d38100c04c72554fcc983e257f1637ab451afaf32da7b",
+    "spool": "spoolbench-7575908ade89-spool sha256:b1c007b5c5859e6480be749768aeed5537f059c684894a9a4b55fe6af8b33a20",
+    "sdk-api": "spoolbench-7575908ade89-driver sha256:4bce41d0bda295aa8539d8167b2828521f4afc9e638200032c3b1365bb2e8804"
+  },
+  "rabbitmq": "4.3.6",
+  "runs": [
+    {
+      "trial": 1,
+      "scenarios": [
+        {
+          "operation": "latest",
+          "readers": 1,
+          "requests": 160,
+          "trace_sha256": "9efd912aea5433138294a12187121d79f1b2cfa005270fe4db21a185059e7340",
+          "unique_task_ids": 159,
+          "arms": {
+            "sdk-default": {
+              "requests": 160,
+              "elapsed_s": 20.29345621799999,
+              "requests_per_s": 7.884314937841018,
+              "p50_ms": 217.42725000001428,
+              "p95_ms": 238.4613330000036,
+              "p99_ms": 248.61487499998702,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 2.5068749999945794,
+                  "p95_ms": 4.3721669999854385,
+                  "p99_ms": 5.853541000021778
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 225.36037500000816,
+                  "p95_ms": 248.61487499998702,
+                  "p99_ms": 248.61487499998702
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 228.30979200000456,
+                  "p95_ms": 240.49254199999837,
+                  "p99_ms": 250.7710829999894
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 79147008,
+                  "cpu_s": 0.7597829999999999,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94568448,
+                  "cpu_s": 0.3597439999999992,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.44384558100000504
+                }
+              }
+            },
+            "sdk-once": {
+              "requests": 160,
+              "elapsed_s": 0.12299649999999929,
+              "requests_per_s": 1300.8500241876877,
+              "p50_ms": 0.7406249999917236,
+              "p95_ms": 0.843624999987469,
+              "p99_ms": 1.3730000000009568,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 0.741207999993776,
+                  "p95_ms": 0.8017499999937172,
+                  "p99_ms": 1.1781669999777478
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 0.7385409999756121,
+                  "p95_ms": 1.5163330000120823,
+                  "p99_ms": 1.5163330000120823
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 0.7385419999934584,
+                  "p95_ms": 0.9100000000046293,
+                  "p99_ms": 1.3730000000009568
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 79757312,
+                  "cpu_s": 0.058262000000000036,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 88154112,
+                  "cpu_s": 0.014882000000000062,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.07338425099999313
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 160,
+              "elapsed_s": 0.0873474999999928,
+              "requests_per_s": 1831.7639314234887,
+              "p50_ms": 0.5160830000079386,
+              "p95_ms": 0.6126660000234097,
+              "p99_ms": 1.033167000002777,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 0.5154579999953057,
+                  "p95_ms": 0.6019590000221342,
+                  "p99_ms": 1.033167000002777
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 0.5012919999956011,
+                  "p95_ms": 1.19962499999815,
+                  "p99_ms": 1.19962499999815
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 0.5224159999954736,
+                  "p95_ms": 0.6210420000059003,
+                  "p99_ms": 0.7802920000017366
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 54292480,
+                  "cpu_s": 0.02462300000000006,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.07190136799999891
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "readers": 16,
+          "requests": 2560,
+          "trace_sha256": "224c50513513aabd4fd2aad5891659c1860ab8b10cabcbd79cd0388fa17ef508",
+          "unique_task_ids": 2325,
+          "arms": {
+            "sdk-default": {
+              "requests": 2560,
+              "elapsed_s": 20.756672509999987,
+              "requests_per_s": 123.33383391613772,
+              "p50_ms": 213.2782500000019,
+              "p95_ms": 244.03620900000078,
+              "p99_ms": 257.27637500000355,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 6.272082999998929,
+                  "p95_ms": 23.59037499999772,
+                  "p99_ms": 29.780583000018623
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 225.7466249999993,
+                  "p95_ms": 251.85162500000047,
+                  "p99_ms": 258.293832999982
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 227.16383299999166,
+                  "p95_ms": 250.17762499999208,
+                  "p99_ms": 259.693666000004
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 80494592,
+                  "cpu_s": 2.617435,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94449664,
+                  "cpu_s": 0.5208899999999996,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.3082663269999983
+                }
+              }
+            },
+            "sdk-once": {
+              "requests": 2560,
+              "elapsed_s": 2.2687742100000037,
+              "requests_per_s": 1128.3626148059907,
+              "p50_ms": 7.567374999979393,
+              "p95_ms": 44.273666999998795,
+              "p99_ms": 73.59375000001478,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 7.220332999992252,
+                  "p95_ms": 45.51887499999907,
+                  "p99_ms": 68.46895799998265
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 6.417958000014323,
+                  "p95_ms": 39.32037500001684,
+                  "p99_ms": 53.49595900000281
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 7.932375000024194,
+                  "p95_ms": 46.17616699999871,
+                  "p99_ms": 79.42745799999784
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 78032896,
+                  "cpu_s": 0.6672609999999999,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94724096,
+                  "cpu_s": 0.07101200000000052,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 2.269366489999996
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 2560,
+              "elapsed_s": 2.2667602930000044,
+              "requests_per_s": 1129.365115449371,
+              "p50_ms": 8.145124999998643,
+              "p95_ms": 24.615208000000166,
+              "p99_ms": 33.78424999999652,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 8.230958000012834,
+                  "p95_ms": 24.521667000016123,
+                  "p99_ms": 26.814165999979878
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 7.97995800002127,
+                  "p95_ms": 24.62412500000255,
+                  "p99_ms": 39.337584000008974
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 8.167415999992045,
+                  "p95_ms": 24.84020800000053,
+                  "p99_ms": 39.13349999999127
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 54521856,
+                  "cpu_s": 0.24117000000000033,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 2.26725724100001
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "history",
+          "readers": 1,
+          "requests": 160,
+          "trace_sha256": "6eb7435165a1e687e397dd2c95d92f8b1b533d90e1a87812c194cfcb8d02ce81",
+          "unique_task_ids": 159,
+          "arms": {
+            "sdk-default": {
+              "requests": 160,
+              "elapsed_s": 0.4119403759999898,
+              "requests_per_s": 388.4057240361502,
+              "p50_ms": 2.29474999997592,
+              "p95_ms": 2.8236249999906704,
+              "p99_ms": 3.575500000010834,
+              "outcomes": {
+                "history": {
+                  "requests": 160,
+                  "p50_ms": 2.29474999997592,
+                  "p95_ms": 2.8236249999906704,
+                  "p99_ms": 3.575500000010834
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84516864,
+                  "cpu_s": 0.26480700000000024,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94765056,
+                  "cpu_s": 0.03944800000000015,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.23820978299998785
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 160,
+              "elapsed_s": 0.21054591699999037,
+              "requests_per_s": 759.9292462176187,
+              "p50_ms": 1.1268330000007154,
+              "p95_ms": 1.3207920000013473,
+              "p99_ms": 1.8671250000181772,
+              "outcomes": {
+                "history": {
+                  "requests": 160,
+                  "p50_ms": 1.1268330000007154,
+                  "p95_ms": 1.3207920000013473,
+                  "p99_ms": 1.8671250000181772
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 52277248,
+                  "cpu_s": 0.0664630000000006,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.20847214500000177
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "history",
+          "readers": 16,
+          "requests": 2560,
+          "trace_sha256": "3c443b0361d91d0eb8a6293ac64c99dcb4516dfe681765593a0296133781609f",
+          "unique_task_ids": 2263,
+          "arms": {
+            "sdk-default": {
+              "requests": 2560,
+              "elapsed_s": 3.8515065020000065,
+              "requests_per_s": 664.6749781340485,
+              "p50_ms": 23.557750000009037,
+              "p95_ms": 34.40875000001142,
+              "p99_ms": 39.76754199999277,
+              "outcomes": {
+                "history": {
+                  "requests": 2560,
+                  "p50_ms": 23.557750000009037,
+                  "p95_ms": 34.40875000001142,
+                  "p99_ms": 39.76754199999277
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84545536,
+                  "cpu_s": 3.802099000000001,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94834688,
+                  "cpu_s": 0.4356610000000005,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.7493263090000113
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 2560,
+              "elapsed_s": 2.9544601259999865,
+              "requests_per_s": 866.4865629667366,
+              "p50_ms": 16.60645800001248,
+              "p95_ms": 18.40779100001555,
+              "p99_ms": 19.535250000018323,
+              "outcomes": {
+                "history": {
+                  "requests": 2560,
+                  "p50_ms": 16.60645800001248,
+                  "p95_ms": 18.40779100001555,
+                  "p99_ms": 19.535250000018323
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 55074816,
+                  "cpu_s": 0.9721349999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.162374102000001
+                }
+              }
+            }
+          }
+        }
+      ],
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    },
+    {
+      "trial": 2,
+      "scenarios": [
+        {
+          "operation": "latest",
+          "readers": 1,
+          "requests": 160,
+          "trace_sha256": "d853c3c269ba3fab03760be6b08c6812bda83daff7e8a13cdac020cf588859b3",
+          "unique_task_ids": 160,
+          "arms": {
+            "sdk-once": {
+              "requests": 160,
+              "elapsed_s": 0.12361758299999792,
+              "requests_per_s": 1294.3142562494745,
+              "p50_ms": 0.7426249999866741,
+              "p95_ms": 0.8947080000041296,
+              "p99_ms": 1.173749999992424,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 0.7412500000043565,
+                  "p95_ms": 0.8236250000095424,
+                  "p99_ms": 0.9061250000002019
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 0.7390410000027714,
+                  "p95_ms": 1.173749999992424,
+                  "p99_ms": 1.173749999992424
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 0.746583000022838,
+                  "p95_ms": 1.0137499999984811,
+                  "p99_ms": 1.5324169999928472
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82657280,
+                  "cpu_s": 0.05748300000000128,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 92483584,
+                  "cpu_s": 0.014652000000000776,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.07366379299999992
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 160,
+              "elapsed_s": 0.09130254199999399,
+              "requests_per_s": 1752.415611823935,
+              "p50_ms": 0.5215000000191594,
+              "p95_ms": 0.6697080000037658,
+              "p99_ms": 1.1364160000084667,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 0.5207080000104725,
+                  "p95_ms": 0.6722500000080345,
+                  "p99_ms": 0.9960830000181886
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 0.5041670000025533,
+                  "p95_ms": 2.765750000008893,
+                  "p99_ms": 2.765750000008893
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 0.532332999995333,
+                  "p95_ms": 0.659542000022384,
+                  "p99_ms": 1.1364160000084667
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 57192448,
+                  "cpu_s": 0.025437000000000154,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.07593983399999993
+                }
+              }
+            },
+            "sdk-default": {
+              "requests": 160,
+              "elapsed_s": 20.294758551,
+              "requests_per_s": 7.883808994225072,
+              "p50_ms": 217.75054200000454,
+              "p95_ms": 238.05829099998732,
+              "p99_ms": 244.62483400000679,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 2.7044580000108454,
+                  "p95_ms": 4.235125000008111,
+                  "p99_ms": 4.653791999999157
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 224.16162600001144,
+                  "p95_ms": 244.62483400000679,
+                  "p99_ms": 244.62483400000679
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 227.89887499999395,
+                  "p95_ms": 241.53104200001962,
+                  "p99_ms": 246.34495799998035
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84369408,
+                  "cpu_s": 0.7657989999999995,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94277632,
+                  "cpu_s": 0.3566609999999999,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.42247896500000004
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "readers": 16,
+          "requests": 2560,
+          "trace_sha256": "dc77352f98779c14327a61b8ab8189f411efa526740f64a76d0dba3f668ce8cc",
+          "unique_task_ids": 2310,
+          "arms": {
+            "sdk-once": {
+              "requests": 2560,
+              "elapsed_s": 2.2940944590000356,
+              "requests_per_s": 1115.908715073515,
+              "p50_ms": 7.549625000024207,
+              "p95_ms": 43.70875000000751,
+              "p99_ms": 73.26083400002403,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 7.661708000000544,
+                  "p95_ms": 41.55100000002676,
+                  "p99_ms": 74.22420800000396
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 7.270708000021386,
+                  "p95_ms": 41.05100000001016,
+                  "p99_ms": 62.28445900001134
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 7.48925000002032,
+                  "p95_ms": 47.038083000018105,
+                  "p99_ms": 72.3768340000106
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 86351872,
+                  "cpu_s": 0.6837549999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 93880320,
+                  "cpu_s": 0.07263900000000056,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 2.294408827
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 2560,
+              "elapsed_s": 2.2863545010000053,
+              "requests_per_s": 1119.6863823524775,
+              "p50_ms": 8.355832999995982,
+              "p95_ms": 29.65599999998858,
+              "p99_ms": 54.53883399997039,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 8.270959000014955,
+                  "p95_ms": 31.02733299999727,
+                  "p99_ms": 55.3209579999816
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 8.420957999987877,
+                  "p95_ms": 32.68562499999916,
+                  "p99_ms": 53.08429100000467
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 8.355832999995982,
+                  "p95_ms": 27.690624999991087,
+                  "p99_ms": 53.08858300003294
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 55050240,
+                  "cpu_s": 0.23770199999999875,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 2.2869312399999995
+                }
+              }
+            },
+            "sdk-default": {
+              "requests": 2560,
+              "elapsed_s": 21.148680092000006,
+              "requests_per_s": 121.04774335152865,
+              "p50_ms": 214.58995900002265,
+              "p95_ms": 247.69712500000196,
+              "p99_ms": 259.7584580000216,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 6.953208000027189,
+                  "p95_ms": 26.185958999974446,
+                  "p99_ms": 31.23233399998071
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 230.3591259999962,
+                  "p95_ms": 251.76508399999875,
+                  "p99_ms": 259.42033300003686
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 230.91112499997735,
+                  "p95_ms": 252.11912500003564,
+                  "p99_ms": 266.5140000000292
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82313216,
+                  "cpu_s": 2.6843450000000004,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94519296,
+                  "cpu_s": 0.5282310000000008,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.3903952849999994
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "history",
+          "readers": 1,
+          "requests": 160,
+          "trace_sha256": "f5b7b5e5623492b61b6834ddf641cc779b78fb342f23b64c1ba95f34b87917a9",
+          "unique_task_ids": 160,
+          "arms": {
+            "spooltail": {
+              "requests": 160,
+              "elapsed_s": 0.20828204200000755,
+              "requests_per_s": 768.1891269339206,
+              "p50_ms": 1.1169169999902806,
+              "p95_ms": 1.3500839999665004,
+              "p99_ms": 1.877499999977772,
+              "outcomes": {
+                "history": {
+                  "requests": 160,
+                  "p50_ms": 1.1169169999902806,
+                  "p95_ms": 1.3500839999665004,
+                  "p99_ms": 1.877499999977772
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 52760576,
+                  "cpu_s": 0.06613800000000047,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.20665879300000078
+                }
+              }
+            },
+            "sdk-default": {
+              "requests": 160,
+              "elapsed_s": 0.44392312499996933,
+              "requests_per_s": 360.4227646397359,
+              "p50_ms": 2.5132079999821144,
+              "p95_ms": 3.1542500000227847,
+              "p99_ms": 4.93437500000482,
+              "outcomes": {
+                "history": {
+                  "requests": 160,
+                  "p50_ms": 2.5132079999821144,
+                  "p95_ms": 3.1542500000227847,
+                  "p99_ms": 4.93437500000482
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82677760,
+                  "cpu_s": 0.28705600000000153,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94461952,
+                  "cpu_s": 0.04257199999999983,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.25264875000000053
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "history",
+          "readers": 16,
+          "requests": 2560,
+          "trace_sha256": "54e686847bd19ac4c894c6c6668d1419739f4a2aa1ec5eb1716e6007e72644be",
+          "unique_task_ids": 2223,
+          "arms": {
+            "spooltail": {
+              "requests": 2560,
+              "elapsed_s": 2.938422084000024,
+              "requests_per_s": 871.2158862198298,
+              "p50_ms": 16.495500000019092,
+              "p95_ms": 18.50075000004381,
+              "p99_ms": 20.603875000006155,
+              "outcomes": {
+                "history": {
+                  "requests": 2560,
+                  "p50_ms": 16.495500000019092,
+                  "p95_ms": 18.50075000004381,
+                  "p99_ms": 20.603875000006155
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 55263232,
+                  "cpu_s": 0.9856359999999995,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.1503003829999994
+                }
+              }
+            },
+            "sdk-default": {
+              "requests": 2560,
+              "elapsed_s": 3.867849002000014,
+              "requests_per_s": 661.8665823501015,
+              "p50_ms": 24.141915999962293,
+              "p95_ms": 34.822583999982726,
+              "p99_ms": 38.614540999958535,
+              "outcomes": {
+                "history": {
+                  "requests": 2560,
+                  "p50_ms": 24.141915999962293,
+                  "p95_ms": 34.822583999982726,
+                  "p99_ms": 38.614540999958535
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84733952,
+                  "cpu_s": 3.779774999999999,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 93810688,
+                  "cpu_s": 0.4323719999999991,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.687989282
+                }
+              }
+            }
+          }
+        }
+      ],
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    },
+    {
+      "trial": 3,
+      "scenarios": [
+        {
+          "operation": "latest",
+          "readers": 1,
+          "requests": 160,
+          "trace_sha256": "1ff03a20c5945e87d7b8b39e4c1d82deba4d7be2354a08bc6581877a0b298ce5",
+          "unique_task_ids": 158,
+          "arms": {
+            "spooltail": {
+              "requests": 160,
+              "elapsed_s": 0.08661279199998262,
+              "requests_per_s": 1847.302186033122,
+              "p50_ms": 0.5108330000211936,
+              "p95_ms": 0.6887920000053782,
+              "p99_ms": 0.8610000000430773,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 0.5090419999760343,
+                  "p95_ms": 0.692666000020381,
+                  "p99_ms": 0.7967089999851851
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 0.49883299999464725,
+                  "p95_ms": 0.5668750000040745,
+                  "p99_ms": 0.5668750000040745
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 0.5135829999858288,
+                  "p95_ms": 0.7011669999883452,
+                  "p99_ms": 1.102208000020255
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 54886400,
+                  "cpu_s": 0.025116000000000582,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.07048649500000004
+                }
+              }
+            },
+            "sdk-default": {
+              "requests": 160,
+              "elapsed_s": 20.241155633999995,
+              "requests_per_s": 7.904687009631045,
+              "p50_ms": 216.98037499999145,
+              "p95_ms": 240.39687499998763,
+              "p99_ms": 245.2039170000262,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 2.0496660000048905,
+                  "p95_ms": 4.047834000004968,
+                  "p99_ms": 4.630416999987119
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 227.9299169999831,
+                  "p95_ms": 245.2039170000262,
+                  "p99_ms": 245.2039170000262
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 227.82829099998025,
+                  "p95_ms": 241.56404199999315,
+                  "p99_ms": 245.28879199999665
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84774912,
+                  "cpu_s": 0.7459400000000009,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94326784,
+                  "cpu_s": 0.3611369999999994,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.41858404399999993
+                }
+              }
+            },
+            "sdk-once": {
+              "requests": 160,
+              "elapsed_s": 0.13596466600000667,
+              "requests_per_s": 1176.77632510782,
+              "p50_ms": 0.780291000012312,
+              "p95_ms": 1.0890000000358668,
+              "p99_ms": 1.7473749999794563,
+              "outcomes": {
+                "completed": {
+                  "requests": 72,
+                  "p50_ms": 0.7764590000078897,
+                  "p95_ms": 1.0031250000110958,
+                  "p99_ms": 1.5670419999764817
+                },
+                "missing": {
+                  "requests": 16,
+                  "p50_ms": 0.7897499999671709,
+                  "p95_ms": 0.8915000000229156,
+                  "p99_ms": 0.8915000000229156
+                },
+                "running": {
+                  "requests": 72,
+                  "p50_ms": 0.7828330000165806,
+                  "p95_ms": 1.5778750000094988,
+                  "p99_ms": 1.8508329999917805
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82505728,
+                  "cpu_s": 0.06411999999999907,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95793152,
+                  "cpu_s": 0.014172999999999547,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.08065837099999995
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "readers": 16,
+          "requests": 2560,
+          "trace_sha256": "59f1b4bf5b5ed298d662c216169546a3fb77e4b4faaac0c85e3a2db10b199d0c",
+          "unique_task_ids": 2307,
+          "arms": {
+            "spooltail": {
+              "requests": 2560,
+              "elapsed_s": 2.2211405010000362,
+              "requests_per_s": 1152.5610373802995,
+              "p50_ms": 8.030292000000827,
+              "p95_ms": 40.66925000000765,
+              "p99_ms": 61.77145899999914,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 8.030458000007457,
+                  "p95_ms": 40.38995899998099,
+                  "p99_ms": 58.39604200002668
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 7.88683400003265,
+                  "p95_ms": 46.51062499999625,
+                  "p99_ms": 60.4648750000365
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 8.035249999977623,
+                  "p95_ms": 39.351333000013256,
+                  "p99_ms": 64.81991700002254
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 54820864,
+                  "cpu_s": 0.2378469999999986,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 2.221578493
+                }
+              }
+            },
+            "sdk-default": {
+              "requests": 2560,
+              "elapsed_s": 20.792878342999984,
+              "requests_per_s": 123.11907749231051,
+              "p50_ms": 213.85483299997077,
+              "p95_ms": 245.21600000002763,
+              "p99_ms": 254.10879199995406,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 6.3634159999992335,
+                  "p95_ms": 22.845082999992883,
+                  "p99_ms": 29.949707999946895
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 228.2567500000141,
+                  "p95_ms": 249.17116699998587,
+                  "p99_ms": 257.8776670000025
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 227.64429200003633,
+                  "p95_ms": 249.12825000001249,
+                  "p99_ms": 258.2809589999897
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 85544960,
+                  "cpu_s": 2.6526309999999995,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 93736960,
+                  "cpu_s": 0.5196199999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.202434617
+                }
+              }
+            },
+            "sdk-once": {
+              "requests": 2560,
+              "elapsed_s": 2.25166012599999,
+              "requests_per_s": 1136.938905849777,
+              "p50_ms": 6.761374999996406,
+              "p95_ms": 44.40695899995717,
+              "p99_ms": 66.02441700005102,
+              "outcomes": {
+                "completed": {
+                  "requests": 1152,
+                  "p50_ms": 7.0724170000175945,
+                  "p95_ms": 44.71708299996635,
+                  "p99_ms": 69.97466699999677
+                },
+                "missing": {
+                  "requests": 256,
+                  "p50_ms": 6.103333999988081,
+                  "p95_ms": 48.923083000033785,
+                  "p99_ms": 68.9897080000037
+                },
+                "running": {
+                  "requests": 1152,
+                  "p50_ms": 6.779499999993277,
+                  "p95_ms": 43.252208000012615,
+                  "p99_ms": 64.10808300000781
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84914176,
+                  "cpu_s": 0.6720949999999988,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94347264,
+                  "cpu_s": 0.07127400000000073,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 2.2521104519999993
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "history",
+          "readers": 1,
+          "requests": 160,
+          "trace_sha256": "812795e855181667c0fa46168a91b3f7871912821342b35db387f6977f24067b",
+          "unique_task_ids": 160,
+          "arms": {
+            "sdk-default": {
+              "requests": 160,
+              "elapsed_s": 0.3950831669999957,
+              "requests_per_s": 404.9780232727601,
+              "p50_ms": 2.2485420000180056,
+              "p95_ms": 2.6422500000080618,
+              "p99_ms": 3.2022919999690203,
+              "outcomes": {
+                "history": {
+                  "requests": 160,
+                  "p50_ms": 2.2485420000180056,
+                  "p95_ms": 2.6422500000080618,
+                  "p99_ms": 3.2022919999690203
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 85295104,
+                  "cpu_s": 0.2552160000000008,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 92549120,
+                  "cpu_s": 0.03703500000000126,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.22705309100000015
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 160,
+              "elapsed_s": 0.20737441700003956,
+              "requests_per_s": 771.5512950663026,
+              "p50_ms": 1.104499999996733,
+              "p95_ms": 1.2866249999774482,
+              "p99_ms": 1.7153329999928246,
+              "outcomes": {
+                "history": {
+                  "requests": 160,
+                  "p50_ms": 1.104499999996733,
+                  "p95_ms": 1.2866249999774482,
+                  "p99_ms": 1.7153329999928246
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 54824960,
+                  "cpu_s": 0.06625000000000014,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 0.20600096199999918
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "history",
+          "readers": 16,
+          "requests": 2560,
+          "trace_sha256": "e3c4e3fa181603ecef02aa8c87f232e556929c119703c5bf5efc750d26c2c240",
+          "unique_task_ids": 2260,
+          "arms": {
+            "sdk-default": {
+              "requests": 2560,
+              "elapsed_s": 3.8478543350000223,
+              "requests_per_s": 665.3058502538104,
+              "p50_ms": 23.164041000029556,
+              "p95_ms": 35.85612500000934,
+              "p99_ms": 43.71950000000879,
+              "outcomes": {
+                "history": {
+                  "requests": 2560,
+                  "p50_ms": 23.164041000029556,
+                  "p95_ms": 35.85612500000934,
+                  "p99_ms": 43.71950000000879
+                }
+              },
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 84811776,
+                  "cpu_s": 3.891186000000001,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94089216,
+                  "cpu_s": 0.44901000000000124,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.8024883220000003
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 2560,
+              "elapsed_s": 2.910727792999978,
+              "requests_per_s": 879.5051210754077,
+              "p50_ms": 16.35712499995634,
+              "p95_ms": 18.19237499995552,
+              "p99_ms": 19.415834000028553,
+              "outcomes": {
+                "history": {
+                  "requests": 2560,
+                  "p50_ms": 16.35712499995634,
+                  "p95_ms": 18.19237499995552,
+                  "p99_ms": 19.415834000028553
+                }
+              },
+              "resources": {
+                "spool": {
+                  "memory_bytes": 55275520,
+                  "cpu_s": 0.9854939999999992,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "driver": {
+                  "cpu_s": 3.1176468149999987
+                }
+              }
+            }
+          }
+        }
+      ],
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    }
+  ]
+}

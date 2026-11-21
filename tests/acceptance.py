@@ -234,9 +234,8 @@ def subscriptions(broker):
     assert broker.request(metrics + "/next")["offset"] == first
 
 
-def crash_after_write(broker):
-    # Hold SQLite's writer lock. A concurrent publish can flush its native journal
-    # frame but cannot commit the index row or return success.
+def kill_after_journal_write(broker, operation):
+    """Kill after the complete frame reaches the journal and before SQLite commits."""
     journal = max(broker.directory.glob("*.seg"))
     before = journal.stat().st_size
     with (
@@ -244,7 +243,7 @@ def crash_after_write(broker):
         concurrent.futures.ThreadPoolExecutor() as pool,
     ):
         lock.execute("BEGIN IMMEDIATE")
-        pending = pool.submit(broker.publish, "crash-task", "unique", status="running")
+        pending = pool.submit(operation)
         deadline = time.monotonic() + 3
         while True:
             newest = max(broker.directory.glob("*.seg"))
@@ -269,10 +268,106 @@ def crash_after_write(broker):
         broker.kill()
         lock.rollback()
         assert pending.exception(timeout=5) is not None
+
+
+def crash_after_write(broker):
+    kill_after_journal_write(
+        broker, lambda: broker.publish("crash-task", "unique", status="running")
+    )
     assert broker.start() == 1
     off = broker.publish("crash-task", "unique", status="running")
     history = broker.request("/topics/status/tasks/crash-task/history")
     assert [r["offset"] for r in history] == [off]
+
+
+def atomic_completion(broker):
+    topic = "completion.tasks"
+    work = f"/topics/{topic}/work/workers"
+    task = "atomic-live"
+    offset = broker.publish(task, "queued", topic)
+    claim = broker.request(work + "/claim", {"lease_ms": 30_000})
+    assert claim["record"]["offset"] == offset
+    event = {"task_id": task, "event_id": "finished", "status": "completed"}
+    body = {
+        "offset": offset,
+        "generation": claim["generation"],
+        "status_topic": "status",
+        "event": event,
+    }
+
+    def complete(**changes):
+        return broker.request(work + "/complete", body | changes)
+
+    expect_http(409, lambda: complete(generation=claim["generation"] + 1))
+    expect_http(409, lambda: complete(event=event | {"task_id": "different"}))
+    expect_http(400, lambda: complete(event=event | {"status": "running"}))
+    assert broker.request(f"/topics/status/tasks/{task}/history") == []
+    # Even identical public content cannot turn a plain publish into a completion receipt.
+    collision = event | {"event_id": "published"}
+    broker.publish(task, "published", status="completed")
+    expect_http(409, lambda: complete(event=collision))
+    with broker.ws() as ws, broker.sse(task, "published") as sse:
+        subscribe(ws, task, "published")
+        assert ws_event(ws)["type"] == "ready" and sse_event(sse)[0] == "ready"
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            retries = [pool.submit(complete) for _ in range(2)]
+            receipt = retries[0].result()
+            assert receipt == retries[1].result()
+        assert sse_event(sse) == ("status", "finished", event)
+        assert not sse.readline()
+        assert ws_event(ws)["data"] == event
+    assert broker.request(work + "/claim", {"lease_ms": 30_000}) is None
+    assert broker.request(f"/topics/status/tasks/{task}/history?after=published") == [
+        {"offset": receipt["offset"], "event": event}
+    ]
+    expect_http(409, lambda: complete(event=event | {"status": "failed"}))
+    expect_http(409, lambda: complete(event=event | {"event_id": "second-id"}))
+    expect_http(409, lambda: complete(status_topic="different.status"))
+    other = f"/topics/{topic}/work/other"
+    assert (
+        broker.request(other + "/claim", {"lease_ms": 30_000})["record"]["offset"]
+        == offset
+    )
+    expect_http(409, lambda: broker.request(other + "/complete", body))
+    assert broker.request(f"/topics/{topic}/streams/audit/next")["offset"] == offset
+
+
+def crash_during_completion(broker):
+    task = "atomic-crash"
+    topic = "crash.tasks"
+    work = f"/topics/{topic}/work/workers"
+    offset = broker.publish(task, "queued", topic)
+    first = broker.request(work + "/claim", {"lease_ms": 1})
+    time.sleep(0.01)
+    event = {"task_id": task, "event_id": "finished", "status": "failed"}
+    body = {
+        "offset": offset,
+        "generation": first["generation"],
+        "status_topic": "status",
+        "event": event,
+    }
+    expect_http(409, lambda: broker.request(work + "/complete", body))
+    claim = broker.request(work + "/claim", {"lease_ms": 1_500})
+    body["generation"] = claim["generation"]
+    kill_after_journal_write(broker, lambda: broker.request(work + "/complete", body))
+    # A completion admitted by a valid lease survives recovery after its deadline.
+    time.sleep(max(0, claim["lease_until_ms"] / 1000 - time.time()) + 0.01)
+    assert broker.start() == 1
+    history = broker.request(f"/topics/status/tasks/{task}/history")
+    assert len(history) == 1 and history[0]["event"] == event
+    assert broker.request(work + "/claim", {"lease_ms": 30_000}) is None
+    receipt = broker.request(work + "/complete", body)
+    assert receipt == {"offset": history[0]["offset"]}
+    expect_http(
+        409,
+        lambda: broker.request(
+            work + "/complete", body | {"generation": first["generation"]}
+        ),
+    )
+    broker.kill()
+    assert broker.start() == 0
+    assert broker.request(work + "/complete", body) == receipt
+    assert broker.request(f"/topics/status/tasks/{task}/history") == history
 
 
 def expired(broker, floor):
@@ -308,10 +403,13 @@ if __name__ == "__main__":
             floor, latency = cross_protocol(broker, prefix, offline)
             subscriptions(broker)
             crash_after_write(broker)
+            atomic_completion(broker)
+            crash_during_completion(broker)
             expired(broker, floor)
             print(
                 f"PASS: {args.events:,} fixture events; sample WebSocket resume {latency:.2f} ms; "
-                "both transport directions, independent groups, lease fencing, write/ack crash and retention gap"
+                "both transport directions, independent groups, lease fencing, write/ack crash, "
+                "atomic completion and retention gap"
             )
         finally:
             broker.kill()

@@ -1,7 +1,7 @@
 use crate::store::{Problem, Record, Store, identifier};
 use anyhow::Result;
-use rusqlite::{OptionalExtension, params};
-use serde::Serialize;
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize)]
@@ -9,6 +9,57 @@ pub struct Claim {
     pub record: Record,
     pub generation: i64,
     pub lease_until_ms: i64,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorkLease {
+    pub topic: String,
+    pub group: String,
+    pub offset: i64,
+    pub generation: i64,
+}
+
+impl WorkLease {
+    pub fn validate_completion(&self, db: &Connection, task: &str) -> Result<()> {
+        valid_group(&self.topic, &self.group)?;
+        let active: bool = db.query_row(
+            "SELECT EXISTS (
+                SELECT 1 FROM leases l JOIN records r ON r.offset=l.offset AND r.topic=l.topic
+                WHERE l.topic=? AND l.name=? AND l.offset=? AND l.generation=?
+                  AND l.state='pending' AND l.visible_at>? AND r.task=?
+            )",
+            params![
+                self.topic,
+                self.group,
+                self.offset,
+                self.generation,
+                now()?,
+                task
+            ],
+            |row| row.get(0),
+        )?;
+        if !active {
+            return Err(Problem::Conflict("no active matching lease for this task".into()).into());
+        }
+        Ok(())
+    }
+
+    pub fn apply_completion(&self, tx: &Transaction<'_>) -> Result<()> {
+        // Admission checked the deadline before journaling. Recovery may run long after it.
+        // The journal also carries enough information to rebuild this particular settlement.
+        let changed = tx.execute(
+            "INSERT INTO leases(topic,name,offset,generation,visible_at,state)
+             VALUES(?,?,?,?,0,'done') ON CONFLICT(topic,name,offset) DO UPDATE
+             SET state='done',visible_at=0
+             WHERE leases.generation=excluded.generation AND leases.state='pending'",
+            params![self.topic, self.group, self.offset, self.generation],
+        )?;
+        anyhow::ensure!(
+            changed == 1,
+            "journal completion conflicts with stored lease"
+        );
+        Ok(())
+    }
 }
 
 fn now() -> Result<i64> {
@@ -88,6 +139,7 @@ impl Store {
     }
 
     pub fn claim(&mut self, topic: &str, group: &str, lease_ms: i64) -> Result<Option<Claim>> {
+        self.ensure_writable()?;
         valid_group(topic, group)?;
         if !(1..=3_600_000).contains(&lease_ms) {
             return Err(Problem::Invalid("lease_ms must be 1..3600000".into()).into());
@@ -98,7 +150,7 @@ impl Store {
             .query_row(
                 "SELECT r.offset,COALESCE(l.generation,0)+1 FROM records r LEFT JOIN leases l
              ON l.topic=r.topic AND l.name=? AND l.offset=r.offset
-             WHERE r.topic=? AND (l.offset IS NULL OR (l.state='pending' AND l.visible_at<=?))
+             WHERE r.topic=? AND (l.offset IS NULL OR (l.state IN ('pending','retry') AND l.visible_at<=?))
              ORDER BY r.offset LIMIT 1",
                 params![group, topic, now],
                 |r| Ok((r.get(0)?, r.get(1)?)),
@@ -127,6 +179,7 @@ impl Store {
         action: &str,
         delay_ms: i64,
     ) -> Result<()> {
+        self.ensure_writable()?;
         valid_group(topic, group)?;
         if !(0..=3_600_000).contains(&delay_ms) {
             return Err(Problem::Invalid("delay_ms must be 0..3600000".into()).into());
@@ -134,7 +187,7 @@ impl Store {
         let target = match action {
             "ack" => "done",
             "dead-letter" => "dead",
-            "retry" => "pending",
+            "retry" => "retry",
             "renew" if delay_ms > 0 => "pending",
             _ => {
                 return Err(Problem::Invalid(

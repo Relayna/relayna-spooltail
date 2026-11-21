@@ -1,0 +1,4439 @@
+{
+  "started_utc": "2026-11-20T14:05:00.712739+00:00",
+  "settings": {
+    "workload": "load-generators",
+    "trials": 3,
+    "timeout": 3600,
+    "read_tasks": 10000,
+    "statuses": 6,
+    "load_shapes": "1x16,2x16,4x16,8x16,4x64,8x64,8x128",
+    "requests": 16000,
+    "seed": 1729
+  },
+  "sdk_revision": "de4c60f052a9af7cd5d5543430c6f4e8b47cd327",
+  "spooltail_revision": "6fcc9675e0e30d8606b6f5db0808ff0113e7c3b9",
+  "broker_source_sha256": {
+    "bench_lock.rs": "74ccf798fb6f67cdd83b1589adfcf231505cfb4abac4d79ad4c45acdc2c9e4d9",
+    "main.rs": "4e70738ec29eb258e7d95820fcc7edebf8ca8b6dacbf4247bf9b66586a4f9721",
+    "store.rs": "7c9721ae3dafe96e2b617411d2c079f0e0bbfae7911ce943bfe5d86a7e1bc025",
+    "subscriptions.rs": "33e3839d3f3155aab687b93949591c46d5c168027a0c30f9934264fcf8124d61",
+    "tests.rs": "e848c7567e27632030208af38d45a7c0b6fd5095449c1d8b9105901465d6cf57"
+  },
+  "engine": {
+    "version": "29.9.3",
+    "architecture": "aarch64",
+    "cpus": 10,
+    "memory_bytes": 20940046336
+  },
+  "service_images": {
+    "rabbit": "rabbitmq:4.3.6@sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd sha256:95cbcc81abe46d919d2ae2c783025a2f4e2a147108bb86e5b441ea8008af6596",
+    "redis": "redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f sha256:c90c016450904cc9c63d38100c04c72554fcc983e257f1637ab451afaf32da7b",
+    "spool": "spoolbench-a47c9487edff-spool sha256:90c5682393c10081995efd6a16150baa6ae229d82f9307b2d9cb51d124abc94b",
+    "sdk-api": "spoolbench-a47c9487edff-driver sha256:617f09398d93d7fbd00725abc6ed2fdefbf9549bfcaf8a12c734abc980a44fb5"
+  },
+  "rabbitmq": "4.3.6",
+  "runs": [
+    {
+      "trial": 1,
+      "scenarios": [
+        {
+          "operation": "latest",
+          "generators": 1,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 12.54614667300001,
+              "requests_per_s": 1275.2919615098133,
+              "p50_ms": 6.945500000028915,
+              "p95_ms": 39.69683399998303,
+              "p99_ms": 59.9868329999822,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 6.881125000006705,
+                  "p95_ms": 39.748000000031425,
+                  "p99_ms": 60.30366600003845
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 6.998791000000892,
+                  "p95_ms": 39.78574999996454,
+                  "p99_ms": 58.79716700002291
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 7.005541000012272,
+                  "p95_ms": 37.06316699998524,
+                  "p99_ms": 74.43766700004062
+                }
+              },
+              "generators": [
+                {
+                  "pid": 229,
+                  "readers": 16,
+                  "requests": 16000,
+                  "cpu_s": 12.545326412,
+                  "start_lag_s": 0.0,
+                  "finish_s": 12.54614667300001
+                }
+              ],
+              "generator_cpu_cores": 0.9999346204837717,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 56926208,
+                  "cpu_s": 1.5025450000000014,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 492201826,
+                "wait_ns": 5193495
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 12.52263921399998,
+              "requests_per_s": 1277.6859355743813,
+              "p50_ms": 6.186415999991368,
+              "p95_ms": 39.13083300000153,
+              "p99_ms": 62.07791700001053,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 6.065207999995437,
+                  "p95_ms": 38.749040999960016,
+                  "p99_ms": 63.363540999944234
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 6.225416999996014,
+                  "p95_ms": 39.577915999984725,
+                  "p99_ms": 59.62166699998761
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 6.799624999985099,
+                  "p95_ms": 38.26145899995481,
+                  "p99_ms": 63.830042000006415
+                }
+              },
+              "generators": [
+                {
+                  "pid": 238,
+                  "readers": 16,
+                  "requests": 16000,
+                  "cpu_s": 12.521635032,
+                  "start_lag_s": 0.0,
+                  "finish_s": 12.52263921399998
+                }
+              ],
+              "generator_cpu_cores": 0.9999198106738668,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 81756160,
+                  "cpu_s": 4.290355999999999,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94257152,
+                  "cpu_s": 0.39854500000000037,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 2,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 4.562514418999967,
+              "requests_per_s": 3506.8382323067713,
+              "p50_ms": 3.1909580000046844,
+              "p95_ms": 11.959667000041918,
+              "p99_ms": 31.778582999947957,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.1897090000256867,
+                  "p95_ms": 12.630834000049163,
+                  "p99_ms": 32.003208999981325
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.192832999957318,
+                  "p95_ms": 11.087707999990926,
+                  "p99_ms": 30.740207999997438
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.188333000025523,
+                  "p95_ms": 12.30929199999764,
+                  "p99_ms": 34.060707999969964
+                }
+              },
+              "generators": [
+                {
+                  "pid": 21,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.473786276,
+                  "start_lag_s": 0.0,
+                  "finish_s": 4.485547918999998
+                },
+                {
+                  "pid": 22,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.549750306,
+                  "start_lag_s": 8.399996431762702e-08,
+                  "finish_s": 4.562514418999967
+                }
+              ],
+              "generator_cpu_cores": 1.9777551922735228,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 80130048,
+                  "cpu_s": 3.8278610000000004,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 93999104,
+                  "cpu_s": 0.3447109999999993,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 5.026188877999971,
+              "requests_per_s": 3183.326450391324,
+              "p50_ms": 2.9446660000189695,
+              "p95_ms": 4.013208999992912,
+              "p99_ms": 18.681166000021676,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 2.942416999985653,
+                  "p95_ms": 4.169875000002321,
+                  "p99_ms": 18.801375000009557
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 2.9484169999705045,
+                  "p95_ms": 3.9325000000189902,
+                  "p99_ms": 18.406665999975758
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 2.9350419999900623,
+                  "p95_ms": 3.9186669999935475,
+                  "p99_ms": 20.889207999971404
+                }
+              },
+              "generators": [
+                {
+                  "pid": 34,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.086463318,
+                  "start_lag_s": 0.0,
+                  "finish_s": 4.08652329399996
+                },
+                {
+                  "pid": 35,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 5.024805399000001,
+                  "start_lag_s": 2.2208999951089936e-05,
+                  "finish_s": 5.026188877999971
+                }
+              ],
+              "generator_cpu_cores": 1.8127589189655706,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 55115776,
+                  "cpu_s": 1.5712159999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 496482947,
+                "wait_ns": 117206895
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 4,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.802571250999904,
+              "requests_per_s": 8876.20946529833,
+              "p50_ms": 1.5965840000262688,
+              "p95_ms": 2.1519160000025295,
+              "p99_ms": 3.279875000089305,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 1.597624999931213,
+                  "p95_ms": 2.1662919999698715,
+                  "p99_ms": 3.973875000042426
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 1.5994170000794838,
+                  "p95_ms": 2.099833999977818,
+                  "p99_ms": 2.849040999990393
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 1.5949589999308955,
+                  "p95_ms": 2.1437499999592546,
+                  "p99_ms": 3.0481670000881422
+                }
+              },
+              "generators": [
+                {
+                  "pid": 246,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.8006235350000002,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.802571250999904
+                },
+                {
+                  "pid": 247,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.7896444969999998,
+                  "start_lag_s": 1.3833999901180505e-05,
+                  "finish_s": 1.7908085849999225
+                },
+                {
+                  "pid": 248,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.78748062,
+                  "start_lag_s": 1.8208999904345546e-05,
+                  "finish_s": 1.7881003349999673
+                },
+                {
+                  "pid": 249,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.762604952,
+                  "start_lag_s": 4.0208999962487724e-05,
+                  "finish_s": 1.7641300009998986
+                }
+              ],
+              "generator_cpu_cores": 3.9612046403376153,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 55857152,
+                  "cpu_s": 1.5314140000000016,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 462630995,
+                "wait_ns": 319572497
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.627618210000037,
+              "requests_per_s": 4410.60747679945,
+              "p50_ms": 3.5925419999784935,
+              "p95_ms": 4.147832999933598,
+              "p99_ms": 4.532209000103649,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.5910840000497046,
+                  "p95_ms": 4.12400000004709,
+                  "p99_ms": 4.523416999973051
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.5929580000129135,
+                  "p95_ms": 4.140791000054378,
+                  "p99_ms": 4.494458999943163
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.5937080000394417,
+                  "p95_ms": 4.1717499999549545,
+                  "p99_ms": 4.559125000014319
+                }
+              },
+              "generators": [
+                {
+                  "pid": 268,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.038782331,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.62293558500005
+                },
+                {
+                  "pid": 269,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.045940449,
+                  "start_lag_s": 1.2250000054336851e-05,
+                  "finish_s": 3.627618210000037
+                },
+                {
+                  "pid": 270,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.028276999,
+                  "start_lag_s": 1.7250000041713065e-05,
+                  "finish_s": 3.623330377000002
+                },
+                {
+                  "pid": 271,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.040091008,
+                  "start_lag_s": 2.2416999968299933e-05,
+                  "finish_s": 3.620190417999993
+                }
+              ],
+              "generator_cpu_cores": 2.247505199010432,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82251776,
+                  "cpu_s": 3.6332570000000004,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 88268800,
+                  "cpu_s": 0.3675569999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.7691513769999574,
+              "requests_per_s": 4244.987372392335,
+              "p50_ms": 3.7252910000233896,
+              "p95_ms": 4.281708000007711,
+              "p99_ms": 4.695749999996224,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.7195410000094853,
+                  "p95_ms": 4.286332999981823,
+                  "p99_ms": 4.682292000097732
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.730625000002874,
+                  "p95_ms": 4.273582999985592,
+                  "p99_ms": 4.695749999996224
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.7320830000453498,
+                  "p95_ms": 4.299208000020371,
+                  "p99_ms": 4.702041999962603
+                }
+              },
+              "generators": [
+                {
+                  "pid": 522,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1157929960000001,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.7673040439999568
+                },
+                {
+                  "pid": 523,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1123411220000001,
+                  "start_lag_s": 8.584000056544028e-06,
+                  "finish_s": 3.7572305859999915
+                },
+                {
+                  "pid": 524,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1151336669999998,
+                  "start_lag_s": 4.075000003922469e-05,
+                  "finish_s": 3.7434753769999816
+                },
+                {
+                  "pid": 525,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1163491620000001,
+                  "start_lag_s": 4.6249999968495104e-05,
+                  "finish_s": 3.7634212110000362
+                },
+                {
+                  "pid": 526,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.129238698,
+                  "start_lag_s": 5.216700003529695e-05,
+                  "finish_s": 3.756515377000028
+                },
+                {
+                  "pid": 527,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.118183957,
+                  "start_lag_s": 4.387499996028055e-05,
+                  "finish_s": 3.762498793999953
+                },
+                {
+                  "pid": 528,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.127301354,
+                  "start_lag_s": 0.00011525000002166053,
+                  "finish_s": 3.7663818360000505
+                },
+                {
+                  "pid": 529,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1156397230000001,
+                  "start_lag_s": 0.000127792000057525,
+                  "finish_s": 3.7691513769999574
+                }
+              ],
+              "generator_cpu_cores": 2.3745346853443987,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87068672,
+                  "cpu_s": 3.7722219999999957,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94023680,
+                  "cpu_s": 0.3843319999999988,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.3006427510000549,
+              "requests_per_s": 12301.610098313095,
+              "p50_ms": 1.175500000044849,
+              "p95_ms": 2.075541999943198,
+              "p99_ms": 2.8032089999214804,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 1.175125000031585,
+                  "p95_ms": 2.0642089999682867,
+                  "p99_ms": 2.818165999997291
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 1.1803749999899082,
+                  "p95_ms": 2.0796249999648353,
+                  "p99_ms": 2.8032089999214804
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 1.1514159999705953,
+                  "p95_ms": 2.1238330000414862,
+                  "p99_ms": 2.743958999985807
+                }
+              },
+              "generators": [
+                {
+                  "pid": 554,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0581497009999998,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.281803251000042
+                },
+                {
+                  "pid": 555,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.057049097,
+                  "start_lag_s": 2.0542000015666417e-05,
+                  "finish_s": 1.2734555420000788
+                },
+                {
+                  "pid": 556,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0585500909999999,
+                  "start_lag_s": 2.045899998392997e-05,
+                  "finish_s": 1.2707266670000763
+                },
+                {
+                  "pid": 557,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.063141592,
+                  "start_lag_s": 3.716700007316831e-05,
+                  "finish_s": 1.2865994590000582
+                },
+                {
+                  "pid": 558,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.067248737,
+                  "start_lag_s": 4.2917000087072665e-05,
+                  "finish_s": 1.3006427510000549
+                },
+                {
+                  "pid": 559,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.064568889,
+                  "start_lag_s": 6.31249999969441e-05,
+                  "finish_s": 1.28848958399999
+                },
+                {
+                  "pid": 560,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0564836579999999,
+                  "start_lag_s": 6.425000003673631e-05,
+                  "finish_s": 1.2815147920000527
+                },
+                {
+                  "pid": 561,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0574660009999999,
+                  "start_lag_s": 0.00010158400004911528,
+                  "finish_s": 1.264423584000042
+                }
+              ],
+              "generator_cpu_cores": 6.521896777172475,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 62320640,
+                  "cpu_s": 1.7352699999999999,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 654035641,
+                "wait_ns": 2292851877
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 4,
+          "readers": 64,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.879654877000007,
+              "requests_per_s": 4124.078173771015,
+              "p50_ms": 8.584999999982301,
+              "p95_ms": 50.99900000004709,
+              "p99_ms": 68.44308300003377,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 8.588334000023679,
+                  "p95_ms": 50.99900000004709,
+                  "p99_ms": 66.80099999999811
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 8.55104200002188,
+                  "p95_ms": 53.18529099997704,
+                  "p99_ms": 71.02216700002373
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 8.598375000019587,
+                  "p95_ms": 50.481166999986726,
+                  "p99_ms": 68.74525000000631
+                }
+              },
+              "generators": [
+                {
+                  "pid": 157,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.8239370649999995,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.8240992099999858
+                },
+                {
+                  "pid": 158,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.875803402,
+                  "start_lag_s": 1.2958000013441051e-05,
+                  "finish_s": 3.879654877000007
+                },
+                {
+                  "pid": 159,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.846938443,
+                  "start_lag_s": 2.3499999997511622e-05,
+                  "finish_s": 3.8470223769999734
+                },
+                {
+                  "pid": 160,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.868391485,
+                  "start_lag_s": 2.783299999009614e-05,
+                  "finish_s": 3.870270667999989
+                }
+              ],
+              "generator_cpu_cores": 3.973309710197702,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 58601472,
+                  "cpu_s": 1.4604680000000005,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 32768
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 466280097,
+                "wait_ns": 113022830
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.691996167999946,
+              "requests_per_s": 4333.698972571695,
+              "p50_ms": 14.156207999974413,
+              "p95_ms": 25.73808300002156,
+              "p99_ms": 59.43229100000735,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 14.139625000041178,
+                  "p95_ms": 25.958124999988286,
+                  "p99_ms": 62.73258299995632
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 14.187165999999252,
+                  "p95_ms": 26.328292000016518,
+                  "p99_ms": 60.75387500004581
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 14.165958000035062,
+                  "p95_ms": 25.254041999971832,
+                  "p99_ms": 55.5726250000248
+                }
+              },
+              "generators": [
+                {
+                  "pid": 194,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.630304103,
+                  "start_lag_s": 1.4790999955494044e-05,
+                  "finish_s": 3.6556605429999536
+                },
+                {
+                  "pid": 195,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.6741552360000003,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.691996167999946
+                },
+                {
+                  "pid": 196,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.62711678,
+                  "start_lag_s": 4.159999775765755e-07,
+                  "finish_s": 3.6564809179999997
+                },
+                {
+                  "pid": 197,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.631576159,
+                  "start_lag_s": 1.474999999118154e-05,
+                  "finish_s": 3.655581500999972
+                }
+              ],
+              "generator_cpu_cores": 2.861095135892935,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82178048,
+                  "cpu_s": 3.620768,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94363648,
+                  "cpu_s": 0.3559599999999996,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 64,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.6664447100000075,
+              "requests_per_s": 4363.900526403947,
+              "p50_ms": 14.540624999995089,
+              "p95_ms": 15.71833399998468,
+              "p99_ms": 17.008125000018026,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 14.540749999980562,
+                  "p95_ms": 15.727666000032059,
+                  "p99_ms": 17.06224999998085
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 14.536749999990661,
+                  "p95_ms": 15.695584000013696,
+                  "p99_ms": 17.003208000005543
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 14.558666999960224,
+                  "p95_ms": 15.771167000025343,
+                  "p99_ms": 16.771582999979273
+                }
+              },
+              "generators": [
+                {
+                  "pid": 46,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.173186417,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.6664447100000075
+                },
+                {
+                  "pid": 47,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.180216129,
+                  "start_lag_s": 4.024999998364365e-05,
+                  "finish_s": 3.664631127000007
+                },
+                {
+                  "pid": 48,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.161123196,
+                  "start_lag_s": 3.833400000985421e-05,
+                  "finish_s": 3.665530294000007
+                },
+                {
+                  "pid": 49,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.162673774,
+                  "start_lag_s": 4.5416999967073934e-05,
+                  "finish_s": 3.66551158499999
+                },
+                {
+                  "pid": 50,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.153911122,
+                  "start_lag_s": 5.158400000482288e-05,
+                  "finish_s": 3.6660146269999814
+                },
+                {
+                  "pid": 51,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1583135690000002,
+                  "start_lag_s": 4.862499997670966e-05,
+                  "finish_s": 3.6660522099999753
+                },
+                {
+                  "pid": 52,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1638451619999999,
+                  "start_lag_s": 0.00011329199998044714,
+                  "finish_s": 3.6653127099999665
+                },
+                {
+                  "pid": 53,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.160009328,
+                  "start_lag_s": 4.999999998744897e-05,
+                  "finish_s": 3.6650772520000032
+                }
+              ],
+              "generator_cpu_cores": 2.5401388630240604,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 82198528,
+                  "cpu_s": 3.674596,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95461376,
+                  "cpu_s": 0.3855649999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.4166062919999831,
+              "requests_per_s": 11294.598993634987,
+              "p50_ms": 3.39574999998149,
+              "p95_ms": 16.94729199999756,
+              "p99_ms": 30.560624999964148,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.410292000012305,
+                  "p95_ms": 17.242374999966614,
+                  "p99_ms": 29.978500000026997
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.3840830000144706,
+                  "p95_ms": 16.675958999996965,
+                  "p99_ms": 29.809249999971144
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.39758300003723,
+                  "p95_ms": 17.97954099998833,
+                  "p99_ms": 35.7175409999968
+                }
+              },
+              "generators": [
+                {
+                  "pid": 104,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.323536546,
+                  "start_lag_s": 2.9170000175327004e-06,
+                  "finish_s": 1.3865709169999718
+                },
+                {
+                  "pid": 105,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.278995133,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.372510625000018
+                },
+                {
+                  "pid": 106,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.3190807169999998,
+                  "start_lag_s": 4.200001058052294e-08,
+                  "finish_s": 1.4166062919999831
+                },
+                {
+                  "pid": 107,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.3266591239999999,
+                  "start_lag_s": 3.470799998694929e-05,
+                  "finish_s": 1.41562916700002
+                },
+                {
+                  "pid": 108,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.283021868,
+                  "start_lag_s": 1.970800002482065e-05,
+                  "finish_s": 1.3623839580000094
+                },
+                {
+                  "pid": 109,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.313984585,
+                  "start_lag_s": 5.870799998319853e-05,
+                  "finish_s": 1.3982679999999732
+                },
+                {
+                  "pid": 110,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.28215972,
+                  "start_lag_s": 2.3375000012038072e-05,
+                  "finish_s": 1.3532224169999836
+                },
+                {
+                  "pid": 111,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.321960546,
+                  "start_lag_s": 0.0001186249999705069,
+                  "finish_s": 1.39508379199998
+                }
+              ],
+              "generator_cpu_cores": 7.376360177143787,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 56868864,
+                  "cpu_s": 1.9642510000000009,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 856412636,
+                "wait_ns": 4789217177
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 128,
+          "requests": 16000,
+          "trace_sha256": "8621c98d358e582de7ea680400efb1c90bb0b7e58ef01d105b06e404dc76c5da",
+          "unique_task_ids": 9167,
+          "arms": {
+            "sdk-wide": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.84833887700006,
+              "requests_per_s": 4157.638012500776,
+              "p50_ms": 30.43712500004858,
+              "p95_ms": 32.56979100001445,
+              "p99_ms": 37.92608300000211,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 30.433874999971522,
+                  "p95_ms": 32.48374999998305,
+                  "p99_ms": 39.11408399994798
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 30.43666700000358,
+                  "p95_ms": 32.651665999992474,
+                  "p99_ms": 37.92608300000211
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 30.45954200001688,
+                  "p95_ms": 32.71545799998421,
+                  "p99_ms": 37.53920900010144
+                }
+              },
+              "generators": [
+                {
+                  "pid": 288,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.180373704,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.8461170860000493
+                },
+                {
+                  "pid": 289,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.165503412,
+                  "start_lag_s": 2.079199998661352e-05,
+                  "finish_s": 3.847864751999964
+                },
+                {
+                  "pid": 290,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.186439791,
+                  "start_lag_s": 2.479199997651449e-05,
+                  "finish_s": 3.8473548360000223
+                },
+                {
+                  "pid": 291,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.197334263,
+                  "start_lag_s": 2.9791999963890703e-05,
+                  "finish_s": 3.8461799190000647
+                },
+                {
+                  "pid": 292,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.182837186,
+                  "start_lag_s": 3.037500005120819e-05,
+                  "finish_s": 3.84833887700006
+                },
+                {
+                  "pid": 293,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1742650490000002,
+                  "start_lag_s": 2.4250000024039764e-05,
+                  "finish_s": 3.8469333360000064
+                },
+                {
+                  "pid": 294,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.18522565,
+                  "start_lag_s": 6.445899998652749e-05,
+                  "finish_s": 3.8477500440000085
+                },
+                {
+                  "pid": 295,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1877004759999998,
+                  "start_lag_s": 0.00015137499997308623,
+                  "finish_s": 3.8480741690000286
+                }
+              ],
+              "generator_cpu_cores": 2.4581202002600695,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 86265856,
+                  "cpu_s": 3.8565000000000005,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 96247808,
+                  "cpu_s": 0.3878730000000008,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 2.0912529180000092,
+              "requests_per_s": 7650.91580376694,
+              "p50_ms": 9.418416000016805,
+              "p95_ms": 48.16462499991303,
+              "p99_ms": 72.6059170000326,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 9.63733300000058,
+                  "p95_ms": 47.6861250000411,
+                  "p99_ms": 75.44412499998998
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 9.215499999982057,
+                  "p95_ms": 47.704875000022184,
+                  "p99_ms": 71.39154100002543
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 9.47433400006048,
+                  "p95_ms": 49.77758300003643,
+                  "p99_ms": 70.54595800002517
+                }
+              },
+              "generators": [
+                {
+                  "pid": 364,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 2.0102928799999997,
+                  "start_lag_s": 0.0,
+                  "finish_s": 2.0912529180000092
+                },
+                {
+                  "pid": 365,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9285677270000001,
+                  "start_lag_s": 2.1958000047561654e-05,
+                  "finish_s": 1.9914396679999982
+                },
+                {
+                  "pid": 366,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9614298829999999,
+                  "start_lag_s": 2.554200000304263e-05,
+                  "finish_s": 2.0128553760000614
+                },
+                {
+                  "pid": 367,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.947562068,
+                  "start_lag_s": 2.383300000019517e-05,
+                  "finish_s": 2.003532709000069
+                },
+                {
+                  "pid": 368,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9701925759999999,
+                  "start_lag_s": 3.6125000065112545e-05,
+                  "finish_s": 2.034231251000051
+                },
+                {
+                  "pid": 369,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9069642230000001,
+                  "start_lag_s": 4.88750000613436e-05,
+                  "finish_s": 1.9545807509999804
+                },
+                {
+                  "pid": 370,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9286111670000001,
+                  "start_lag_s": 5.0041999998029496e-05,
+                  "finish_s": 1.979674793000072
+                },
+                {
+                  "pid": 371,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.968964321,
+                  "start_lag_s": 8.97080000186179e-05,
+                  "finish_s": 2.0232920429999695
+                }
+              ],
+              "generator_cpu_cores": 7.470442580393775,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 62504960,
+                  "cpu_s": 2.214056000000003,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 960002790,
+                "wait_ns": 2544961737
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 15970,
+              "errors": {
+                "http_500": 15,
+                "transport_ReadError": 15
+              },
+              "elapsed_s": 3.857415710000055,
+              "requests_per_s": 4140.077502821124,
+              "p50_ms": 30.161583999984032,
+              "p95_ms": 32.943665999937366,
+              "p99_ms": 49.42249999999149,
+              "outcomes": {
+                "completed": {
+                  "requests": 7188,
+                  "p50_ms": 30.163166999955138,
+                  "p95_ms": 32.96799999998257,
+                  "p99_ms": 50.019375000033506
+                },
+                "http_500": {
+                  "requests": 15,
+                  "p50_ms": 36.64258300000256,
+                  "p95_ms": 45.71833299996797,
+                  "p99_ms": 45.71833299996797
+                },
+                "transport_ReadError": {
+                  "requests": 15,
+                  "p50_ms": 13.301875000024665,
+                  "p95_ms": 22.281832999965445,
+                  "p99_ms": 22.281832999965445
+                },
+                "running": {
+                  "requests": 7186,
+                  "p50_ms": 30.161750000047505,
+                  "p95_ms": 32.93929100004789,
+                  "p99_ms": 49.20529200001056
+                },
+                "missing": {
+                  "requests": 1596,
+                  "p50_ms": 30.15466700003344,
+                  "p95_ms": 32.87391599997136,
+                  "p99_ms": 53.02925000000869
+                }
+              },
+              "generators": [
+                {
+                  "pid": 453,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.179715948,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.8557206680000036
+                },
+                {
+                  "pid": 454,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.214374486,
+                  "start_lag_s": 9.533299999020528e-05,
+                  "finish_s": 3.8557030010000517
+                },
+                {
+                  "pid": 455,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.190439457,
+                  "start_lag_s": 2.5333000053251453e-05,
+                  "finish_s": 3.856468251000024
+                },
+                {
+                  "pid": 456,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.183238201,
+                  "start_lag_s": 3.0415999958677276e-05,
+                  "finish_s": 3.855872000999966
+                },
+                {
+                  "pid": 457,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.208865989,
+                  "start_lag_s": 3.0666000043311215e-05,
+                  "finish_s": 3.8571961259999625
+                },
+                {
+                  "pid": 458,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.201952984,
+                  "start_lag_s": 4.4125000044914486e-05,
+                  "finish_s": 3.8571832930000483
+                },
+                {
+                  "pid": 459,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1875423779999998,
+                  "start_lag_s": 4.383300006338686e-05,
+                  "finish_s": 3.8563681680000172
+                },
+                {
+                  "pid": 460,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.195531017,
+                  "start_lag_s": 3.90000000152213e-05,
+                  "finish_s": 3.857415710000055
+                }
+              ],
+              "generator_cpu_cores": 2.4787736606174255,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 86839296,
+                  "cpu_s": 3.8623169999999973,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 89436160,
+                  "cpu_s": 0.39796300000000073,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        }
+      ],
+      "execution_order": [
+        [
+          2,
+          16
+        ],
+        [
+          8,
+          64
+        ],
+        [
+          4,
+          64
+        ],
+        [
+          1,
+          16
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          8,
+          128
+        ],
+        [
+          8,
+          16
+        ]
+      ],
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    },
+    {
+      "trial": 2,
+      "scenarios": [
+        {
+          "operation": "latest",
+          "generators": 1,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 12.871842546000039,
+              "requests_per_s": 1243.0232845702456,
+              "p50_ms": 6.5664170000445665,
+              "p95_ms": 40.643667000040296,
+              "p99_ms": 63.13770899998872,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 6.620458000043072,
+                  "p95_ms": 41.490209000016876,
+                  "p99_ms": 60.94833299994207
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 6.506833000003098,
+                  "p95_ms": 39.21216699995966,
+                  "p99_ms": 64.42420799999127
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 6.675374999986161,
+                  "p95_ms": 40.83695799999987,
+                  "p99_ms": 63.7892089999923
+                }
+              },
+              "generators": [
+                {
+                  "pid": 470,
+                  "readers": 16,
+                  "requests": 16000,
+                  "cpu_s": 12.872182405,
+                  "start_lag_s": 0.0,
+                  "finish_s": 12.871842546000039
+                }
+              ],
+              "generator_cpu_cores": 1.0000264032906514,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87486464,
+                  "cpu_s": 4.350416000000003,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 96350208,
+                  "cpu_s": 0.40140000000000065,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 12.696993840000005,
+              "requests_per_s": 1260.1408019585203,
+              "p50_ms": 6.937041000014688,
+              "p95_ms": 40.07950000004712,
+              "p99_ms": 65.84920900002089,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 6.882499999960601,
+                  "p95_ms": 40.10708299995258,
+                  "p99_ms": 65.18216699998902
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 6.964874999994208,
+                  "p95_ms": 39.722417000007226,
+                  "p99_ms": 65.46158399999058
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 7.000416999972003,
+                  "p95_ms": 40.93062499998723,
+                  "p99_ms": 73.75924999996641
+                }
+              },
+              "generators": [
+                {
+                  "pid": 480,
+                  "readers": 16,
+                  "requests": 16000,
+                  "cpu_s": 12.69634849,
+                  "start_lag_s": 0.0,
+                  "finish_s": 12.696993840000005
+                }
+              ],
+              "generator_cpu_cores": 0.9999491730083406,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 58449920,
+                  "cpu_s": 1.488467,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 490337320,
+                "wait_ns": 4453018
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 2,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 5.2448242110000365,
+              "requests_per_s": 3050.6265522575563,
+              "p50_ms": 2.8153749999546562,
+              "p95_ms": 3.32241699993574,
+              "p99_ms": 4.613000000063039,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 2.8220829999554553,
+                  "p95_ms": 3.329750000034437,
+                  "p99_ms": 4.7927919999892765
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 2.8078750000304353,
+                  "p95_ms": 3.3125420000033046,
+                  "p99_ms": 4.790666000076271
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 2.820166000105928,
+                  "p95_ms": 3.3144999999876745,
+                  "p99_ms": 3.8078750000067885
+                }
+              },
+              "generators": [
+                {
+                  "pid": 124,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 5.244992143,
+                  "start_lag_s": 0.0,
+                  "finish_s": 5.2448242110000365
+                },
+                {
+                  "pid": 125,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 5.008004939999999,
+                  "start_lag_s": 9.792000014385849e-06,
+                  "finish_s": 5.010184127999992
+                }
+              ],
+              "generator_cpu_cores": 1.954879071351192,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 62836736,
+                  "cpu_s": 1.5781899999999993,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 504404249,
+                "wait_ns": 69583148
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 4.73529900199992,
+              "requests_per_s": 3378.878502337976,
+              "p50_ms": 3.2030830000167043,
+              "p95_ms": 13.140667000016037,
+              "p99_ms": 35.728542000015295,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.200000000106229,
+                  "p95_ms": 13.359290999915174,
+                  "p99_ms": 36.129207999920254
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.203791000032652,
+                  "p95_ms": 12.690916999986257,
+                  "p99_ms": 35.26833400007945
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.214333000073566,
+                  "p95_ms": 12.87537500002145,
+                  "p99_ms": 33.06383300002835
+                }
+              },
+              "generators": [
+                {
+                  "pid": 138,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.6469426490000005,
+                  "start_lag_s": 0.0,
+                  "finish_s": 4.655906919000017
+                },
+                {
+                  "pid": 139,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.7308641940000005,
+                  "start_lag_s": 1.6666999954395578e-05,
+                  "finish_s": 4.73529900199992
+                }
+              ],
+              "generator_cpu_cores": 1.9804043713056667,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87134208,
+                  "cpu_s": 3.8969749999999976,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 93601792,
+                  "cpu_s": 0.34468099999999957,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 4,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.6688550850000183,
+              "requests_per_s": 4361.033518444329,
+              "p50_ms": 3.638208999973358,
+              "p95_ms": 4.195542000047681,
+              "p99_ms": 4.560416999993322,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.6327909999727126,
+                  "p95_ms": 4.201875000035216,
+                  "p99_ms": 4.56850000000486
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.641582999989623,
+                  "p95_ms": 4.199749999997948,
+                  "p99_ms": 4.568667000057758
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.6486249999825304,
+                  "p95_ms": 4.159417000096255,
+                  "p99_ms": 4.452667000009569
+                }
+              },
+              "generators": [
+                {
+                  "pid": 7,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.0704359130000003,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.668765209999947
+                },
+                {
+                  "pid": 8,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.058086728,
+                  "start_lag_s": 1.9791999989138276e-05,
+                  "finish_s": 3.6664235429999508
+                },
+                {
+                  "pid": 9,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.072243981,
+                  "start_lag_s": 1.8917000033980003e-05,
+                  "finish_s": 3.6688550850000183
+                },
+                {
+                  "pid": 10,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.068433201,
+                  "start_lag_s": 2.966700003526057e-05,
+                  "finish_s": 3.6602126269999644
+                }
+              ],
+              "generator_cpu_cores": 2.2538910999260575,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87101440,
+                  "cpu_s": 3.677099999999996,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 94224384,
+                  "cpu_s": 0.37128099999999975,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.7934097090000023,
+              "requests_per_s": 8921.55312849373,
+              "p50_ms": 1.586666999969566,
+              "p95_ms": 2.1542920000001686,
+              "p99_ms": 3.117916999940462,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 1.5866659999801414,
+                  "p95_ms": 2.1393749999560896,
+                  "p99_ms": 3.012541999964924
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 1.5856669999720907,
+                  "p95_ms": 2.1504999999706342,
+                  "p99_ms": 3.0169999999998254
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 1.5922080000336791,
+                  "p95_ms": 2.1936249999043866,
+                  "p99_ms": 4.0992080000705755
+                }
+              },
+              "generators": [
+                {
+                  "pid": 28,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.751647492,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.7545153340000752
+                },
+                {
+                  "pid": 29,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.7638652419999998,
+                  "start_lag_s": 2.1958000047561654e-05,
+                  "finish_s": 1.7653630010000825
+                },
+                {
+                  "pid": 30,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.7564884909999998,
+                  "start_lag_s": 1.7250000041713065e-05,
+                  "finish_s": 1.7578072930000417
+                },
+                {
+                  "pid": 31,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.790723699,
+                  "start_lag_s": 2.720800000588497e-05,
+                  "finish_s": 1.7934097090000023
+                }
+              ],
+              "generator_cpu_cores": 3.938154727587677,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 60243968,
+                  "cpu_s": 1.5188249999999996,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 458562977,
+                "wait_ns": 343938852
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.2794606669999666,
+              "requests_per_s": 12505.26914400286,
+              "p50_ms": 1.1640830000487767,
+              "p95_ms": 2.002916000037658,
+              "p99_ms": 2.7220829999805574,
+              "outcomes": {
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 1.1677089999011514,
+                  "p95_ms": 1.9965000000183863,
+                  "p99_ms": 2.761582999937673
+                },
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 1.1693330000071,
+                  "p95_ms": 2.0400829999971393,
+                  "p99_ms": 2.7022920000945305
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 1.1252079999621856,
+                  "p95_ms": 1.8928329999425841,
+                  "p99_ms": 2.553999999918233
+                }
+              },
+              "generators": [
+                {
+                  "pid": 489,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.058743835,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.2607942920000141
+                },
+                {
+                  "pid": 490,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0512799899999998,
+                  "start_lag_s": 2.4542000005567388e-05,
+                  "finish_s": 1.2471547090000286
+                },
+                {
+                  "pid": 491,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.060635164,
+                  "start_lag_s": 3.0541999990418844e-05,
+                  "finish_s": 1.2794606669999666
+                },
+                {
+                  "pid": 492,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0508572239999998,
+                  "start_lag_s": 3.675000004932372e-05,
+                  "finish_s": 1.244270541999981
+                },
+                {
+                  "pid": 493,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.060861547,
+                  "start_lag_s": 4.0333000015380094e-05,
+                  "finish_s": 1.2651544169999625
+                },
+                {
+                  "pid": 494,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.059990224,
+                  "start_lag_s": 5.554200004098675e-05,
+                  "finish_s": 1.2650832919999857
+                },
+                {
+                  "pid": 495,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0581091150000002,
+                  "start_lag_s": 8.533300001545285e-05,
+                  "finish_s": 1.2635523339999963
+                },
+                {
+                  "pid": 496,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.070795322,
+                  "start_lag_s": 0.00010374999999385182,
+                  "finish_s": 1.2745426259999704
+                }
+              ],
+              "generator_cpu_cores": 6.6209713510483565,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 58241024,
+                  "cpu_s": 1.6993629999999982,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 663894954,
+                "wait_ns": 2138187606
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.7572632520000298,
+              "requests_per_s": 4258.41867521075,
+              "p50_ms": 3.7099579999448906,
+              "p95_ms": 4.207541999903697,
+              "p99_ms": 4.570833999991919,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.7129579999373163,
+                  "p95_ms": 4.2158329999892885,
+                  "p99_ms": 4.536375000043336
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.7047920000077283,
+                  "p95_ms": 4.202500000019427,
+                  "p99_ms": 4.612415999986297
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.7130840000827448,
+                  "p95_ms": 4.189999999994143,
+                  "p99_ms": 4.508750000013606
+                }
+              },
+              "generators": [
+                {
+                  "pid": 520,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1166826899999998,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.7149764600000026
+                },
+                {
+                  "pid": 521,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.117576757,
+                  "start_lag_s": 3.29169999986334e-05,
+                  "finish_s": 3.736033959999986
+                },
+                {
+                  "pid": 522,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1279938440000001,
+                  "start_lag_s": 3.379200006747851e-05,
+                  "finish_s": 3.741469043000052
+                },
+                {
+                  "pid": 523,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1144285489999999,
+                  "start_lag_s": 3.595800001221505e-05,
+                  "finish_s": 3.7572632520000298
+                },
+                {
+                  "pid": 524,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.110780594,
+                  "start_lag_s": 4.975000001650187e-05,
+                  "finish_s": 3.7377616680000756
+                },
+                {
+                  "pid": 525,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1255122419999999,
+                  "start_lag_s": 5.020800006150239e-05,
+                  "finish_s": 3.7300556679999772
+                },
+                {
+                  "pid": 526,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.11606144,
+                  "start_lag_s": 4.5917000079498393e-05,
+                  "finish_s": 3.7191945020000503
+                },
+                {
+                  "pid": 527,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1104012490000001,
+                  "start_lag_s": 8.78750000765649e-05,
+                  "finish_s": 3.7428219600000148
+                }
+              ],
+              "generator_cpu_cores": 2.3792416888120482,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87695360,
+                  "cpu_s": 3.758464999999994,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95854592,
+                  "cpu_s": 0.38102599999999853,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 4,
+          "readers": 64,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.7018880019999187,
+              "requests_per_s": 4322.118873222559,
+              "p50_ms": 14.366291999976966,
+              "p95_ms": 20.437083999922834,
+              "p99_ms": 58.683291999955145,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 14.368874999945547,
+                  "p95_ms": 20.35470800001349,
+                  "p99_ms": 57.35008299996025
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 14.366416000029858,
+                  "p95_ms": 20.18812500000422,
+                  "p99_ms": 58.98166700001184
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 14.355791999946632,
+                  "p95_ms": 22.447666000061872,
+                  "p99_ms": 67.8923749999285
+                }
+              },
+              "generators": [
+                {
+                  "pid": 49,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.539437656,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.6907924600000115
+                },
+                {
+                  "pid": 50,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.5255274269999997,
+                  "start_lag_s": 2.791999918372312e-06,
+                  "finish_s": 3.6750445850000233
+                },
+                {
+                  "pid": 51,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.579716377,
+                  "start_lag_s": 1.950000000761065e-05,
+                  "finish_s": 3.7018880019999187
+                },
+                {
+                  "pid": 52,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.543853166,
+                  "start_lag_s": 2.0624999933716026e-05,
+                  "finish_s": 3.691279418000022
+                }
+              ],
+              "generator_cpu_cores": 2.752253612344759,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87547904,
+                  "cpu_s": 3.6656429999999958,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95719424,
+                  "cpu_s": 0.36090400000000145,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.855956710999976,
+              "requests_per_s": 4149.424176458318,
+              "p50_ms": 8.5841249999703,
+              "p95_ms": 46.57658300004641,
+              "p99_ms": 71.88987500001076,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 8.588499999973465,
+                  "p95_ms": 47.230916999978945,
+                  "p99_ms": 70.62233399994966
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 8.611209000036979,
+                  "p95_ms": 45.93625000006796,
+                  "p99_ms": 73.31766699996933
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 8.471708000001854,
+                  "p95_ms": 46.41745800006447,
+                  "p99_ms": 85.10491600009118
+                }
+              },
+              "generators": [
+                {
+                  "pid": 85,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.8067964039999995,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.806827918999943
+                },
+                {
+                  "pid": 86,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.7845220219999995,
+                  "start_lag_s": 2.7791999968940218e-05,
+                  "finish_s": 3.78478854399998
+                },
+                {
+                  "pid": 87,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.854008816,
+                  "start_lag_s": 2.441699996325042e-05,
+                  "finish_s": 3.855956710999976
+                },
+                {
+                  "pid": 88,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.8554738169999996,
+                  "start_lag_s": 2.441699996325042e-05,
+                  "finish_s": 3.855616710999925
+                }
+              ],
+              "generator_cpu_cores": 3.9680946145871014,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 62717952,
+                  "cpu_s": 1.4645189999999992,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 465910977,
+                "wait_ns": 112402933
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 64,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.3956338329999198,
+              "requests_per_s": 11464.325112847073,
+              "p50_ms": 3.354875000013635,
+              "p95_ms": 16.64016699999138,
+              "p99_ms": 31.846208000047227,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.3553340000480603,
+                  "p95_ms": 16.33987499997147,
+                  "p99_ms": 30.09479199999987
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.3572500000218497,
+                  "p95_ms": 17.08208399998057,
+                  "p99_ms": 32.60758299995814
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.333375000011074,
+                  "p95_ms": 16.41545900008623,
+                  "p99_ms": 32.848000000058164
+                }
+              },
+              "generators": [
+                {
+                  "pid": 153,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.295631384,
+                  "start_lag_s": 2.0874999904663127e-05,
+                  "finish_s": 1.3566045419999
+                },
+                {
+                  "pid": 154,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.261049336,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.3060223749999977
+                },
+                {
+                  "pid": 155,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.287987279,
+                  "start_lag_s": 8.415999900535098e-06,
+                  "finish_s": 1.338731374999952
+                },
+                {
+                  "pid": 156,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.287209324,
+                  "start_lag_s": 0.00011758299990560772,
+                  "finish_s": 1.3523437919999424
+                },
+                {
+                  "pid": 157,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.306063591,
+                  "start_lag_s": 0.0001479159999462354,
+                  "finish_s": 1.3937587499999609
+                },
+                {
+                  "pid": 158,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.308782413,
+                  "start_lag_s": 6.924999991042569e-05,
+                  "finish_s": 1.3956338329999198
+                },
+                {
+                  "pid": 159,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.305331977,
+                  "start_lag_s": 7.683299998006987e-05,
+                  "finish_s": 1.3695550829999092
+                },
+                {
+                  "pid": 160,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.291957904,
+                  "start_lag_s": 0.0020177499999363135,
+                  "finish_s": 1.3625149999999167
+                }
+              ],
+              "generator_cpu_cores": 7.411695649256013,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 62881792,
+                  "cpu_s": 1.9322990000000004,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 816829116,
+                "wait_ns": 3376460840
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.7264945850000686,
+              "requests_per_s": 4293.579296855387,
+              "p50_ms": 14.814124999929845,
+              "p95_ms": 15.975167000078727,
+              "p99_ms": 17.065249999973275,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 14.80087499999172,
+                  "p95_ms": 15.971832999980506,
+                  "p99_ms": 16.949665999959507
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 14.817708999999013,
+                  "p95_ms": 15.9784170000421,
+                  "p99_ms": 17.1013749999247
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 14.848458999949798,
+                  "p95_ms": 15.98187499996584,
+                  "p99_ms": 17.22562499992364
+                }
+              },
+              "generators": [
+                {
+                  "pid": 206,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.174550264,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.7230109600000105
+                },
+                {
+                  "pid": 207,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1562839999999999,
+                  "start_lag_s": 2.2708000074089796e-05,
+                  "finish_s": 3.7261106270000255
+                },
+                {
+                  "pid": 208,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1657110089999998,
+                  "start_lag_s": 2.4625000037303835e-05,
+                  "finish_s": 3.7264945850000686
+                },
+                {
+                  "pid": 209,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1791525,
+                  "start_lag_s": 3.450000008342613e-05,
+                  "finish_s": 3.719466710000006
+                },
+                {
+                  "pid": 210,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1578818750000002,
+                  "start_lag_s": 4.0000000012696546e-05,
+                  "finish_s": 3.7253676270000824
+                },
+                {
+                  "pid": 211,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.176669326,
+                  "start_lag_s": 4.275000003417517e-05,
+                  "finish_s": 3.7235773350000727
+                },
+                {
+                  "pid": 212,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.169943924,
+                  "start_lag_s": 4.416600006607041e-05,
+                  "finish_s": 3.724314251999999
+                },
+                {
+                  "pid": 213,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.171746747,
+                  "start_lag_s": 0.00012900000001536682,
+                  "finish_s": 3.7245746680000593
+                }
+              ],
+              "generator_cpu_cores": 2.5095809028258196,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 86929408,
+                  "cpu_s": 3.7352929999999986,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 97910784,
+                  "cpu_s": 0.39027600000000007,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 128,
+          "requests": 16000,
+          "trace_sha256": "6a62c168c263359ab3549ce07dada993c3592e333b46fa1163a9414174c8dece",
+          "unique_task_ids": 9086,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.805350752000095,
+              "requests_per_s": 4204.605841285561,
+              "p50_ms": 30.06854199998088,
+              "p95_ms": 31.969832999948267,
+              "p99_ms": 38.54175000003579,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 30.06962500001009,
+                  "p95_ms": 32.03174999998737,
+                  "p99_ms": 38.5943750000024
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 30.06300000004103,
+                  "p95_ms": 31.928459000027942,
+                  "p99_ms": 39.81041700001242
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 30.098915999928977,
+                  "p95_ms": 32.08566700004667,
+                  "p99_ms": 34.84949999995024
+                }
+              },
+              "generators": [
+                {
+                  "pid": 258,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.171394181,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.8045013350000545
+                },
+                {
+                  "pid": 259,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.174129566,
+                  "start_lag_s": 1.975000009224459e-05,
+                  "finish_s": 3.8037162940000826
+                },
+                {
+                  "pid": 260,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.154813706,
+                  "start_lag_s": 2.854199999546836e-05,
+                  "finish_s": 3.805350752000095
+                },
+                {
+                  "pid": 261,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.182710948,
+                  "start_lag_s": 2.420900000288384e-05,
+                  "finish_s": 3.803781210000011
+                },
+                {
+                  "pid": 262,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.183431435,
+                  "start_lag_s": 3.458399999090034e-05,
+                  "finish_s": 3.8030530849999877
+                },
+                {
+                  "pid": 263,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1731047319999999,
+                  "start_lag_s": 5.2084000003560504e-05,
+                  "finish_s": 3.801502252000091
+                },
+                {
+                  "pid": 264,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.17897066,
+                  "start_lag_s": 4.929200008518819e-05,
+                  "finish_s": 3.8036482100000057
+                },
+                {
+                  "pid": 265,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.190797233,
+                  "start_lag_s": 0.00011383399998976529,
+                  "finish_s": 3.804866627000024
+                }
+              ],
+              "generator_cpu_cores": 2.472663645014704,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87289856,
+                  "cpu_s": 3.814169999999997,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95076352,
+                  "cpu_s": 0.38757599999999925,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "sdk-wide": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.9101602939999793,
+              "requests_per_s": 4091.903859939325,
+              "p50_ms": 30.64958300001308,
+              "p95_ms": 33.058250000067346,
+              "p99_ms": 53.502999999977874,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 30.643832999999177,
+                  "p95_ms": 33.04783299995506,
+                  "p99_ms": 53.66712499994719
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 30.650250000007873,
+                  "p95_ms": 33.022667000068395,
+                  "p99_ms": 53.46979199998714
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 30.668292000086694,
+                  "p95_ms": 33.12641699994856,
+                  "p99_ms": 53.199166000013065
+                }
+              },
+              "generators": [
+                {
+                  "pid": 330,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1880403959999999,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.9094466689999763
+                },
+                {
+                  "pid": 331,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1908409930000001,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.9101602939999793
+                },
+                {
+                  "pid": 332,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.181664972,
+                  "start_lag_s": 1.1707999988175288e-05,
+                  "finish_s": 3.9092469189999974
+                },
+                {
+                  "pid": 333,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1869526320000001,
+                  "start_lag_s": 1.0917000054178061e-05,
+                  "finish_s": 3.9082777520000036
+                },
+                {
+                  "pid": 334,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.198412761,
+                  "start_lag_s": 3.595800001221505e-05,
+                  "finish_s": 3.909155460000079
+                },
+                {
+                  "pid": 335,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.193051544,
+                  "start_lag_s": 3.6958000009690295e-05,
+                  "finish_s": 3.9086549600000353
+                },
+                {
+                  "pid": 336,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1947240790000002,
+                  "start_lag_s": 3.533300002800388e-05,
+                  "finish_s": 3.9092815440000095
+                },
+                {
+                  "pid": 337,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1900077359999999,
+                  "start_lag_s": 0.0001385830000799615,
+                  "finish_s": 3.9072441690000232
+                }
+              ],
+              "generator_cpu_cores": 2.435627799610624,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 85573632,
+                  "cpu_s": 3.914810000000003,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 96215040,
+                  "cpu_s": 0.39278600000000097,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 2.028855916999987,
+              "requests_per_s": 7886.2179743442575,
+              "p50_ms": 9.310292000009213,
+              "p95_ms": 48.08891699997275,
+              "p99_ms": 76.22816699995383,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 9.241291999956047,
+                  "p95_ms": 48.13691699996525,
+                  "p99_ms": 75.04383299999517
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 9.446000000025379,
+                  "p95_ms": 48.120666000045276,
+                  "p99_ms": 76.49854200008122
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 9.041832999969301,
+                  "p95_ms": 46.43016699992586,
+                  "p99_ms": 77.91895899993051
+                }
+              },
+              "generators": [
+                {
+                  "pid": 400,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.93361564,
+                  "start_lag_s": 0.0,
+                  "finish_s": 2.004356501000075
+                },
+                {
+                  "pid": 401,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9718579669999998,
+                  "start_lag_s": 0.0,
+                  "finish_s": 2.028855916999987
+                },
+                {
+                  "pid": 402,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.970231935,
+                  "start_lag_s": 9.48750000588916e-05,
+                  "finish_s": 2.022061876000066
+                },
+                {
+                  "pid": 403,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9650260680000002,
+                  "start_lag_s": 1.6250000044237822e-05,
+                  "finish_s": 2.0208665420000216
+                },
+                {
+                  "pid": 404,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9683876650000003,
+                  "start_lag_s": 1.779100000476319e-05,
+                  "finish_s": 2.017532167000013
+                },
+                {
+                  "pid": 405,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.967973034,
+                  "start_lag_s": 3.983300007348589e-05,
+                  "finish_s": 2.015564126000072
+                },
+                {
+                  "pid": 406,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9554440880000001,
+                  "start_lag_s": 4.066600001806364e-05,
+                  "finish_s": 2.012350126000001
+                },
+                {
+                  "pid": 407,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.952401628,
+                  "start_lag_s": 2.9541000003519002e-05,
+                  "finish_s": 2.003260917000034
+                }
+              ],
+              "generator_cpu_cores": 7.73092751120192,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 60055552,
+                  "cpu_s": 2.203939000000002,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 943092225,
+                "wait_ns": 2411418106
+              }
+            }
+          }
+        }
+      ],
+      "execution_order": [
+        [
+          4,
+          16
+        ],
+        [
+          4,
+          64
+        ],
+        [
+          2,
+          16
+        ],
+        [
+          8,
+          64
+        ],
+        [
+          8,
+          128
+        ],
+        [
+          1,
+          16
+        ],
+        [
+          8,
+          16
+        ]
+      ],
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    },
+    {
+      "trial": 3,
+      "scenarios": [
+        {
+          "operation": "latest",
+          "generators": 1,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 12.613117547000002,
+              "requests_per_s": 1268.520644509934,
+              "p50_ms": 7.230374999949163,
+              "p95_ms": 37.93412500010618,
+              "p99_ms": 65.81870800005163,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 7.156750000035572,
+                  "p95_ms": 38.12516699997559,
+                  "p99_ms": 64.87175000006573
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 7.309125000006134,
+                  "p95_ms": 37.7008330000308,
+                  "p99_ms": 66.60145800003647
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 7.313667000062196,
+                  "p95_ms": 37.84945899997183,
+                  "p99_ms": 60.57799999996405
+                }
+              },
+              "generators": [
+                {
+                  "pid": 349,
+                  "readers": 16,
+                  "requests": 16000,
+                  "cpu_s": 12.612104784,
+                  "start_lag_s": 0.0,
+                  "finish_s": 12.613117547000002
+                }
+              ],
+              "generator_cpu_cores": 0.9999197055766563,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 58892288,
+                  "cpu_s": 1.5004949999999937,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 496552701,
+                "wait_ns": 4745609
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 12.694858130999933,
+              "requests_per_s": 1260.3528007082764,
+              "p50_ms": 6.425125000077969,
+              "p95_ms": 39.39041699993595,
+              "p99_ms": 63.07250000008935,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 6.382250000001477,
+                  "p95_ms": 39.91550000000643,
+                  "p99_ms": 65.19079200006672
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 6.463750000079926,
+                  "p95_ms": 39.25354100010736,
+                  "p99_ms": 62.47500000006312
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 6.3732919999210935,
+                  "p95_ms": 37.72266700002547,
+                  "p99_ms": 58.61712500006888
+                }
+              },
+              "generators": [
+                {
+                  "pid": 358,
+                  "readers": 16,
+                  "requests": 16000,
+                  "cpu_s": 12.687966332,
+                  "start_lag_s": 0.0,
+                  "finish_s": 12.694858130999933
+                }
+              ],
+              "generator_cpu_cores": 0.9994571188642823,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 85671936,
+                  "cpu_s": 4.294573,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95621120,
+                  "cpu_s": 0.40203099999999914,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 2,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 4.594274836000068,
+              "requests_per_s": 3482.5953107172286,
+              "p50_ms": 3.194874999962849,
+              "p95_ms": 11.974792000046364,
+              "p99_ms": 32.116250000058244,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.1888749999779975,
+                  "p95_ms": 12.445624999941174,
+                  "p99_ms": 32.11874999999509
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.2040830000141796,
+                  "p95_ms": 11.75458400007301,
+                  "p99_ms": 32.976291999943896
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.1843750000462023,
+                  "p95_ms": 10.528166999961286,
+                  "p99_ms": 27.022375000001375
+                }
+              },
+              "generators": [
+                {
+                  "pid": 280,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.553243932,
+                  "start_lag_s": 0.0,
+                  "finish_s": 4.561297378000063
+                },
+                {
+                  "pid": 281,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.584738435999999,
+                  "start_lag_s": 1.2999999967178155e-05,
+                  "finish_s": 4.594274836000068
+                }
+              ],
+              "generator_cpu_cores": 1.9889934090133445,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87666688,
+                  "cpu_s": 3.8192710000000005,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95760384,
+                  "cpu_s": 0.33953599999999895,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 4.592051584999922,
+              "requests_per_s": 3484.281416233322,
+              "p50_ms": 3.044499999987238,
+              "p95_ms": 4.074166999998852,
+              "p99_ms": 15.665291999994224,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.0413749999524953,
+                  "p95_ms": 4.032917000017733,
+                  "p99_ms": 15.86854200002108
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.0485830000088754,
+                  "p95_ms": 4.0716659999588956,
+                  "p99_ms": 16.057624999916698
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.0352909999464828,
+                  "p95_ms": 4.146208000065599,
+                  "p99_ms": 11.736124999970343
+                }
+              },
+              "generators": [
+                {
+                  "pid": 293,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.591997232,
+                  "start_lag_s": 0.0,
+                  "finish_s": 4.592051584999922
+                },
+                {
+                  "pid": 294,
+                  "readers": 8,
+                  "requests": 8000,
+                  "cpu_s": 4.194625858,
+                  "start_lag_s": 1.3499999909072358e-05,
+                  "finish_s": 4.197699667999927
+                }
+              ],
+              "generator_cpu_cores": 1.9134417214958503,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 57319424,
+                  "cpu_s": 1.5731369999999956,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 494998146,
+                "wait_ns": 139015618
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 4,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.8096336669999573,
+              "requests_per_s": 8841.568485253196,
+              "p50_ms": 1.5949590000445824,
+              "p95_ms": 2.192540999999437,
+              "p99_ms": 3.3087919999843507,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 1.5956669999468431,
+                  "p95_ms": 2.1830419999560036,
+                  "p99_ms": 3.2640409999658004
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 1.593541000033838,
+                  "p95_ms": 2.207624999982727,
+                  "p99_ms": 3.268542000000707
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 1.5975830000343194,
+                  "p95_ms": 2.172083000004932,
+                  "p99_ms": 4.0715000000091095
+                }
+              },
+              "generators": [
+                {
+                  "pid": 307,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.7948192840000001,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.7971263759999374
+                },
+                {
+                  "pid": 308,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.807792409,
+                  "start_lag_s": 4.874999945059244e-06,
+                  "finish_s": 1.8096336669999573
+                },
+                {
+                  "pid": 309,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.80188512,
+                  "start_lag_s": 1.6624999943815055e-05,
+                  "finish_s": 1.8039925839999569
+                },
+                {
+                  "pid": 310,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 1.7658362820000002,
+                  "start_lag_s": 2.34579999869311e-05,
+                  "finish_s": 1.7672095419999323
+                }
+              ],
+              "generator_cpu_cores": 3.962311945095001,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 56516608,
+                  "cpu_s": 1.5566109999999966,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 468877082,
+                "wait_ns": 360405122
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.6722255859999677,
+              "requests_per_s": 4357.030804697449,
+              "p50_ms": 3.6243749999584907,
+              "p95_ms": 4.213833999983763,
+              "p99_ms": 4.664625000032174,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.6170419999734804,
+                  "p95_ms": 4.214250000018183,
+                  "p99_ms": 4.651207999927465
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.6317499999540814,
+                  "p95_ms": 4.213833999983763,
+                  "p99_ms": 4.726500000060696
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.6312920000227678,
+                  "p95_ms": 4.206375000080698,
+                  "p99_ms": 4.6065409999300755
+                }
+              },
+              "generators": [
+                {
+                  "pid": 328,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.064134872,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.667289293999943
+                },
+                {
+                  "pid": 329,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.0560996080000002,
+                  "start_lag_s": 5.125000029693183e-06,
+                  "finish_s": 3.6722255859999677
+                },
+                {
+                  "pid": 330,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.06178072,
+                  "start_lag_s": 8.459000014227058e-06,
+                  "finish_s": 3.6559741690000465
+                },
+                {
+                  "pid": 331,
+                  "readers": 4,
+                  "requests": 4000,
+                  "cpu_s": 2.0675585310000004,
+                  "start_lag_s": 3.4541999980319815e-05,
+                  "finish_s": 3.668535876999954
+                }
+              ],
+              "generator_cpu_cores": 2.2464779294743664,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87855104,
+                  "cpu_s": 3.6768749999999955,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95711232,
+                  "cpu_s": 0.3695939999999993,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 16,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.737308584999937,
+              "requests_per_s": 4281.155713022362,
+              "p50_ms": 3.6835829999972702,
+              "p95_ms": 4.188792000036301,
+              "p99_ms": 4.534208999984912,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.683167000076537,
+                  "p95_ms": 4.188499999941087,
+                  "p99_ms": 4.491250000000946
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.6793340000258468,
+                  "p95_ms": 4.19212500003141,
+                  "p99_ms": 4.580499999974563
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.684334000013223,
+                  "p95_ms": 4.1886249999834035,
+                  "p99_ms": 4.550083000026461
+                }
+              },
+              "generators": [
+                {
+                  "pid": 217,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1209448340000001,
+                  "start_lag_s": 6.24999984211172e-07,
+                  "finish_s": 3.695897627000022
+                },
+                {
+                  "pid": 218,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1343629960000001,
+                  "start_lag_s": 1.3750000107393134e-06,
+                  "finish_s": 3.710878168000022
+                },
+                {
+                  "pid": 219,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1186619899999999,
+                  "start_lag_s": 3.1659999422117835e-06,
+                  "finish_s": 3.737308584999937
+                },
+                {
+                  "pid": 220,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.133703075,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.698930834999942
+                },
+                {
+                  "pid": 221,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1148470129999999,
+                  "start_lag_s": 1.5409999605253688e-06,
+                  "finish_s": 3.715804501999969
+                },
+                {
+                  "pid": 222,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.126516529,
+                  "start_lag_s": 2.1540999910030223e-05,
+                  "finish_s": 3.718449042999964
+                },
+                {
+                  "pid": 223,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.1240767520000001,
+                  "start_lag_s": 2.2541000021192303e-05,
+                  "finish_s": 3.7080757520000134
+                },
+                {
+                  "pid": 224,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.134992817,
+                  "start_lag_s": 9.60410000061529e-05,
+                  "finish_s": 3.7042745019999757
+                }
+              ],
+              "generator_cpu_cores": 2.410319030693622,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 88117248,
+                  "cpu_s": 3.735225,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95703040,
+                  "cpu_s": 0.3855039999999992,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.3024871670000948,
+              "requests_per_s": 12284.190128990987,
+              "p50_ms": 1.1729999999943175,
+              "p95_ms": 2.063457999952334,
+              "p99_ms": 2.977790999921126,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 1.172666999991634,
+                  "p95_ms": 2.0845840000447424,
+                  "p99_ms": 2.9913329999544658
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 1.173042000004898,
+                  "p95_ms": 2.092457999992803,
+                  "p99_ms": 3.1251670000074228
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 1.173207999954684,
+                  "p95_ms": 2.035542000044188,
+                  "p99_ms": 2.9183750000356667
+                }
+              },
+              "generators": [
+                {
+                  "pid": 248,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.071287409,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.291861084000061
+                },
+                {
+                  "pid": 249,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.0802862819999999,
+                  "start_lag_s": 1.950000000761065e-05,
+                  "finish_s": 1.2794138340000245
+                },
+                {
+                  "pid": 250,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.079621663,
+                  "start_lag_s": 2.1334000052775082e-05,
+                  "finish_s": 1.2890982510000413
+                },
+                {
+                  "pid": 251,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.074743153,
+                  "start_lag_s": 2.4375000066356733e-05,
+                  "finish_s": 1.3024871670000948
+                },
+                {
+                  "pid": 252,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.071932039,
+                  "start_lag_s": 2.7667000040310086e-05,
+                  "finish_s": 1.2596415840000645
+                },
+                {
+                  "pid": 253,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.080389799,
+                  "start_lag_s": 4.4333999994705664e-05,
+                  "finish_s": 1.2854894590000185
+                },
+                {
+                  "pid": 254,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.058703365,
+                  "start_lag_s": 4.1709000015544007e-05,
+                  "finish_s": 1.271560126000054
+                },
+                {
+                  "pid": 255,
+                  "readers": 2,
+                  "requests": 2000,
+                  "cpu_s": 1.072168664,
+                  "start_lag_s": 7.779200007007603e-05,
+                  "finish_s": 1.2821655010000086
+                }
+              ],
+              "generator_cpu_cores": 6.594408445330482,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 56705024,
+                  "cpu_s": 1.717416,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 673519799,
+                "wait_ns": 2110186871
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 4,
+          "readers": 64,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.9161917099999073,
+              "requests_per_s": 4085.6018256574007,
+              "p50_ms": 8.734624999988228,
+              "p95_ms": 46.80483300001015,
+              "p99_ms": 72.89604200002486,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 8.8427910000064,
+                  "p95_ms": 45.92783300006431,
+                  "p99_ms": 71.36670800002776
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 8.280000000013388,
+                  "p95_ms": 50.20916600005876,
+                  "p99_ms": 82.49041699991722
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 8.734874999959175,
+                  "p95_ms": 48.72887499993794,
+                  "p99_ms": 73.22879200000898
+                }
+              },
+              "generators": [
+                {
+                  "pid": 471,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.835040069,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.8418572929999755
+                },
+                {
+                  "pid": 472,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.821380696,
+                  "start_lag_s": 3.9499999957115506e-05,
+                  "finish_s": 3.8313116679998984
+                },
+                {
+                  "pid": 473,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.8354098169999995,
+                  "start_lag_s": 3.145799996673304e-05,
+                  "finish_s": 3.8399176679999982
+                },
+                {
+                  "pid": 474,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 3.9031171479999998,
+                  "start_lag_s": 3.412499995647522e-05,
+                  "finish_s": 3.9161917099999073
+                }
+              ],
+              "generator_cpu_cores": 3.931101659474266,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 58945536,
+                  "cpu_s": 1.5252380000000016,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 480857490,
+                "wait_ns": 948845181
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.6395525010000256,
+              "requests_per_s": 4396.144854512675,
+              "p50_ms": 14.294999999947322,
+              "p95_ms": 15.884374999927786,
+              "p99_ms": 25.216125000042666,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 14.298374999953012,
+                  "p95_ms": 15.842124999949192,
+                  "p99_ms": 27.370541999971465
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 14.293333000068742,
+                  "p95_ms": 15.918292000037582,
+                  "p99_ms": 21.802708999985043
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 14.29174999998395,
+                  "p95_ms": 15.917541000021629,
+                  "p99_ms": 23.906457999942177
+                }
+              },
+              "generators": [
+                {
+                  "pid": 509,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.2586365099999997,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.6395525010000256
+                },
+                {
+                  "pid": 510,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.278706807,
+                  "start_lag_s": 3.108299995346897e-05,
+                  "finish_s": 3.632719667999936
+                },
+                {
+                  "pid": 511,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.2560255490000003,
+                  "start_lag_s": 6.908299997121503e-05,
+                  "finish_s": 3.636615751000022
+                },
+                {
+                  "pid": 512,
+                  "readers": 16,
+                  "requests": 4000,
+                  "cpu_s": 2.270684264,
+                  "start_lag_s": 0.0002671659999577969,
+                  "finish_s": 3.6394223349999493
+                }
+              ],
+              "generator_cpu_cores": 2.490430658029938,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 87678976,
+                  "cpu_s": 3.639796000000004,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 93290496,
+                  "cpu_s": 0.3713230000000003,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 64,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.699171043999968,
+              "requests_per_s": 4325.293372403501,
+              "p50_ms": 14.651875000026848,
+              "p95_ms": 15.841833000081351,
+              "p99_ms": 16.908791999981077,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 14.659667000046284,
+                  "p95_ms": 15.85162499998205,
+                  "p99_ms": 16.941915999950652
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 14.648874999920736,
+                  "p95_ms": 15.829040999960853,
+                  "p99_ms": 16.893290999973942
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 14.634375000014188,
+                  "p95_ms": 15.833625000027496,
+                  "p99_ms": 16.779000000042288
+                }
+              },
+              "generators": [
+                {
+                  "pid": 367,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1646153989999999,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.6981725019999203
+                },
+                {
+                  "pid": 368,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.159343909,
+                  "start_lag_s": 3.337499992994708e-05,
+                  "finish_s": 3.698471834999964
+                },
+                {
+                  "pid": 369,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.166999199,
+                  "start_lag_s": 3.4416999938002846e-05,
+                  "finish_s": 3.699171043999968
+                },
+                {
+                  "pid": 370,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1850511629999998,
+                  "start_lag_s": 0.00011479199997666001,
+                  "finish_s": 3.692853044000003
+                },
+                {
+                  "pid": 371,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.170507482,
+                  "start_lag_s": 4.2749999920488335e-05,
+                  "finish_s": 3.6971662099999776
+                },
+                {
+                  "pid": 372,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.168533983,
+                  "start_lag_s": 5.88340000149401e-05,
+                  "finish_s": 3.696213501999978
+                },
+                {
+                  "pid": 373,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.1686763139999998,
+                  "start_lag_s": 5.791699993551447e-05,
+                  "finish_s": 3.6955351689999816
+                },
+                {
+                  "pid": 374,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.15915203,
+                  "start_lag_s": 4.32919999866499e-05,
+                  "finish_s": 3.6980819599999677
+                }
+              ],
+              "generator_cpu_cores": 2.525668418105211,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 88424448,
+                  "cpu_s": 3.704092000000003,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95580160,
+                  "cpu_s": 0.38771999999999984,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 1.3775402910000594,
+              "requests_per_s": 11614.905280472345,
+              "p50_ms": 3.3729159999893454,
+              "p95_ms": 16.823166999984096,
+              "p99_ms": 28.58945900004528,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 3.383875000054104,
+                  "p95_ms": 17.16954200003329,
+                  "p99_ms": 28.459916000088015
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 3.36404200004381,
+                  "p95_ms": 16.38362500000312,
+                  "p99_ms": 27.6115840000557
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 3.3582080000087444,
+                  "p95_ms": 16.189957999927174,
+                  "p99_ms": 32.73704200000793
+                }
+              },
+              "generators": [
+                {
+                  "pid": 418,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.302389025,
+                  "start_lag_s": 0.0,
+                  "finish_s": 1.3621297079999977
+                },
+                {
+                  "pid": 419,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.2919973379999998,
+                  "start_lag_s": 2.370800007156504e-05,
+                  "finish_s": 1.3692007910000257
+                },
+                {
+                  "pid": 420,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.27630894,
+                  "start_lag_s": 1.8542000020715932e-05,
+                  "finish_s": 1.3493902080000453
+                },
+                {
+                  "pid": 421,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.290116209,
+                  "start_lag_s": 2.6708000063990767e-05,
+                  "finish_s": 1.367309500000033
+                },
+                {
+                  "pid": 422,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.2857475749999998,
+                  "start_lag_s": 4.0582999986327195e-05,
+                  "finish_s": 1.36026383300009
+                },
+                {
+                  "pid": 423,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.259430198,
+                  "start_lag_s": 4.079200004980521e-05,
+                  "finish_s": 1.3221437079999987
+                },
+                {
+                  "pid": 424,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.289037158,
+                  "start_lag_s": 3.3833000088634435e-05,
+                  "finish_s": 1.3748473750000585
+                },
+                {
+                  "pid": 425,
+                  "readers": 8,
+                  "requests": 2000,
+                  "cpu_s": 1.3041566839999998,
+                  "start_lag_s": 0.0001361250000400105,
+                  "finish_s": 1.3775402910000594
+                }
+              ],
+              "generator_cpu_cores": 7.476502280396498,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 58990592,
+                  "cpu_s": 2.018295000000002,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 852247731,
+                "wait_ns": 4767810847
+              }
+            }
+          }
+        },
+        {
+          "operation": "latest",
+          "generators": 8,
+          "readers": 128,
+          "requests": 16000,
+          "trace_sha256": "f5acc5cf467fa65f32f4703aa957d7dbbcb19af682ce47ceb2a40d19aa6782ab",
+          "unique_task_ids": 9093,
+          "arms": {
+            "spooltail": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 2.0532009589999234,
+              "requests_per_s": 7792.7101727993095,
+              "p50_ms": 9.164499999997133,
+              "p95_ms": 47.99720799996976,
+              "p99_ms": 77.32420800005002,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 9.339167000007365,
+                  "p95_ms": 47.659042000077534,
+                  "p99_ms": 78.67866699996284
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 8.997541999974601,
+                  "p95_ms": 48.82612500000505,
+                  "p99_ms": 76.51754199991956
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 9.274374999904467,
+                  "p95_ms": 46.39408299999559,
+                  "p99_ms": 69.96787499997481
+                }
+              },
+              "generators": [
+                {
+                  "pid": 7,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.943762536,
+                  "start_lag_s": 0.0,
+                  "finish_s": 2.010565000999918
+                },
+                {
+                  "pid": 8,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.910166095,
+                  "start_lag_s": 3.1292000016946986e-05,
+                  "finish_s": 1.966984043000025
+                },
+                {
+                  "pid": 9,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9459586640000002,
+                  "start_lag_s": 3.7416999930428574e-05,
+                  "finish_s": 2.0103047090000246
+                },
+                {
+                  "pid": 10,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9292992540000002,
+                  "start_lag_s": 4.1791999933593615e-05,
+                  "finish_s": 1.9904093339999918
+                },
+                {
+                  "pid": 11,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9399242780000001,
+                  "start_lag_s": 6.262499994136306e-05,
+                  "finish_s": 2.005574167999953
+                },
+                {
+                  "pid": 12,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9155350260000001,
+                  "start_lag_s": 6.199999995715189e-05,
+                  "finish_s": 1.9793210839999347
+                },
+                {
+                  "pid": 13,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.9650534149999999,
+                  "start_lag_s": 4.6042000008128525e-05,
+                  "finish_s": 2.0267900430000054
+                },
+                {
+                  "pid": 14,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.978022869,
+                  "start_lag_s": 0.00011754199999813864,
+                  "finish_s": 2.0532009589999234
+                }
+              ],
+              "generator_cpu_cores": 7.562689891087557,
+              "resources": {
+                "spool": {
+                  "memory_bytes": 63909888,
+                  "cpu_s": 2.198787000000003,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              },
+              "store_lock": {
+                "calls": 16000,
+                "hold_ns": 942381709,
+                "wait_ns": 1852037627
+              }
+            },
+            "sdk-once": {
+              "requests": 16000,
+              "verified": 15976,
+              "errors": {
+                "http_500": 12,
+                "transport_ReadError": 12
+              },
+              "elapsed_s": 3.827570043000037,
+              "requests_per_s": 4173.927536405856,
+              "p50_ms": 30.071166000084304,
+              "p95_ms": 32.38299999998162,
+              "p99_ms": 53.373833000023296,
+              "outcomes": {
+                "running": {
+                  "requests": 7190,
+                  "p50_ms": 30.071958000007726,
+                  "p95_ms": 32.3606250000239,
+                  "p99_ms": 53.44891699996879
+                },
+                "http_500": {
+                  "requests": 12,
+                  "p50_ms": 35.777166999992005,
+                  "p95_ms": 43.831832999899234,
+                  "p99_ms": 43.831832999899234
+                },
+                "transport_ReadError": {
+                  "requests": 12,
+                  "p50_ms": 8.605665999994017,
+                  "p95_ms": 16.797416000031262,
+                  "p99_ms": 16.797416000031262
+                },
+                "completed": {
+                  "requests": 7187,
+                  "p50_ms": 30.067207999991297,
+                  "p95_ms": 32.42133300000205,
+                  "p99_ms": 53.30229200001213
+                },
+                "missing": {
+                  "requests": 1599,
+                  "p50_ms": 30.0909169999386,
+                  "p95_ms": 32.435791000011704,
+                  "p99_ms": 53.514625000048
+                }
+              },
+              "generators": [
+                {
+                  "pid": 77,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.178384074,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.827570043000037
+                },
+                {
+                  "pid": 78,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.181370287,
+                  "start_lag_s": 1.2624999953914084e-05,
+                  "finish_s": 3.82754012700002
+                },
+                {
+                  "pid": 79,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.187636334,
+                  "start_lag_s": 3.204100005405053e-05,
+                  "finish_s": 3.826858917999971
+                },
+                {
+                  "pid": 80,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.18873374,
+                  "start_lag_s": 3.2000000032894604e-05,
+                  "finish_s": 3.827070918000004
+                },
+                {
+                  "pid": 81,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.179420165,
+                  "start_lag_s": 4.9874999945132004e-05,
+                  "finish_s": 3.8252453769999875
+                },
+                {
+                  "pid": 82,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.181443533,
+                  "start_lag_s": 6.76659999498952e-05,
+                  "finish_s": 3.827412042999981
+                },
+                {
+                  "pid": 83,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.199880613,
+                  "start_lag_s": 7.145799997942959e-05,
+                  "finish_s": 3.826884585000016
+                },
+                {
+                  "pid": 84,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.177647448,
+                  "start_lag_s": 0.00011066599995501747,
+                  "finish_s": 3.8264281269999856
+                }
+              ],
+              "generator_cpu_cores": 2.475334504022271,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 81805312,
+                  "cpu_s": 3.8360979999999927,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95662080,
+                  "cpu_s": 0.39237700000000153,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            },
+            "sdk-wide": {
+              "requests": 16000,
+              "verified": 16000,
+              "errors": {},
+              "elapsed_s": 3.833581251999931,
+              "requests_per_s": 4173.643115468859,
+              "p50_ms": 30.073667000010573,
+              "p95_ms": 32.327875000078166,
+              "p99_ms": 50.559582999994745,
+              "outcomes": {
+                "running": {
+                  "requests": 7200,
+                  "p50_ms": 30.066916999999194,
+                  "p95_ms": 32.278292000000874,
+                  "p99_ms": 50.44058400005724
+                },
+                "completed": {
+                  "requests": 7200,
+                  "p50_ms": 30.07670900001358,
+                  "p95_ms": 32.357625000031476,
+                  "p99_ms": 50.65504100002727
+                },
+                "missing": {
+                  "requests": 1600,
+                  "p50_ms": 30.09050000002844,
+                  "p95_ms": 32.40525000001071,
+                  "p99_ms": 50.47095800000534
+                }
+              },
+              "generators": [
+                {
+                  "pid": 148,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.189098476,
+                  "start_lag_s": 0.0,
+                  "finish_s": 3.8328374599999506
+                },
+                {
+                  "pid": 149,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.194068253,
+                  "start_lag_s": 2.8374999942570867e-05,
+                  "finish_s": 3.8318301269999893
+                },
+                {
+                  "pid": 150,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1868017530000001,
+                  "start_lag_s": 3.391699999610864e-05,
+                  "finish_s": 3.830145917999971
+                },
+                {
+                  "pid": 151,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.189055759,
+                  "start_lag_s": 3.0374999937521352e-05,
+                  "finish_s": 3.833581251999931
+                },
+                {
+                  "pid": 152,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1871966649999999,
+                  "start_lag_s": 3.4916999993583886e-05,
+                  "finish_s": 3.8326569600000084
+                },
+                {
+                  "pid": 153,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1761005709999999,
+                  "start_lag_s": 5.420799993771652e-05,
+                  "finish_s": 3.832059459999982
+                },
+                {
+                  "pid": 154,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.1726447759999998,
+                  "start_lag_s": 5.4499999919244146e-05,
+                  "finish_s": 3.8326755429999366
+                },
+                {
+                  "pid": 155,
+                  "readers": 16,
+                  "requests": 2000,
+                  "cpu_s": 1.194381619,
+                  "start_lag_s": 0.00010612500000206637,
+                  "finish_s": 3.831265584999983
+                }
+              ],
+              "generator_cpu_cores": 2.475321963516367,
+              "resources": {
+                "sdk-api": {
+                  "memory_bytes": 88453120,
+                  "cpu_s": 3.8395189999999957,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                },
+                "redis": {
+                  "memory_bytes": 95731712,
+                  "cpu_s": 0.39152599999999893,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 0
+                }
+              }
+            }
+          }
+        }
+      ],
+      "execution_order": [
+        [
+          8,
+          128
+        ],
+        [
+          8,
+          16
+        ],
+        [
+          2,
+          16
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          1,
+          16
+        ],
+        [
+          8,
+          64
+        ],
+        [
+          4,
+          64
+        ]
+      ],
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    }
+  ],
+  "sdk_exception_counts": {
+    "redis.exceptions.MaxConnectionsError: Too many connections": 47
+  },
+  "wide_pool_connections": 128
+}

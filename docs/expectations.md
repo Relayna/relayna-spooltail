@@ -13,6 +13,8 @@ The prototype answers two questions. Can a worker recover a task after another w
 | Crash after writing and before acknowledgement | Hold SQLite’s writer lock, start a real HTTP append, verify and flush its complete journal bytes, then kill the blocked broker. On restart exactly one suffix frame is applied. Retrying the same ID yields one history entry. Different content with the same ID is rejected. | Process test |
 | Worker loss with independent subscribers | Two workers claim distinct tasks. Audit commits its first record. Kill the broker, allow worker A’s lease to expire, then reclaim that record. A’s stale acknowledgement fails. Audit resumes on the second record. Another stream group begins on the first. | Process test |
 | Retry and settlement | Retrying releases the generation, renewal extends the new lease, and acknowledgement or dead-letter settlement removes work from that group’s ready set. | Process test |
+| Atomic task completion | A valid claim settles together with one terminal status. Concurrent identical requests return the same status offset. Both streaming transports deliver the event, and other work and stream subscriptions keep their own progress. Stale leases, task mismatches, and event ID collisions leave the claim and history intact. | Process test |
+| Crash during completion | Kill the broker after the completion frame reaches the journal and before SQLite commits. Restart after lease expiry. The status appears once, the work stays settled, and repeating the request returns its original result. A torn frame leaves the task available to its lease holder or a later worker. | Process and Rust tests |
 | Retention passes a cursor | Move the status read floor past `E41`. Both protocols report a gap and the earliest retained event ID. An existing stream group cannot silently skip an unprocessed expired record. Work leases retain independent semantics. | Process and Rust tests |
 | Segment integrity | An incomplete tail is truncated, a complete corrupt suffix frame fails recovery, a second writer cannot open the volume, and lookups survive segment rotation. | Rust tests |
 
@@ -22,7 +24,11 @@ Run the commands in the [README](../README.md#verify). The Python driver writes 
 
 The November 20, 2026 local run passed Rust formatting, strict Clippy, all four Rust tests, Python harness linting, a locked release build and the 800,000-event process suite. After the fully indexed restart, recovery read zero suffix frames and the rare-task replay decoded one payload. The first missed status arrived in 3.82 ms in one loopback WebSocket sample on the development machine. Treat this as a functional run record. Production latency and comparative CPU measurements require the workload below.
 
-## Comparative benchmark draft
+The atomic completion update passed all six Rust tests and the extended 800,000-event process suite. When the process died after writing a completion frame, recovery settled the claim and published one status even though the lease had expired during downtime. Repeated requests returned that status’s offset. The torn-frame test verified that an incomplete write preserved the original lease and left status history empty.
+
+## Comparative benchmarks
+
+The [local comparison](../benchmarks/README.md) runs the released SDK with RabbitMQ and Redis alongside Spooltail. It covers consumer restart, per-task SSE resume, and task completion. The broader AKS workload below adds deployment-level measurements.
 
 Use the same ordered inputs, stable IDs, payload distribution, topic/task skew, reader population and post-restart publish rate in every arm. Preserve each arm’s pre-crash durable state. Record deployed versions, pod counts, CPU limits, prefetch, deduplication lifetime, persistence and replication settings. Run single-volume and equivalent replicated configurations separately. Keep the reader restart separate from a storage-node failure. Report warm and cold-cache trials and repeated-run distributions.
 

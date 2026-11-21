@@ -1,0 +1,50 @@
+x-broker: &broker
+  image: ${COMPOSE_PROJECT_NAME}-broker
+services:
+  http1:
+    <<: *broker
+    build:
+      context: ../..
+      dockerfile: benchmarks/Dockerfile
+      target: transport-broker
+    volumes:
+      - http1-data:/data
+  http2:
+    <<: *broker
+    volumes:
+      - http2-data:/data
+  http-uds:
+    <<: *broker
+    environment:
+      SPOOLTAIL_BENCH_UNIX: /sockets/http.sock
+    volumes:
+      - http-uds-data:/data
+      - sockets:/sockets
+  grpc:
+    <<: *broker
+    environment:
+      SPOOLTAIL_BENCH_GRPC: 0.0.0.0:7474
+    volumes:
+      - grpc-data:/data
+  grpc-uds:
+    <<: *broker
+    environment:
+      SPOOLTAIL_BENCH_GRPC: unix:/sockets/grpc.sock
+    volumes:
+      - grpc-uds-data:/data
+      - sockets:/sockets
+  driver:
+    build:
+      context: ../..
+      dockerfile: benchmarks/Dockerfile
+      target: transport-driver
+    volumes:
+      - sockets:/sockets
+    profiles: [bench]
+volumes:
+  http1-data:
+  http2-data:
+  http-uds-data:
+  grpc-data:
+  grpc-uds-data:
+  sockets:

@@ -1,0 +1,90 @@
+syntax = "proto3";
+package spooltail.v1;
+
+service Spooltail {
+  rpc Ping(Empty) returns (Empty);
+  rpc Latest(Task) returns (Record);
+  rpc History(Task) returns (Page);
+  rpc Append(Publish) returns (Offset);
+  rpc Claim(ClaimRequest) returns (ClaimResponse);
+  rpc Settle(SettleRequest) returns (Empty);
+  rpc Complete(CompleteRequest) returns (Offset);
+  rpc Next(StreamGroup) returns (NextResponse);
+  rpc Commit(CommitRequest) returns (Empty);
+  rpc Subscribe(Task) returns (stream Delivery);
+  rpc Stats(Empty) returns (StatsResponse);
+}
+
+message Empty {}
+message Task {
+  string topic = 1;
+  string task_id = 2;
+  // Exclusive event-ID cursor for History and Subscribe.
+  optional string after = 3;
+}
+message Record {
+  int64 offset = 1;
+  bytes event_json = 2;
+}
+message Page { repeated Record records = 1; }
+message Publish {
+  string topic = 1;
+  bytes event_json = 2;
+}
+message Offset { int64 offset = 1; }
+message ClaimRequest {
+  string topic = 1;
+  string group = 2;
+  int64 lease_ms = 3;
+}
+message ClaimResponse {
+  // Absent when no work is available.
+  Record record = 1;
+  int64 generation = 2;
+  int64 lease_until_ms = 3;
+}
+enum SettlementAction {
+  SETTLEMENT_ACTION_UNSPECIFIED = 0;
+  SETTLEMENT_ACTION_ACK = 1;
+  SETTLEMENT_ACTION_RENEW = 2;
+  SETTLEMENT_ACTION_RETRY = 3;
+  SETTLEMENT_ACTION_DEAD_LETTER = 4;
+}
+message SettleRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+  int64 generation = 4;
+  SettlementAction action = 5;
+  int64 delay_ms = 6;
+}
+message CompleteRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+  int64 generation = 4;
+  Publish status = 5;
+}
+message Delivery {
+  // One of ready, status, gap, or error.
+  string kind = 1;
+  optional string event_id = 2;
+  bytes data_json = 3;
+}
+message StreamGroup {
+  string topic = 1;
+  string group = 2;
+}
+message NextResponse {
+  // Absent when the stream group has caught up.
+  Record record = 1;
+}
+message CommitRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+}
+message StatsResponse {
+  uint64 payload_reads = 1;
+  uint64 recovered_frames = 2;
+}

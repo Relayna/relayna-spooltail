@@ -1,3 +1,8 @@
+#[cfg(feature = "bench-lock-timing")]
+mod bench_lock;
+#[cfg(feature = "bench-tls")]
+mod bench_tls;
+mod grpc;
 mod store;
 mod subscriptions;
 
@@ -24,7 +29,8 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex, Weak},
 };
-use store::{Problem, Store, identifier};
+use store::{Problem, Store, identifier, terminal_status};
+use subscriptions::WorkLease;
 use tokio::sync::watch;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 
@@ -41,8 +47,13 @@ impl Broker {
         f: impl FnOnce(&mut Store) -> Result<T> + Send + 'static,
     ) -> Result<T> {
         let store = self.store.clone();
-        tokio::task::spawn_blocking(move || f(&mut store.lock().expect("store mutex poisoned")))
-            .await?
+        tokio::task::spawn_blocking(move || {
+            #[cfg(feature = "bench-lock-timing")]
+            return bench_lock::run(&store, f);
+            #[cfg(not(feature = "bench-lock-timing"))]
+            f(&mut store.lock().expect("store mutex poisoned"))
+        })
+        .await?
     }
     fn subscribe(&self, topic: &str, task: &str) -> Arc<watch::Sender<()>> {
         let mut map = self.watchers.lock().unwrap();
@@ -122,18 +133,24 @@ async fn append(
     Path(topic): Path<String>,
     Json(event): Json<Value>,
 ) -> Reply {
+    Ok(Json(
+        json!({"offset": publish(b, topic, event, None).await?}),
+    ))
+}
+
+async fn publish(b: Broker, topic: String, event: Value, lease: Option<WorkLease>) -> Result<i64> {
     let task = event["task_id"].as_str().unwrap_or_default().to_owned();
-    let dest = topic.clone();
     let wake = b.clone();
-    let off = b
-        .run(move |s| {
-            let off = s.append(&dest, event)?;
-            // The request can disconnect while blocking I/O completes. Wake readers on commit anyway.
-            wake.notify(dest, task);
-            Ok(off)
-        })
-        .await?;
-    Ok(Json(json!({"offset":off})))
+    b.run(move |s| {
+        let off = match lease {
+            Some(lease) => s.complete(lease, &topic, event)?,
+            None => s.append(&topic, event)?,
+        };
+        // The request can disconnect while blocking I/O completes. Wake readers on commit anyway.
+        wake.notify(topic, task);
+        Ok(off)
+    })
+    .await
 }
 async fn latest(State(b): State<Broker>, Path((topic, task)): Parts) -> Reply {
     Ok(Json(json!(b.run(move |s| s.latest(&topic, &task)).await?)))
@@ -189,8 +206,7 @@ fn feed(b: Broker, topic: String, task: String, after: Option<String>) -> Feed {
             }
             for record in page {
                 position = record.offset;
-                let terminal = record.event["status"].as_str().is_some_and(|s|
-                    s.eq_ignore_ascii_case("completed") || s.eq_ignore_ascii_case("failed"));
+                let terminal = terminal_status(&record.event);
                 let id = record.event["event_id"].as_str().map(str::to_owned);
                 yield Delivery { kind: "status", data: record.event, id };
                 if terminal { return; }
@@ -312,6 +328,13 @@ struct Settlement {
     delay_ms: i64,
 }
 #[derive(Deserialize)]
+struct Completion {
+    offset: i64,
+    generation: i64,
+    status_topic: String,
+    event: Value,
+}
+#[derive(Deserialize)]
 struct Commit {
     offset: i64,
 }
@@ -342,6 +365,22 @@ async fn settle(
     .await?;
     Ok(Json(json!({"ok":true})))
 }
+async fn complete(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Json(q): Json<Completion>,
+) -> Reply {
+    let lease = WorkLease {
+        topic,
+        group,
+        offset: q.offset,
+        generation: q.generation,
+    };
+    Ok(Json(
+        json!({"offset": publish(b, q.status_topic, q.event, Some(lease)).await?}),
+    ))
+}
+
 async fn next(State(b): State<Broker>, Path((topic, group)): Parts) -> Reply {
     Ok(Json(json!(
         b.run(move |s| s.group_next(&topic, &group)).await?
@@ -373,6 +412,28 @@ async fn main() -> Result<()> {
         store: Arc::new(Mutex::new(store)),
         watchers: Default::default(),
     };
+    #[cfg(feature = "bench-transports")]
+    if grpc::SETTINGS
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+    {
+        anyhow::ensure!(
+            [
+                "SPOOLTAIL_BENCH_GRPC",
+                "SPOOLTAIL_BENCH_UNIX",
+                "SPOOLTAIL_BENCH_CERT",
+                "SPOOLTAIL_BENCH_KEY"
+            ]
+            .iter()
+            .all(|name| std::env::var_os(name).is_none()),
+            "gRPC listener settings cannot be combined with benchmark listener settings",
+        );
+    }
+    #[cfg(feature = "bench-transports")]
+    if let Ok(addr) = std::env::var("SPOOLTAIL_BENCH_GRPC") {
+        return grpc::serve_benchmark(broker, &addr).await;
+    }
+    let grpc_listener = grpc::Listener::bind_from_env(broker.clone()).await?;
     let app = Router::new()
         .route("/topics/{topic}/records", post(append))
         .route("/topics/{topic}/tasks/{task}/latest", get(latest))
@@ -380,13 +441,31 @@ async fn main() -> Result<()> {
         .route("/topics/{topic}/tasks/{task}/events", get(sse))
         .route("/topics/{topic}/work/{group}/claim", post(claim))
         .route("/topics/{topic}/work/{group}/settle", post(settle))
+        .route("/topics/{topic}/work/{group}/complete", post(complete))
         .route("/topics/{topic}/streams/{group}/next", get(next))
         .route("/topics/{topic}/streams/{group}/commit", post(commit))
         .route("/stats", get(stats))
-        .route("/ws", get(websocket))
+        .route("/ws", get(websocket));
+    #[cfg(feature = "bench-lock-timing")]
+    let app = app.route("/bench/store-lock", get(bench_lock::snapshot));
+    #[cfg(feature = "bench-transports")]
+    let app = app.route("/bench/ping", get(|| async { StatusCode::NO_CONTENT }));
+    let app = app
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .with_state(broker);
+    #[cfg(all(feature = "bench-transports", unix))]
+    if let Ok(path) = std::env::var("SPOOLTAIL_BENCH_UNIX") {
+        let listener =
+            tokio::net::UnixListener::bind(&path).context("bind benchmark Unix socket")?;
+        println!("Listening {path} recovered_frames={recovered}");
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
     let addr = std::env::var("SPOOLTAIL_LISTEN").unwrap_or_else(|_| "127.0.0.1:7474".into());
+    #[cfg(feature = "bench-tls")]
+    if let Some(files) = bench_tls::identity_files()? {
+        return bench_tls::serve_http(app, &addr, files).await;
+    }
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .context("bind broker listener")?;
@@ -394,7 +473,12 @@ async fn main() -> Result<()> {
         "Listening {} recovered_frames={recovered}",
         listener.local_addr()?
     );
-    axum::serve(listener, app).await?;
+    let http = async { axum::serve(listener, app).await.context("serve HTTP") };
+    if let Some(grpc) = grpc_listener {
+        tokio::try_join!(http, grpc.serve())?;
+    } else {
+        http.await?;
+    }
     Ok(())
 }
 

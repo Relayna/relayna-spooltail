@@ -1,0 +1,852 @@
+{
+  "started_utc": "2026-11-20T07:35:27.657846+00:00",
+  "settings": {
+    "prefix": 5000,
+    "offline": 250,
+    "tasks": 200,
+    "trials": 3,
+    "timeout": 3600
+  },
+  "sdk_revision": "de4c60f052a9af7cd5d5543430c6f4e8b47cd327",
+  "spooltail_revision": "6fcc9675e0e30d8606b6f5db0808ff0113e7c3b9",
+  "broker_source_sha256": {
+    "main.rs": "a86c03a48fa66f85b268f4adf6cc8a34f4b4546c2342c916c91a59cfbd473861",
+    "store.rs": "7c9721ae3dafe96e2b617411d2c079f0e0bbfae7911ce943bfe5d86a7e1bc025",
+    "subscriptions.rs": "33e3839d3f3155aab687b93949591c46d5c168027a0c30f9934264fcf8124d61",
+    "tests.rs": "e848c7567e27632030208af38d45a7c0b6fd5095449c1d8b9105901465d6cf57"
+  },
+  "engine": {
+    "version": "29.9.3",
+    "architecture": "aarch64",
+    "cpus": 10,
+    "memory_bytes": 20940046336
+  },
+  "service_images": {
+    "rabbit": "rabbitmq:4.3.6@sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd sha256:95cbcc81abe46d919d2ae2c783025a2f4e2a147108bb86e5b441ea8008af6596",
+    "redis": "redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f sha256:c90c016450904cc9c63d38100c04c72554fcc983e257f1637ab451afaf32da7b",
+    "spool": "spoolbench-0969c4ca43c1-spool sha256:236149d41248aea549e65674c04335c6ea3cc44ac0d68e757977711d3fb735fa",
+    "sdk-api": "spoolbench-0969c4ca43c1-driver sha256:db11d303926cf98608bcf6987784ca38533b05f8951d0bb623e5ed8e0df751ee"
+  },
+  "rabbitmq": "4.3.6",
+  "runs": [
+    {
+      "trial": 1,
+      "modes": {
+        "first": {
+          "catch_up_ms": 2776.081375999979,
+          "time_to_retained_tail_ms": 2776.081375999979,
+          "replayed_prefix": 5000,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 2775.6255429999896,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3645840000103817,
+            "p95_ms": 0.41241700000682613,
+            "p99_ms": 0.5423340000447752
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 171671552,
+              "cpu_s": 0.3859560000000002,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 24576
+            },
+            "redis": {
+              "memory_bytes": 26648576,
+              "cpu_s": 0.2679830000000001,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 3244032
+            },
+            "sdk-api": {
+              "memory_bytes": 84897792,
+              "cpu_s": 0.03271299999999999,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 1.7729220419999994
+            }
+          }
+        },
+        "next": {
+          "catch_up_ms": null,
+          "time_to_retained_tail_ms": null,
+          "replayed_prefix": 0,
+          "recovered": 0,
+          "missing_count": 250,
+          "missing_event_range": [
+            "E5000",
+            "E5249"
+          ],
+          "live_event_verified": true,
+          "first_sse_id": "E5250",
+          "reconnect_to_missed_status_ms": null,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3564160000451011,
+            "p95_ms": 0.39125000000694854,
+            "p99_ms": 0.4252080000242131
+          },
+          "recovery_resources": null
+        },
+        "checkpoint": {
+          "catch_up_ms": 441.0117500000297,
+          "time_to_retained_tail_ms": 441.0117500000297,
+          "replayed_prefix": 0,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 440.1244590000033,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.29845799997474387,
+            "p95_ms": 0.3357080000228052,
+            "p99_ms": 0.3803750000201944
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 170737664,
+              "cpu_s": 0.030825000000000102,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 24576
+            },
+            "redis": {
+              "memory_bytes": 36413440,
+              "cpu_s": 0.05679400000000001,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 4292608
+            },
+            "sdk-api": {
+              "memory_bytes": 85016576,
+              "cpu_s": 0.012418999999999958,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 0.16224998600000085
+            }
+          }
+        },
+        "spooltail": {
+          "catch_up_ms": 693.7498339999593,
+          "time_to_retained_tail_ms": 693.7498339999593,
+          "replayed_prefix": 0,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 2.767041999959474,
+          "native_latest_during_disconnect": "E5249",
+          "offline_publish": {
+            "p50_ms": 1.1055840000153694,
+            "p95_ms": 1.2754580000091664,
+            "p99_ms": 1.7174169998952493
+          },
+          "recovery_resources": {
+            "spool": {
+              "memory_bytes": 18460672,
+              "cpu_s": 0.07281100000000018,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 2048000
+            },
+            "redis": {
+              "memory_bytes": 43204608,
+              "cpu_s": 0.05214199999999991,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 3252224
+            },
+            "driver": {
+              "cpu_s": 0.377615647999999
+            }
+          }
+        },
+        "last": {
+          "catch_up_ms": null,
+          "time_to_retained_tail_ms": 7.867292000014459,
+          "replayed_prefix": 0,
+          "recovered": 1,
+          "missing_count": 249,
+          "missing_event_range": [
+            "E5000",
+            "E5248"
+          ],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 7.504958000026818,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.35945900003753195,
+            "p95_ms": 0.40187499996591214,
+            "p99_ms": 0.4999169999564401
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 173584384,
+              "cpu_s": 0.011694000000000315,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 20480
+            },
+            "redis": {
+              "memory_bytes": 48324608,
+              "cpu_s": 0.009867999999999988,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 12288
+            },
+            "sdk-api": {
+              "memory_bytes": 86458368,
+              "cpu_s": 0.011301000000000005,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 0.004329627000000613
+            }
+          }
+        },
+        "first-200": {
+          "catch_up_ms": 1065.563333,
+          "time_to_retained_tail_ms": 1065.563333,
+          "replayed_prefix": 5000,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 1065.009874999987,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3677079999988564,
+            "p95_ms": 0.43108300008043443,
+            "p99_ms": 0.5955000000312793
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 177422336,
+              "cpu_s": 0.19071899999999964,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 20480
+            },
+            "redis": {
+              "memory_bytes": 50393088,
+              "cpu_s": 0.17880499999999966,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 1208320
+            },
+            "sdk-api": {
+              "memory_bytes": 84582400,
+              "cpu_s": 0.012719999999999843,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 1.0601386650000002
+            }
+          }
+        }
+      },
+      "task_lifecycle": {
+        "sdk": {
+          "verified_tasks": 200,
+          "submit_to_claim": {
+            "p50_ms": 0.4536249999773645,
+            "p95_ms": 0.5387500000324508,
+            "p99_ms": 0.6021660000214979
+          },
+          "submit_to_settled_and_read": {
+            "p50_ms": 2.3947500000076616,
+            "p95_ms": 2.701249999972788,
+            "p99_ms": 2.991250000036416
+          }
+        },
+        "spooltail": {
+          "verified_tasks": 200,
+          "submit_to_claim": {
+            "p50_ms": 2.0034169999689766,
+            "p95_ms": 2.357207999921229,
+            "p99_ms": 3.7186669999300648
+          },
+          "submit_to_settled_and_read": {
+            "p50_ms": 3.7295419999736623,
+            "p95_ms": 4.311292000011235,
+            "p99_ms": 6.2169999999923675
+          }
+        }
+      },
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "redis_client": "8.1.0",
+        "aio_pika": "9.6.1",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    },
+    {
+      "trial": 2,
+      "modes": {
+        "next": {
+          "catch_up_ms": null,
+          "time_to_retained_tail_ms": null,
+          "replayed_prefix": 0,
+          "recovered": 0,
+          "missing_count": 250,
+          "missing_event_range": [
+            "E5000",
+            "E5249"
+          ],
+          "live_event_verified": true,
+          "first_sse_id": "E5250",
+          "reconnect_to_missed_status_ms": null,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.37508299999444716,
+            "p95_ms": 0.4150830000071437,
+            "p99_ms": 0.4925420000745362
+          },
+          "recovery_resources": null
+        },
+        "checkpoint": {
+          "catch_up_ms": 442.7550830000655,
+          "time_to_retained_tail_ms": 442.7550830000655,
+          "replayed_prefix": 0,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 441.88641700009157,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.36741599990364193,
+            "p95_ms": 0.43637499993565143,
+            "p99_ms": 0.5102500000475629
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 183513088,
+              "cpu_s": 0.031293999999999045,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 24576
+            },
+            "redis": {
+              "memory_bytes": 68952064,
+              "cpu_s": 0.05895600000000023,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 4288512
+            },
+            "sdk-api": {
+              "memory_bytes": 84992000,
+              "cpu_s": 0.012062999999999935,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 0.16160485400000013
+            }
+          }
+        },
+        "spooltail": {
+          "catch_up_ms": 699.8018340000272,
+          "time_to_retained_tail_ms": 699.8018340000272,
+          "replayed_prefix": 0,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 2.7808329999743364,
+          "native_latest_during_disconnect": "E5249",
+          "offline_publish": {
+            "p50_ms": 1.0846249999758584,
+            "p95_ms": 1.2155829999755952,
+            "p99_ms": 1.4956669999719452
+          },
+          "recovery_resources": {
+            "spool": {
+              "memory_bytes": 22773760,
+              "cpu_s": 0.07532899999999998,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 2625536
+            },
+            "redis": {
+              "memory_bytes": 74686464,
+              "cpu_s": 0.05260200000000026,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 3252224
+            },
+            "driver": {
+              "cpu_s": 0.3787314540000004
+            }
+          }
+        },
+        "last": {
+          "catch_up_ms": null,
+          "time_to_retained_tail_ms": 8.759209000004375,
+          "replayed_prefix": 0,
+          "recovered": 1,
+          "missing_count": 249,
+          "missing_event_range": [
+            "E5000",
+            "E5248"
+          ],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 8.397959000035371,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.35512500005552283,
+            "p95_ms": 0.4250409999713156,
+            "p99_ms": 0.531249999994543
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 186822656,
+              "cpu_s": 0.012100000000000222,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 20480
+            },
+            "redis": {
+              "memory_bytes": 80654336,
+              "cpu_s": 0.009875000000000966,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 12288
+            },
+            "sdk-api": {
+              "memory_bytes": 85049344,
+              "cpu_s": 0.0121,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 0.004301373000000552
+            }
+          }
+        },
+        "first-200": {
+          "catch_up_ms": 1046.0426670000516,
+          "time_to_retained_tail_ms": 1046.0426670000516,
+          "replayed_prefix": 5000,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 1045.3496249999716,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3627090000009048,
+            "p95_ms": 0.39308300006268837,
+            "p99_ms": 0.46179100002063933
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 190590976,
+              "cpu_s": 0.18655700000000053,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 20480
+            },
+            "redis": {
+              "memory_bytes": 90894336,
+              "cpu_s": 0.17952400000000068,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 1327104
+            },
+            "sdk-api": {
+              "memory_bytes": 78675968,
+              "cpu_s": 0.012482000000000104,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 1.0411119569999983
+            }
+          }
+        },
+        "first": {
+          "catch_up_ms": 2758.3404599999994,
+          "time_to_retained_tail_ms": 2758.3404599999994,
+          "replayed_prefix": 5000,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 2757.9160850000335,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.36520899993774947,
+            "p95_ms": 0.4144170000017766,
+            "p99_ms": 0.4702920000454469
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 191062016,
+              "cpu_s": 0.3772139999999986,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 24576
+            },
+            "redis": {
+              "memory_bytes": 94330880,
+              "cpu_s": 0.2736730000000005,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 3244032
+            },
+            "sdk-api": {
+              "memory_bytes": 82731008,
+              "cpu_s": 0.013738999999999946,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 1.770213394999999
+            }
+          }
+        }
+      },
+      "task_lifecycle": {
+        "spooltail": {
+          "verified_tasks": 200,
+          "submit_to_claim": {
+            "p50_ms": 2.0543329999327398,
+            "p95_ms": 3.1238330000178394,
+            "p99_ms": 9.334749999993619
+          },
+          "submit_to_settled_and_read": {
+            "p50_ms": 3.816207999989274,
+            "p95_ms": 5.442167000069276,
+            "p99_ms": 11.245292000012341
+          }
+        },
+        "sdk": {
+          "verified_tasks": 200,
+          "submit_to_claim": {
+            "p50_ms": 0.4407500000525033,
+            "p95_ms": 0.5324169999312289,
+            "p99_ms": 0.6217920000608501
+          },
+          "submit_to_settled_and_read": {
+            "p50_ms": 2.351290999968114,
+            "p95_ms": 2.6627500000131477,
+            "p99_ms": 3.0139159999862386
+          }
+        }
+      },
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "redis_client": "8.1.0",
+        "aio_pika": "9.6.1",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    },
+    {
+      "trial": 3,
+      "modes": {
+        "checkpoint": {
+          "catch_up_ms": 465.7921670000178,
+          "time_to_retained_tail_ms": 465.7921670000178,
+          "replayed_prefix": 0,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 464.9593750000349,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3691249999064894,
+            "p95_ms": 0.4313329999376947,
+            "p99_ms": 0.5298340000763346
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 196243456,
+              "cpu_s": 0.03238600000000247,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 24576
+            },
+            "redis": {
+              "memory_bytes": 100225024,
+              "cpu_s": 0.05999499999999891,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 4292608
+            },
+            "sdk-api": {
+              "memory_bytes": 85024768,
+              "cpu_s": 0.012548999999999921,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 0.18251422000000073
+            }
+          }
+        },
+        "spooltail": {
+          "catch_up_ms": 694.9781250000342,
+          "time_to_retained_tail_ms": 694.9781250000342,
+          "replayed_prefix": 0,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 2.7430410000306438,
+          "native_latest_during_disconnect": "E5249",
+          "offline_publish": {
+            "p50_ms": 1.077833000067585,
+            "p95_ms": 1.3349999999263673,
+            "p99_ms": 1.5235409999831973
+          },
+          "recovery_resources": {
+            "spool": {
+              "memory_bytes": 23638016,
+              "cpu_s": 0.07542500000000008,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 2048000
+            },
+            "redis": {
+              "memory_bytes": 106557440,
+              "cpu_s": 0.0544159999999998,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 3248128
+            },
+            "driver": {
+              "cpu_s": 0.3807964839999993
+            }
+          }
+        },
+        "last": {
+          "catch_up_ms": null,
+          "time_to_retained_tail_ms": 9.938416999943911,
+          "replayed_prefix": 0,
+          "recovered": 1,
+          "missing_count": 249,
+          "missing_event_range": [
+            "E5000",
+            "E5248"
+          ],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 9.482374999947751,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3609999999980573,
+            "p95_ms": 0.4073750000088694,
+            "p99_ms": 0.47579199997471733
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 197746688,
+              "cpu_s": 0.012095999999999663,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 20480
+            },
+            "redis": {
+              "memory_bytes": 109375488,
+              "cpu_s": 0.009705000000000297,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 12288
+            },
+            "sdk-api": {
+              "memory_bytes": 82423808,
+              "cpu_s": 0.012344999999999828,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 0.0050864150000009545
+            }
+          }
+        },
+        "first-200": {
+          "catch_up_ms": 1038.9457090000178,
+          "time_to_retained_tail_ms": 1038.9457090000178,
+          "replayed_prefix": 5000,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 1038.4240419999742,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3675419999353835,
+            "p95_ms": 0.40320800007975777,
+            "p99_ms": 0.5215409998982068
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 203841536,
+              "cpu_s": 0.1846679999999985,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 20480
+            },
+            "redis": {
+              "memory_bytes": 119508992,
+              "cpu_s": 0.1745359999999998,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 1355776
+            },
+            "sdk-api": {
+              "memory_bytes": 82849792,
+              "cpu_s": 0.012647000000000075,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 1.0336684110000007
+            }
+          }
+        },
+        "first": {
+          "catch_up_ms": 2740.879750999966,
+          "time_to_retained_tail_ms": 2740.879750999966,
+          "replayed_prefix": 5000,
+          "recovered": 250,
+          "missing_count": 0,
+          "missing_event_range": [],
+          "live_event_verified": true,
+          "first_sse_id": "E5249",
+          "reconnect_to_missed_status_ms": 2740.4664179999827,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.3641669999296937,
+            "p95_ms": 0.39483300008669175,
+            "p99_ms": 0.44587499996850966
+          },
+          "recovery_resources": {
+            "rabbit": {
+              "memory_bytes": 206262272,
+              "cpu_s": 0.3871089999999988,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 24576
+            },
+            "redis": {
+              "memory_bytes": 125595648,
+              "cpu_s": 0.26812600000000053,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 3248128
+            },
+            "sdk-api": {
+              "memory_bytes": 84496384,
+              "cpu_s": 0.013919999999999932,
+              "throttled_s": 0.0,
+              "block_read_bytes": 0,
+              "block_write_bytes": 0
+            },
+            "driver": {
+              "cpu_s": 1.7683643750000009
+            }
+          }
+        },
+        "next": {
+          "catch_up_ms": null,
+          "time_to_retained_tail_ms": null,
+          "replayed_prefix": 0,
+          "recovered": 0,
+          "missing_count": 250,
+          "missing_event_range": [
+            "E5000",
+            "E5249"
+          ],
+          "live_event_verified": true,
+          "first_sse_id": "E5250",
+          "reconnect_to_missed_status_ms": null,
+          "native_latest_during_disconnect": "E2500",
+          "offline_publish": {
+            "p50_ms": 0.37120800004686316,
+            "p95_ms": 0.4725830000325004,
+            "p99_ms": 0.6151669999781006
+          },
+          "recovery_resources": null
+        }
+      },
+      "task_lifecycle": {
+        "sdk": {
+          "verified_tasks": 200,
+          "submit_to_claim": {
+            "p50_ms": 0.44737500002156594,
+            "p95_ms": 0.6561669999882724,
+            "p99_ms": 1.0346249999884094
+          },
+          "submit_to_settled_and_read": {
+            "p50_ms": 2.420042000039757,
+            "p95_ms": 3.5078340000609387,
+            "p99_ms": 5.421665999961078
+          }
+        },
+        "spooltail": {
+          "verified_tasks": 200,
+          "submit_to_claim": {
+            "p50_ms": 2.0090000000436703,
+            "p95_ms": 2.4472499999319552,
+            "p99_ms": 2.961334000019633
+          },
+          "submit_to_settled_and_read": {
+            "p50_ms": 3.7282499999946594,
+            "p95_ms": 4.41545799992582,
+            "p99_ms": 5.577417000040441
+          }
+        }
+      },
+      "versions": {
+        "python": "3.13.18",
+        "relayna": "1.14.0",
+        "redis_client": "8.1.0",
+        "aio_pika": "9.6.1",
+        "httpx": "0.28.1",
+        "redis_server": "7.4.12"
+      }
+    }
+  ]
+}

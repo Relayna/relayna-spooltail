@@ -1,5 +1,6 @@
+use crate::subscriptions::WorkLease;
 use anyhow::{Context, Result, ensure};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -38,6 +39,14 @@ pub fn identifier(s: &str) -> Result<()> {
 struct Frame {
     topic: String,
     event: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    completion: Option<WorkLease>,
+}
+
+pub fn terminal_status(event: &Value) -> bool {
+    event["status"].as_str().is_some_and(|status| {
+        status.eq_ignore_ascii_case("completed") || status.eq_ignore_ascii_case("failed")
+    })
 }
 
 impl Frame {
@@ -103,9 +112,9 @@ CREATE TABLE IF NOT EXISTS leases(topic TEXT, name TEXT, offset INTEGER, generat
     visible_at INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(topic,name,offset));
 ";
 
-fn index(db: &Connection, frame: &Frame, segment: u64, pos: u64, len: usize) -> Result<i64> {
+fn index(tx: &Transaction<'_>, frame: &Frame, segment: u64, pos: u64, len: usize) -> Result<i64> {
     let (task, event_id) = frame.key()?;
-    db.prepare_cached(
+    tx.prepare_cached(
         "INSERT INTO records(topic,task,event_id,segment,pos,len) VALUES(?,?,?,?,?,?)",
     )?
     .execute(params![
@@ -116,7 +125,11 @@ fn index(db: &Connection, frame: &Frame, segment: u64, pos: u64, len: usize) -> 
         i64::try_from(pos)?,
         i64::try_from(len)?
     ])?;
-    Ok(db.last_insert_rowid())
+    let offset = tx.last_insert_rowid();
+    if let Some(lease) = &frame.completion {
+        lease.apply_completion(tx)?;
+    }
+    Ok(offset)
 }
 
 impl Store {
@@ -244,35 +257,66 @@ impl Store {
         })
     }
 
-    pub fn append(&mut self, topic: &str, event: Value) -> Result<i64> {
+    pub(crate) fn ensure_writable(&self) -> Result<()> {
         ensure!(
             !self.failed_write,
-            "previous append failed; restart for journal recovery"
+            "restart required to recover an uncertain journal write"
         );
-        let frame = Frame {
+        Ok(())
+    }
+
+    pub fn append(&mut self, topic: &str, event: Value) -> Result<i64> {
+        self.append_frame(Frame {
             topic: topic.into(),
             event,
-        };
+            completion: None,
+        })
+    }
+
+    pub fn complete(&mut self, lease: WorkLease, topic: &str, event: Value) -> Result<i64> {
+        if !terminal_status(&event) {
+            return Err(Problem::Invalid("expected a completed or failed status".into()).into());
+        }
+        self.append_frame(Frame {
+            topic: topic.into(),
+            event,
+            completion: Some(lease),
+        })
+    }
+
+    fn append_frame(&mut self, frame: Frame) -> Result<i64> {
+        self.ensure_writable()?;
         let (task, id) = frame.key()?;
         let old: Option<i64> = self
             .db
             .query_row(
                 "SELECT offset FROM records WHERE topic=? AND task=? AND event_id=?",
-                params![topic, task, id],
+                params![frame.topic, task, id],
                 |r| r.get(0),
             )
             .optional()?;
         if let Some(offset) = old {
-            if self.read(offset)?.event == frame.event {
-                return Ok(offset);
+            let saved = self.read_frame(offset)?;
+            if saved.event != frame.event {
+                return Err(Problem::Conflict(
+                    "event_id already used with different content".into(),
+                )
+                .into());
             }
-            return Err(
-                Problem::Conflict("event_id already used with different content".into()).into(),
-            );
+            if frame.completion.is_some() && frame.completion != saved.completion {
+                return Err(Problem::Conflict(
+                    "event_id already used outside this completion".into(),
+                )
+                .into());
+            }
+            return Ok(offset);
         }
         let body = serde_json::to_vec(&frame)?;
         if body.len() > MAX_FRAME {
             return Err(Problem::Invalid("frame exceeds 1 MiB".into()).into());
+        }
+        if let Some(lease) = &frame.completion {
+            lease.validate_completion(&self.db, task)?;
         }
         // Any uncertain disk operation requires recovery before another append.
         self.failed_write = true;
@@ -285,13 +329,22 @@ impl Store {
         self.file.write_all(&crc32fast::hash(&body).to_le_bytes())?;
         self.file.write_all(&body)?;
         self.file.sync_data()?;
-        let offset = index(&self.db, &frame, self.segment, self.end, body.len())?;
+        let tx = self.db.transaction()?;
+        let offset = index(&tx, &frame, self.segment, self.end, body.len())?;
+        tx.commit()?;
         self.end += 8 + body.len() as u64;
         self.failed_write = false;
         Ok(offset)
     }
 
     pub fn read(&self, offset: i64) -> Result<Record> {
+        Ok(Record {
+            offset,
+            event: self.read_frame(offset)?.event,
+        })
+    }
+
+    fn read_frame(&self, offset: i64) -> Result<Frame> {
         let (seg, pos, len): (i64, i64, i64) = self.db.query_row(
             "SELECT segment,pos,len FROM records WHERE offset=?",
             [offset],
@@ -318,10 +371,7 @@ impl Store {
             "journal checksum mismatch"
         );
         self.payload_reads.set(self.payload_reads.get() + 1);
-        Ok(Record {
-            offset,
-            event: serde_json::from_slice::<Frame>(&body)?.event,
-        })
+        Ok(serde_json::from_slice(&body)?)
     }
 
     pub fn floor(&self, topic: &str) -> Result<i64> {

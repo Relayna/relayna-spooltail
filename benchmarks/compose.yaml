@@ -1,0 +1,55 @@
+services:
+  rabbit:
+    image: rabbitmq:4.3.6@sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd
+    hostname: rabbit
+    environment:
+      RABBITMQ_DEFAULT_USER: bench
+      RABBITMQ_DEFAULT_PASS: bench
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 1h
+      start_period: 90s
+      start_interval: 1s
+      timeout: 10s
+      retries: 40
+  redis:
+    image: redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1h
+      start_period: 90s
+      start_interval: 1s
+      timeout: 3s
+      retries: 30
+  spool:
+    build:
+      context: ..
+      dockerfile: benchmarks/Dockerfile
+      target: broker
+      args:
+        SPOOLTAIL_FEATURES: ${SPOOLTAIL_BENCH_FEATURES:-}
+    volumes:
+      - spool-data:/data
+  sdk-api:
+    image: ${COMPOSE_PROJECT_NAME}-driver
+    entrypoint: ["uvicorn", "sdk_api:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+    environment:
+      BENCH_TRIALS: ${BENCH_TRIALS:-3}
+      BENCH_REDIS_POOL_SIZE: ${BENCH_REDIS_POOL_SIZE:-0}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost',8080),1).close()"]
+      interval: 1h
+      start_period: 90s
+      start_interval: 1s
+      retries: 20
+  driver:
+    build:
+      context: ..
+      dockerfile: benchmarks/Dockerfile
+      target: driver
+      additional_contexts:
+        sdk: ${RELAYNA_SDK_PATH:-../../relayna}
+    profiles: [bench]
+volumes:
+  spool-data:

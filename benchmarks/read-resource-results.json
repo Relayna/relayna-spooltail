@@ -1,0 +1,1463 @@
+{
+  "started_utc": "2026-11-20T14:29:19.848565+00:00",
+  "settings": {
+    "workload": "read-resources",
+    "trials": 3,
+    "timeout": 3600,
+    "read_tasks": 10000,
+    "statuses": 6,
+    "readers": 16,
+    "rates": "0,100,1000",
+    "seconds": 12,
+    "seed": 1729
+  },
+  "sdk_revision": "de4c60f052a9af7cd5d5543430c6f4e8b47cd327",
+  "spooltail_revision": "6fcc9675e0e30d8606b6f5db0808ff0113e7c3b9",
+  "broker_source_sha256": {
+    "bench_lock.rs": "74ccf798fb6f67cdd83b1589adfcf231505cfb4abac4d79ad4c45acdc2c9e4d9",
+    "main.rs": "4e70738ec29eb258e7d95820fcc7edebf8ca8b6dacbf4247bf9b66586a4f9721",
+    "store.rs": "7c9721ae3dafe96e2b617411d2c079f0e0bbfae7911ce943bfe5d86a7e1bc025",
+    "subscriptions.rs": "33e3839d3f3155aab687b93949591c46d5c168027a0c30f9934264fcf8124d61",
+    "tests.rs": "e848c7567e27632030208af38d45a7c0b6fd5095449c1d8b9105901465d6cf57"
+  },
+  "engine": {
+    "version": "29.9.3",
+    "architecture": "aarch64",
+    "cpus": 10,
+    "memory_bytes": 20940046336
+  },
+  "service_images": {
+    "rabbit": "rabbitmq:4.3.6@sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd sha256:95cbcc81abe46d919d2ae2c783025a2f4e2a147108bb86e5b441ea8008af6596",
+    "redis": "redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f sha256:c90c016450904cc9c63d38100c04c72554fcc983e257f1637ab451afaf32da7b",
+    "spool": "spoolbench-15534fb3869d-spool sha256:7cfc287d5c6199b0f3c6ca546d7e95220ca5ce32629595216888f90cba97a13b",
+    "sdk-api": "spoolbench-15534fb3869d-driver sha256:0dd414c3b1cda9342235afdd6eecb22079c903331fa6e43a0dbed7c34c63ec38"
+  },
+  "rabbitmq": "4.3.6",
+  "runs": [
+    {
+      "trial": 1,
+      "arms": {
+        "spooltail": {
+          "scenarios": [
+            {
+              "elapsed_s": 12.021416047999992,
+              "requests": 0,
+              "outcomes": {},
+              "requests_per_s": 0.0,
+              "client_cpu_s": 0.00024491700000001115,
+              "latency": {},
+              "dispatch_delay": {},
+              "target_rps": 0,
+              "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "client_memory_before": {
+                "memory_bytes": 37158912,
+                "anon_bytes": 31100928,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42442752,
+                "pss_bytes": 37003264,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "client_memory_after": {
+                "memory_bytes": 37158912,
+                "anon_bytes": 31100928,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42442752,
+                "pss_bytes": 36927488,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 52240384,
+                  "cpu_s": 11.453593,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749733376,
+                  "anon_bytes": 13176832,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 51888128,
+                  "cpu_s": 11.472454,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749733376,
+                  "anon_bytes": 14733312,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.000829755000012,
+              "requests": 1200,
+              "outcomes": {
+                "completed": 540,
+                "running": 540,
+                "missing": 120
+              },
+              "requests_per_s": 99.99308585308722,
+              "client_cpu_s": 3.429937771,
+              "latency": {
+                "p50_ms": 3.0276250000156324,
+                "p95_ms": 5.052749999975958,
+                "p99_ms": 8.078584000003275
+              },
+              "dispatch_delay": {
+                "p50_ms": 2.3034180000252036,
+                "p95_ms": 4.196336000006795,
+                "p99_ms": 6.025335999993331
+              },
+              "target_rps": 100,
+              "trace_sha256": "69a5586e6495bee1c45c017be4c14e45e3bb41250a99ecca01d70d2837495fe6",
+              "client_memory_before": {
+                "memory_bytes": 37138432,
+                "anon_bytes": 31100928,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42532864,
+                "pss_bytes": 37017600,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "client_memory_after": {
+                "memory_bytes": 37130240,
+                "anon_bytes": 31191040,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42532864,
+                "pss_bytes": 37017600,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 50020352,
+                  "cpu_s": 11.501257,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749733376,
+                  "anon_bytes": 12394496,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 54460416,
+                  "cpu_s": 12.188927,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749733376,
+                  "anon_bytes": 16773120,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.000765839000024,
+              "requests": 12000,
+              "outcomes": {
+                "running": 5400,
+                "completed": 5400,
+                "missing": 1200
+              },
+              "requests_per_s": 999.9361841560532,
+              "client_cpu_s": 7.189793496,
+              "latency": {
+                "p50_ms": 0.9203339999999116,
+                "p95_ms": 1.4374170000053255,
+                "p99_ms": 1.8576669999958995
+              },
+              "dispatch_delay": {
+                "p50_ms": 0.3888379999921199,
+                "p95_ms": 1.3308370000117975,
+                "p99_ms": 1.3887949999968896
+              },
+              "target_rps": 1000,
+              "trace_sha256": "99f02c12e000151bc9d333cd1e3771f49e9ae043ad38247e661922844f3c767f",
+              "client_memory_before": {
+                "memory_bytes": 37130240,
+                "anon_bytes": 31191040,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42553344,
+                "pss_bytes": 37038080,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "client_memory_after": {
+                "memory_bytes": 37601280,
+                "anon_bytes": 31211520,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42553344,
+                "pss_bytes": 37038080,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 52101120,
+                  "cpu_s": 12.214066,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749733376,
+                  "anon_bytes": 14487552,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 51773440,
+                  "cpu_s": 13.432864,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14434304,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            }
+          ],
+          "client_pid": 1,
+          "versions": {
+            "httpx": "0.28.1",
+            "relayna": "1.14.0"
+          },
+          "sdk_loaded_in_client": false
+        },
+        "sdk-once": {
+          "scenarios": [
+            {
+              "elapsed_s": 12.022612006000003,
+              "requests": 0,
+              "outcomes": {},
+              "requests_per_s": 0.0,
+              "client_cpu_s": 0.0005147500000000083,
+              "latency": {},
+              "dispatch_delay": {},
+              "target_rps": 0,
+              "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "client_memory_before": {
+                "memory_bytes": 37199872,
+                "anon_bytes": 31035392,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42377216,
+                "pss_bytes": 36839424,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "client_memory_after": {
+                "memory_bytes": 37199872,
+                "anon_bytes": 31035392,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42377216,
+                "pss_bytes": 36839424,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80277504,
+                  "cpu_s": 1.381047,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64077824,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94474240,
+                  "cpu_s": 5.769747,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46358528,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 189030400,
+                  "cpu_s": 20.669757,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 127016960,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 80224256,
+                  "cpu_s": 1.44262,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64065536,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 92409856,
+                  "cpu_s": 5.932381,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 44253184,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 184758272,
+                  "cpu_s": 20.745691,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 122974208,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.003078171999988,
+              "requests": 1200,
+              "outcomes": {
+                "completed": 540,
+                "running": 540,
+                "missing": 120
+              },
+              "requests_per_s": 99.97435514493966,
+              "client_cpu_s": 2.881710488,
+              "latency": {
+                "p50_ms": 3.2948749999945903,
+                "p95_ms": 5.459416999997302,
+                "p99_ms": 7.026041999978361
+              },
+              "dispatch_delay": {
+                "p50_ms": 1.7202549999808525,
+                "p95_ms": 3.8748350000048504,
+                "p99_ms": 4.756375999988904
+              },
+              "target_rps": 100,
+              "trace_sha256": "69a5586e6495bee1c45c017be4c14e45e3bb41250a99ecca01d70d2837495fe6",
+              "client_memory_before": {
+                "memory_bytes": 37195776,
+                "anon_bytes": 31035392,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42500096,
+                "pss_bytes": 36962304,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "client_memory_after": {
+                "memory_bytes": 37396480,
+                "anon_bytes": 31158272,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42500096,
+                "pss_bytes": 36962304,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80637952,
+                  "cpu_s": 1.495955,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64307200,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94273536,
+                  "cpu_s": 5.945848,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46116864,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 184504320,
+                  "cpu_s": 20.755007,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 122736640,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 80596992,
+                  "cpu_s": 3.144412,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64331776,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94294016,
+                  "cpu_s": 6.188429,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46129152,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 185692160,
+                  "cpu_s": 20.82491,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 124100608,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.000246089000001,
+              "requests": 12000,
+              "outcomes": {
+                "running": 5400,
+                "completed": 5400,
+                "missing": 1200
+              },
+              "requests_per_s": 999.9794930038788,
+              "client_cpu_s": 6.592547758,
+              "latency": {
+                "p50_ms": 1.0009589999810942,
+                "p95_ms": 1.581791999996085,
+                "p99_ms": 1.8732909999812364
+              },
+              "dispatch_delay": {
+                "p50_ms": 0.24208799999314579,
+                "p95_ms": 1.1037090000343142,
+                "p99_ms": 1.1632530000156294
+              },
+              "target_rps": 1000,
+              "trace_sha256": "99f02c12e000151bc9d333cd1e3771f49e9ae043ad38247e661922844f3c767f",
+              "client_memory_before": {
+                "memory_bytes": 37392384,
+                "anon_bytes": 31158272,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42508288,
+                "pss_bytes": 36970496,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "client_memory_after": {
+                "memory_bytes": 37343232,
+                "anon_bytes": 31166464,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42508288,
+                "pss_bytes": 36970496,
+                "lifetime_peak_rss_bytes": 41877504
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80252928,
+                  "cpu_s": 3.195847,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64090112,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94277632,
+                  "cpu_s": 6.201874,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46133248,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 187572224,
+                  "cpu_s": 20.834737,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 125960192,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 78589952,
+                  "cpu_s": 6.594405,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 61997056,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94216192,
+                  "cpu_s": 6.514235,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46129152,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 189243392,
+                  "cpu_s": 20.860373,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 127344640,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            }
+          ],
+          "client_pid": 1,
+          "versions": {
+            "httpx": "0.28.1",
+            "relayna": "1.14.0"
+          },
+          "sdk_loaded_in_client": false
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "arms": {
+        "sdk-once": {
+          "scenarios": [
+            {
+              "elapsed_s": 12.000467545999982,
+              "requests": 1200,
+              "outcomes": {
+                "completed": 540,
+                "running": 540,
+                "missing": 120
+              },
+              "requests_per_s": 99.99610393513261,
+              "client_cpu_s": 2.88125008,
+              "latency": {
+                "p50_ms": 3.247667000010779,
+                "p95_ms": 5.444167000007383,
+                "p99_ms": 6.630416000007244
+              },
+              "dispatch_delay": {
+                "p50_ms": 1.7940049999936036,
+                "p95_ms": 3.8332929999853604,
+                "p99_ms": 4.6717499999999745
+              },
+              "target_rps": 100,
+              "trace_sha256": "7cbf81c3ad91730749a9b0814cf4bccdab16725865c887661118bea636be27f1",
+              "client_memory_before": {
+                "memory_bytes": 37150720,
+                "anon_bytes": 31109120,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42450944,
+                "pss_bytes": 36913152,
+                "lifetime_peak_rss_bytes": 41881600
+              },
+              "client_memory_after": {
+                "memory_bytes": 37412864,
+                "anon_bytes": 31109120,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42450944,
+                "pss_bytes": 36913152,
+                "lifetime_peak_rss_bytes": 41881600
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 78585856,
+                  "cpu_s": 6.647532,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 62255104,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94478336,
+                  "cpu_s": 6.529149,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46346240,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 188485632,
+                  "cpu_s": 20.869584,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 127356928,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 82255872,
+                  "cpu_s": 8.252946,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 66162688,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94445568,
+                  "cpu_s": 6.761869,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46260224,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 190963712,
+                  "cpu_s": 20.932918,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 129118208,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.000902421999996,
+              "requests": 12000,
+              "outcomes": {
+                "completed": 5400,
+                "running": 5400,
+                "missing": 1200
+              },
+              "requests_per_s": 999.9248038215575,
+              "client_cpu_s": 6.7032057389999995,
+              "latency": {
+                "p50_ms": 1.0490419999769074,
+                "p95_ms": 1.6311249999887423,
+                "p99_ms": 2.064999999987549
+              },
+              "dispatch_delay": {
+                "p50_ms": 0.2747959999851446,
+                "p95_ms": 1.2608799999895837,
+                "p99_ms": 1.3231279999956769
+              },
+              "target_rps": 1000,
+              "trace_sha256": "bbf3c4449ae3cfcca7c888ce6612fa174538fcb7f3562fd9998bd12716d10393",
+              "client_memory_before": {
+                "memory_bytes": 37400576,
+                "anon_bytes": 31109120,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42471424,
+                "pss_bytes": 36933632,
+                "lifetime_peak_rss_bytes": 41881600
+              },
+              "client_memory_after": {
+                "memory_bytes": 37060608,
+                "anon_bytes": 31129600,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42471424,
+                "pss_bytes": 36933632,
+                "lifetime_peak_rss_bytes": 41881600
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80547840,
+                  "cpu_s": 8.305629,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64344064,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94220288,
+                  "cpu_s": 6.775438,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46252032,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 191184896,
+                  "cpu_s": 20.943145,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 129351680,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 82341888,
+                  "cpu_s": 11.577215,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 66117632,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 93560832,
+                  "cpu_s": 7.082749,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46125056,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 191676416,
+                  "cpu_s": 20.968177,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 130285568,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.022445129999994,
+              "requests": 0,
+              "outcomes": {},
+              "requests_per_s": 0.0,
+              "client_cpu_s": 0.00039116599999999835,
+              "latency": {},
+              "dispatch_delay": {},
+              "target_rps": 0,
+              "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "client_memory_before": {
+                "memory_bytes": 37322752,
+                "anon_bytes": 31129600,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42471424,
+                "pss_bytes": 36933632,
+                "lifetime_peak_rss_bytes": 41881600
+              },
+              "client_memory_after": {
+                "memory_bytes": 37322752,
+                "anon_bytes": 31129600,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42471424,
+                "pss_bytes": 36933632,
+                "lifetime_peak_rss_bytes": 41881600
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80556032,
+                  "cpu_s": 11.62869,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64122880,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94134272,
+                  "cpu_s": 7.095867,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46133248,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 193728512,
+                  "cpu_s": 20.977626,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 132280320,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 80199680,
+                  "cpu_s": 11.689751,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64110592,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 92086272,
+                  "cpu_s": 7.266439,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 43782144,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 190418944,
+                  "cpu_s": 21.063303,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 128720896,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            }
+          ],
+          "client_pid": 1,
+          "versions": {
+            "httpx": "0.28.1",
+            "relayna": "1.14.0"
+          },
+          "sdk_loaded_in_client": false
+        },
+        "spooltail": {
+          "scenarios": [
+            {
+              "elapsed_s": 12.003459631000027,
+              "requests": 1200,
+              "outcomes": {
+                "completed": 540,
+                "running": 540,
+                "missing": 120
+              },
+              "requests_per_s": 99.97117805110877,
+              "client_cpu_s": 3.3154360250000003,
+              "latency": {
+                "p50_ms": 2.9482079999922917,
+                "p95_ms": 4.871958999956405,
+                "p99_ms": 6.032332999978962
+              },
+              "dispatch_delay": {
+                "p50_ms": 2.3575459999847226,
+                "p95_ms": 4.282625999991296,
+                "p99_ms": 4.8242530000095485
+              },
+              "target_rps": 100,
+              "trace_sha256": "7cbf81c3ad91730749a9b0814cf4bccdab16725865c887661118bea636be27f1",
+              "client_memory_before": {
+                "memory_bytes": 37412864,
+                "anon_bytes": 31043584,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42385408,
+                "pss_bytes": 36847616,
+                "lifetime_peak_rss_bytes": 41906176
+              },
+              "client_memory_after": {
+                "memory_bytes": 37146624,
+                "anon_bytes": 31043584,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42385408,
+                "pss_bytes": 36847616,
+                "lifetime_peak_rss_bytes": 41906176
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 54415360,
+                  "cpu_s": 13.461085,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 16474112,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 49324032,
+                  "cpu_s": 14.110361,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 12582912,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.000572089000002,
+              "requests": 12000,
+              "outcomes": {
+                "completed": 5400,
+                "running": 5400,
+                "missing": 1200
+              },
+              "requests_per_s": 999.9523281893763,
+              "client_cpu_s": 7.217703038,
+              "latency": {
+                "p50_ms": 0.918167000008907,
+                "p95_ms": 1.4688340000361677,
+                "p99_ms": 1.867249999975229
+              },
+              "dispatch_delay": {
+                "p50_ms": 0.3954630000180259,
+                "p95_ms": 1.324460999967414,
+                "p99_ms": 1.382463000027201
+              },
+              "target_rps": 1000,
+              "trace_sha256": "bbf3c4449ae3cfcca7c888ce6612fa174538fcb7f3562fd9998bd12716d10393",
+              "client_memory_before": {
+                "memory_bytes": 37146624,
+                "anon_bytes": 31043584,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42385408,
+                "pss_bytes": 36847616,
+                "lifetime_peak_rss_bytes": 41906176
+              },
+              "client_memory_after": {
+                "memory_bytes": 37089280,
+                "anon_bytes": 31043584,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42385408,
+                "pss_bytes": 36847616,
+                "lifetime_peak_rss_bytes": 41906176
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 51941376,
+                  "cpu_s": 14.136218,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14663680,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 52514816,
+                  "cpu_s": 15.366467,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14704640,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.019364630999974,
+              "requests": 0,
+              "outcomes": {},
+              "requests_per_s": 0.0,
+              "client_cpu_s": 0.0005241680000001026,
+              "latency": {},
+              "dispatch_delay": {},
+              "target_rps": 0,
+              "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "client_memory_before": {
+                "memory_bytes": 37089280,
+                "anon_bytes": 31043584,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42385408,
+                "pss_bytes": 36847616,
+                "lifetime_peak_rss_bytes": 41906176
+              },
+              "client_memory_after": {
+                "memory_bytes": 37089280,
+                "anon_bytes": 31043584,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42385408,
+                "pss_bytes": 36847616,
+                "lifetime_peak_rss_bytes": 41906176
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 51920896,
+                  "cpu_s": 15.391441,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14479360,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 52125696,
+                  "cpu_s": 15.404953,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14467072,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            }
+          ],
+          "client_pid": 1,
+          "versions": {
+            "httpx": "0.28.1",
+            "relayna": "1.14.0"
+          },
+          "sdk_loaded_in_client": false
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "arms": {
+        "spooltail": {
+          "scenarios": [
+            {
+              "elapsed_s": 12.000517713999955,
+              "requests": 12000,
+              "outcomes": {
+                "running": 5400,
+                "completed": 5400,
+                "missing": 1200
+              },
+              "requests_per_s": 999.9568590278942,
+              "client_cpu_s": 7.181885373,
+              "latency": {
+                "p50_ms": 0.9226249999869651,
+                "p95_ms": 1.4212080000106653,
+                "p99_ms": 1.9182500000169966
+              },
+              "dispatch_delay": {
+                "p50_ms": 0.3582520000122713,
+                "p95_ms": 1.4331699999843295,
+                "p99_ms": 1.522753999950055
+              },
+              "target_rps": 1000,
+              "trace_sha256": "a56dda1a7a350db73b2026c5115b59ddbd5ba504522224c68a47a60f92ca11cc",
+              "client_memory_before": {
+                "memory_bytes": 37945344,
+                "anon_bytes": 31416320,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42758144,
+                "pss_bytes": 37220352,
+                "lifetime_peak_rss_bytes": 42258432
+              },
+              "client_memory_after": {
+                "memory_bytes": 37638144,
+                "anon_bytes": 31416320,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42758144,
+                "pss_bytes": 37220352,
+                "lifetime_peak_rss_bytes": 42258432
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 52043776,
+                  "cpu_s": 15.430733,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14503936,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 49909760,
+                  "cpu_s": 16.6381,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 12677120,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.013338463000025,
+              "requests": 0,
+              "outcomes": {},
+              "requests_per_s": 0.0,
+              "client_cpu_s": 0.0002822089999998667,
+              "latency": {},
+              "dispatch_delay": {},
+              "target_rps": 0,
+              "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "client_memory_before": {
+                "memory_bytes": 37638144,
+                "anon_bytes": 31416320,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42778624,
+                "pss_bytes": 37240832,
+                "lifetime_peak_rss_bytes": 42258432
+              },
+              "client_memory_after": {
+                "memory_bytes": 37638144,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42778624,
+                "pss_bytes": 37240832,
+                "lifetime_peak_rss_bytes": 42258432
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 52006912,
+                  "cpu_s": 16.66272,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14778368,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 51654656,
+                  "cpu_s": 16.678245,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14553088,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.003436130000011,
+              "requests": 1200,
+              "outcomes": {
+                "running": 540,
+                "completed": 540,
+                "missing": 120
+              },
+              "requests_per_s": 99.97137378028427,
+              "client_cpu_s": 3.509686853,
+              "latency": {
+                "p50_ms": 3.0950409999945805,
+                "p95_ms": 4.918541999984427,
+                "p99_ms": 7.237750000001597
+              },
+              "dispatch_delay": {
+                "p50_ms": 2.3143390000086583,
+                "p95_ms": 4.255043999989994,
+                "p99_ms": 5.187544000023081
+              },
+              "target_rps": 100,
+              "trace_sha256": "a2637baaefca1721ed5a444c80c0ced49f75513983d85812a22ead2aebf7c0fc",
+              "client_memory_before": {
+                "memory_bytes": 37363712,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42840064,
+                "pss_bytes": 37302272,
+                "lifetime_peak_rss_bytes": 42258432
+              },
+              "client_memory_after": {
+                "memory_bytes": 37875712,
+                "anon_bytes": 31498240,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42840064,
+                "pss_bytes": 37302272,
+                "lifetime_peak_rss_bytes": 42258432
+              },
+              "servers_before": {
+                "spool": {
+                  "memory_bytes": 52371456,
+                  "cpu_s": 16.705525,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 14864384,
+                  "file_cache_bytes": 33001472
+                }
+              },
+              "servers_after": {
+                "spool": {
+                  "memory_bytes": 54276096,
+                  "cpu_s": 17.380667,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 1749737472,
+                  "anon_bytes": 16867328,
+                  "file_cache_bytes": 33001472
+                }
+              }
+            }
+          ],
+          "client_pid": 1,
+          "versions": {
+            "httpx": "0.28.1",
+            "relayna": "1.14.0"
+          },
+          "sdk_loaded_in_client": false
+        },
+        "sdk-once": {
+          "scenarios": [
+            {
+              "elapsed_s": 12.001085253999975,
+              "requests": 12000,
+              "outcomes": {
+                "running": 5400,
+                "completed": 5400,
+                "missing": 1200
+              },
+              "requests_per_s": 999.9095703449309,
+              "client_cpu_s": 6.840960608,
+              "latency": {
+                "p50_ms": 1.1156249999544343,
+                "p95_ms": 1.6565000000241525,
+                "p99_ms": 2.170374999991509
+              },
+              "dispatch_delay": {
+                "p50_ms": 0.28100299999778144,
+                "p95_ms": 1.2222929999552434,
+                "p99_ms": 1.2642529999880026
+              },
+              "target_rps": 1000,
+              "trace_sha256": "a56dda1a7a350db73b2026c5115b59ddbd5ba504522224c68a47a60f92ca11cc",
+              "client_memory_before": {
+                "memory_bytes": 37801984,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42778624,
+                "pss_bytes": 37240832,
+                "lifetime_peak_rss_bytes": 42270720
+              },
+              "client_memory_after": {
+                "memory_bytes": 37220352,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42778624,
+                "pss_bytes": 37240832,
+                "lifetime_peak_rss_bytes": 42270720
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80437248,
+                  "cpu_s": 11.912512,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64339968,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94285824,
+                  "cpu_s": 7.896293,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46108672,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 197091328,
+                  "cpu_s": 21.350903,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 135385088,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 80666624,
+                  "cpu_s": 15.275018,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64131072,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94031872,
+                  "cpu_s": 8.211876,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 45883392,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 197189632,
+                  "cpu_s": 21.375863,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 135163904,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.01818100600002,
+              "requests": 0,
+              "outcomes": {},
+              "requests_per_s": 0.0,
+              "client_cpu_s": 0.00046074999999934363,
+              "latency": {},
+              "dispatch_delay": {},
+              "target_rps": 0,
+              "trace_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "client_memory_before": {
+                "memory_bytes": 37220352,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42778624,
+                "pss_bytes": 37240832,
+                "lifetime_peak_rss_bytes": 42270720
+              },
+              "client_memory_after": {
+                "memory_bytes": 37220352,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42778624,
+                "pss_bytes": 37240832,
+                "lifetime_peak_rss_bytes": 42270720
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 78745600,
+                  "cpu_s": 15.327286,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 62255104,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 93769728,
+                  "cpu_s": 8.224848,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 45883392,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 197083136,
+                  "cpu_s": 21.385132,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 135393280,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 80957440,
+                  "cpu_s": 15.38794,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64757760,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 93786112,
+                  "cpu_s": 8.389713,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 45887488,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 194908160,
+                  "cpu_s": 21.465103,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 133058560,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            },
+            {
+              "elapsed_s": 12.000669921999986,
+              "requests": 1200,
+              "outcomes": {
+                "running": 540,
+                "completed": 540,
+                "missing": 120
+              },
+              "requests_per_s": 99.99441762831292,
+              "client_cpu_s": 3.0479383549999994,
+              "latency": {
+                "p50_ms": 3.4464169999637306,
+                "p95_ms": 5.65320900000188,
+                "p99_ms": 7.239209000033497
+              },
+              "dispatch_delay": {
+                "p50_ms": 1.6279170000075283,
+                "p95_ms": 4.356669999936003,
+                "p99_ms": 5.236128999968059
+              },
+              "target_rps": 100,
+              "trace_sha256": "a2637baaefca1721ed5a444c80c0ced49f75513983d85812a22ead2aebf7c0fc",
+              "client_memory_before": {
+                "memory_bytes": 37736448,
+                "anon_bytes": 31436800,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42901504,
+                "pss_bytes": 37363712,
+                "lifetime_peak_rss_bytes": 42270720
+              },
+              "client_memory_after": {
+                "memory_bytes": 37982208,
+                "anon_bytes": 31559680,
+                "file_cache_bytes": 2732032,
+                "rss_bytes": 42901504,
+                "pss_bytes": 37363712,
+                "lifetime_peak_rss_bytes": 42270720
+              },
+              "servers_before": {
+                "sdk-api": {
+                  "memory_bytes": 80691200,
+                  "cpu_s": 15.442795,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64528384,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 94306304,
+                  "cpu_s": 8.403054,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 46112768,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 194576384,
+                  "cpu_s": 21.474791,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 133062656,
+                  "file_cache_bytes": 48082944
+                }
+              },
+              "servers_after": {
+                "sdk-api": {
+                  "memory_bytes": 80773120,
+                  "cpu_s": 17.100263,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 10117120,
+                  "anon_bytes": 64532480,
+                  "file_cache_bytes": 10117120
+                },
+                "redis": {
+                  "memory_bytes": 92262400,
+                  "cpu_s": 8.636857,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 399409152,
+                  "anon_bytes": 44015616,
+                  "file_cache_bytes": 43876352
+                },
+                "rabbit": {
+                  "memory_bytes": 196980736,
+                  "cpu_s": 21.535632,
+                  "throttled_s": 0.0,
+                  "block_read_bytes": 0,
+                  "block_write_bytes": 34050048,
+                  "anon_bytes": 135172096,
+                  "file_cache_bytes": 48082944
+                }
+              }
+            }
+          ],
+          "client_pid": 1,
+          "versions": {
+            "httpx": "0.28.1",
+            "relayna": "1.14.0"
+          },
+          "sdk_loaded_in_client": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+<style>
+#spooltail-map { color:var(--foreground,CanvasText); font-family:var(--font-sans,system-ui); --edge:color-mix(in srgb,currentColor 38%,transparent); --rule:color-mix(in srgb,currentColor 20%,transparent); --broker:var(--chart-2,Highlight); }
+#spooltail-map * { box-sizing:border-box; }
+#spooltail-map h2,#spooltail-map h3,#spooltail-map p { margin:0; }
+#spooltail-map h2 { font-size:1.18em; font-weight:500; }
+#spooltail-map h3,#spooltail-map strong { font-size:1em; font-weight:500; }
+#spooltail-map .scope,#spooltail-map small { font-size:.86em; }
+#spooltail-map .scope { white-space:nowrap; color:var(--muted-foreground,GrayText); }
+#spooltail-map .clients { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px; }
+#spooltail-map .clients div { padding-top:6px;border-top:1px solid var(--edge); }
+#spooltail-map small { display:block;margin-top:3px;color:var(--muted-foreground,GrayText); }
+#spooltail-map .title { display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px; }
+#spooltail-map .bus { width:100%;height:30px;display:block;color:var(--edge); }
+#spooltail-map .bus path { fill:none;stroke:currentColor;stroke-width:1.2;vector-effect:non-scaling-stroke; }
+#spooltail-map .compact { display:none; }
+#spooltail-map .broker { border:1px solid var(--edge);border-left:3px solid var(--broker);border-radius:5px;background:color-mix(in srgb,var(--broker) 5%,transparent);padding:12px 16px; }
+#spooltail-map .broker .title { margin-bottom:8px; }
+#spooltail-map .pair { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px; }
+#spooltail-map .storage { border:1px dashed var(--edge);border-radius:5px;padding:10px 16px 12px; }
+#spooltail-map .storage h3 { margin-bottom:8px; }
+#spooltail-map .store { border-top:2px solid var(--rule);padding-top:6px; }
+#spooltail-map .paths { margin-top:14px; }
+#spooltail-map details { border-bottom:1px solid var(--rule); }
+#spooltail-map summary { padding:8px 0;cursor:pointer; }
+#spooltail-map summary:focus-visible { outline:2px solid var(--ring,Highlight); }
+#spooltail-map ol { margin:0 0 10px 1.5em;padding:0; }
+#spooltail-map li + li { margin-top:4px; }
+@media(max-width:520px){
+  #spooltail-map .clients { grid-template-columns:1fr 1fr;gap:8px 14px; }
+  #spooltail-map .wide { display:none; }
+  #spooltail-map .compact { display:block; }
+  #spooltail-map .pair { grid-template-columns:1fr;gap:9px; }
+  #spooltail-map .broker,#spooltail-map .storage { padding:10px 12px; }
+}
+</style>
+<section id="spooltail-map" aria-label="Current Spooltail architecture">
+  <div class="title"><h2>Spooltail architecture</h2><span class="scope">Single-node prototype</span></div>
+  <div class="clients" aria-label="Client roles">
+    <div><strong>Producer</strong><small>Publish a task or status event</small></div>
+    <div><strong>Worker</strong><small>Claim, settle or complete a task</small></div>
+    <div><strong>Service or browser</strong><small>Read status, replay history or follow a task</small></div>
+    <div><strong>Stream consumer</strong><small>Read the next record and commit a group offset</small></div>
+  </div>
+  <svg class="bus wide" viewBox="0 0 800 30" preserveAspectRatio="none" aria-hidden="true"><path d="M100 2 V14 H700 V2 M300 2 V14 M500 2 V14 M400 14 V29 M395 24 L400 29 L405 24"/></svg>
+  <svg class="bus compact" viewBox="0 0 400 30" preserveAspectRatio="none" aria-hidden="true"><path d="M100 2 V14 H300 V2 M200 14 V29 M195 24 L200 29 L205 24"/></svg>
+  <div class="broker">
+    <div class="title"><h3>Spooltail broker</h3><span class="scope">One Rust process · Axum / Tokio</span></div>
+    <div class="pair">
+      <div><strong>HTTP operations</strong><small>Publish, look up a task, manage leases and advance group cursors. Store access shares one mutex.</small></div>
+      <div><strong>SSE and WebSocket subscriptions</strong><small>Replay indexed task events, then wait on an in-memory notification. A commit wakes readers to query again.</small></div>
+    </div>
+  </div>
+  <svg class="bus" viewBox="0 0 800 30" preserveAspectRatio="none" aria-hidden="true"><path d="M400 1 V29 M395 6 L400 1 L405 6 M395 24 L400 29 L405 24"/></svg>
+  <div class="storage">
+    <h3>Persistent data directory</h3>
+    <div class="pair">
+      <div class="store"><strong>SQLite index and subscription state</strong><small>Task and event IDs map to offsets and segment locations. SQLite also holds work leases, group cursors and retention floors.</small></div>
+      <div class="store"><strong>Append-only journal segments</strong><small>Checksummed frames hold event payloads. A terminal completion frame also records the lease it acknowledges.</small></div>
+    </div>
+  </div>
+  <div class="paths">
+    <details open>
+      <summary>Follow a random status read</summary>
+      <ol>
+        <li>The caller sends the topic and task ID to <code>/latest</code>.</li>
+        <li>SQLite locates the latest retained record. The broker reads that frame from the journal and verifies its checksum.</li>
+        <li>The caller receives the event and its offset, or HTTP 404 if no retained status exists.</li>
+      </ol>
+    </details>
+    <details>
+      <summary>Follow an atomic task completion</summary>
+      <ol>
+        <li>The worker submits its work offset, lease generation and terminal status event.</li>
+        <li>The broker validates the lease and flushes the completion frame to the journal. One SQLite transaction indexes the status and marks the lease done.</li>
+        <li>After commit, the broker wakes task subscribers and returns the status offset. An exact retry returns that same offset.</li>
+      </ol>
+    </details>
+    <details>
+      <summary>Follow a subscriber after reconnect</summary>
+      <ol>
+        <li>The client supplies its last event ID through SSE or WebSocket. A fresh subscription starts at the first retained event for the task.</li>
+        <li>The broker registers for wakeups and replays retained records after that ID. An unknown or expired ID produces a gap.</li>
+        <li>Once caught up, the subscriber waits for the next commit. A terminal status ends that task’s subscription.</li>
+      </ol>
+    </details>
+  </div>
+</section>

@@ -91,6 +91,80 @@ fn group_created_before_retention_cannot_skip_unprocessed_record() -> Result<()>
 }
 
 #[test]
+fn delayed_retry_has_no_active_completion_lease() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let offset = store.append("work", record("queued"))?;
+    let claim = store.claim("work", "workers", 60_000)?.unwrap();
+    store.settle("work", "workers", offset, claim.generation, "retry", 60_000)?;
+    for generation in [claim.generation, claim.generation + 1] {
+        let lease = WorkLease {
+            topic: "work".into(),
+            group: "workers".into(),
+            offset,
+            generation,
+        };
+        let event = json!({"task_id":"T7","event_id":"final","status":"completed"});
+        let err = store.complete(lease, "status", event).unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<Problem>(),
+            Some(Problem::Conflict(_))
+        ));
+    }
+    assert!(store.page("status", "T7", 0)?.is_empty());
+    assert!(store.claim("work", "workers", 1000)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn torn_completion_preserves_the_lease_and_publishes_nothing() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let offset = store.append("work", record("queued"))?;
+    let claim = store.claim("work", "workers", 60_000)?.unwrap();
+    let lease = || WorkLease {
+        topic: "work".into(),
+        group: "workers".into(),
+        offset,
+        generation: claim.generation,
+    };
+    let event = json!({"task_id":"T7","event_id":"final","status":"completed"});
+    let segment = dir.path().join("00000000000000000000.seg");
+    let before = segment.metadata()?.len();
+    // Fail the lease update after the index insert in the same transaction.
+    store.db.execute_batch(
+        "CREATE TEMP TRIGGER fail_settlement BEFORE UPDATE ON leases
+         BEGIN SELECT RAISE(ABORT,'injected failure'); END;",
+    )?;
+    let error = store
+        .complete(lease(), "status", event.clone())
+        .unwrap_err();
+    assert!(error.to_string().contains("injected failure"));
+    assert!(store.page("status", "T7", 0)?.is_empty());
+    store.db.execute_batch("DROP TRIGGER fail_settlement")?;
+    assert!(store.claim("work", "workers", 1000).is_err());
+    assert!(
+        store
+            .settle("work", "workers", offset, claim.generation, "ack", 0)
+            .is_err()
+    );
+    drop(store);
+
+    // Simulate a torn final frame. Recovery must discard the entire operation.
+    let file = OpenOptions::new().write(true).open(&segment)?;
+    file.set_len(file.metadata()?.len() - 1)?;
+    file.sync_all()?;
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.recovered_frames, 0);
+    assert_eq!(segment.metadata()?.len(), before);
+    assert!(store.page("status", "T7", 0)?.is_empty());
+    let status_offset = store.complete(lease(), "status", event.clone())?;
+    assert_eq!(store.complete(lease(), "status", event)?, status_offset);
+    assert!(store.claim("work", "workers", 1000)?.is_none());
+    Ok(())
+}
+
+#[test]
 fn rolling_segments_preserves_indexed_reads_and_topic_isolation() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
