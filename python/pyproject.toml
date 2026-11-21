@@ -1,0 +1,14 @@
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14"]
+build-backend = "uv_build"
+
+[project]
+name = "relayna-spooltail"
+version = "0.0.1"
+description = "Async Python client for the Relayna Spooltail broker"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["grpcio>=1.80.0", "protobuf>=6.31.1"]
+
+[dependency-groups]
+dev = ["grpcio-tools==1.80.0", "httpx==0.28.1"]

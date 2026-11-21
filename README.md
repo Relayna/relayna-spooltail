@@ -12,7 +12,7 @@ The single-node prototype runs one broker process with one persistent directory.
 - **Atomic task completion.** A worker can acknowledge its claim and publish a terminal status in one request. After a crash, retrying the same completion returns the original status offset.
 - **Service and browser listeners.** A broker can serve gRPC over TLS and HTTP/SSE at the same time, using the same journal, leases, cursors, and live notifications.
 
-Replication and failover, physical storage reclamation, and the Relayna SDK adapter remain open. The [local RabbitMQ and Redis benchmark](benchmarks/README.md) compares status recovery and task completion with the Relayna SDK. A [random-read benchmark](benchmarks/random-reads.md) measures latest status and recent history by task ID. AKS measurements remain open. See the [acceptance cases and benchmark plan](docs/expectations.md).
+The [native Python client](#python-client) is available from this checkout. Replication and failover, physical storage reclamation, and an adapter for the existing Relayna SDK remain open. The [local RabbitMQ and Redis benchmark](benchmarks/README.md) compares status recovery and task completion with the Relayna SDK. A [random-read benchmark](benchmarks/random-reads.md) measures latest status and recent history by task ID. AKS measurements remain open. See the [acceptance cases and benchmark plan](docs/expectations.md).
 
 ## Run the prototype
 
@@ -68,6 +68,16 @@ Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1
 
 History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A unary history gap returns `FAILED_PRECONDITION` with `spooltail-earliest-event-id-bin` trailing metadata when a retained event exists. The metadata value is the UTF-8 event ID. A streaming gap carries `earliest_event_id` in its JSON body. The TLS listener authenticates the broker to its clients.
 
+## Python client
+
+The SDK is a uv library project under `python/`. Set it up from the repository root with
+
+```sh
+uv sync --project python --locked
+```
+
+See the [Python SDK quickstart](python/README.md) for a publish-and-complete example.
+
 ## Broker operations
 
 | Method and path | Behavior |
@@ -112,8 +122,9 @@ cargo test --locked
 cargo build --release --locked
 uv run --script tests/acceptance.py --events 800000
 uv run --python 3.13 --script tests/grpc_acceptance.py
+uv run --project python --locked python tests/python_sdk_acceptance.py
 ```
 
-The acceptance drivers create temporary data directories and start real broker processes on loopback. The gRPC driver uses OpenSSL to create a test identity and checks certificate validation, simultaneous SSE delivery, leases, checkpoints, and restart. Use `--events 1000` for a quick HTTP acceptance run.
+The acceptance drivers create temporary data directories and start real broker processes on loopback. The gRPC and Python SDK drivers use OpenSSL to create a test identity. The SDK driver checks task completion, replay gaps, and SSE resume after restart. Use `--events 1000` for a quick HTTP acceptance run.
 
 Read the [architecture draft](docs/design.md) for the durability model and the [prototype expectations](docs/expectations.md) for acceptance criteria, benchmarks, and open decisions.
