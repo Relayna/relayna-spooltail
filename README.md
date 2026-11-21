@@ -115,16 +115,21 @@ Keep the producer’s `task_id` for the life of the task. Choose the terminal `e
 
 ## Verify
 
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs these checks on Ubuntu for every pull request and push to `main`. It uses Rust 1.95.0 and uv 0.13.9.
+
 ```sh
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
+cargo fmt --all --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-features
 cargo build --release --locked
-uv run --script tests/acceptance.py --events 800000
+uv run --project python --locked python python/generate_wire.py
+git status --short --untracked-files=all -- python/src/relayna_spooltail/_wire
+uv build --project python
+uv run --python 3.11 --script tests/acceptance.py --events 800000
 uv run --python 3.13 --script tests/grpc_acceptance.py
-uv run --project python --locked python tests/python_sdk_acceptance.py
+uv run --project python --locked --no-editable python tests/python_sdk_acceptance.py
 ```
 
-The acceptance drivers create temporary data directories and start real broker processes on loopback. The gRPC and Python SDK drivers use OpenSSL to create a test identity. The SDK driver checks task completion, replay gaps, and SSE resume after restart. Use `--events 1000` for a quick HTTP acceptance run.
+Regenerating the Python gRPC bindings should leave `git status` empty for the `_wire` directory. The acceptance drivers create temporary data directories and start real broker processes on loopback. The gRPC and Python SDK drivers use OpenSSL to create a test identity. The SDK driver checks task completion, replay gaps, and SSE resume after restart. Use `--events 1000` for a quick HTTP acceptance run.
 
 Read the [architecture draft](docs/design.md) for the durability model and the [prototype expectations](docs/expectations.md) for acceptance criteria, benchmarks, and open decisions.
