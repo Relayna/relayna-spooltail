@@ -1,12 +1,24 @@
 # Relayna Spooltail Python SDK
 
-This async gRPC client supports Python 3.11 and later. Run the commands below from the repository root.
+This async gRPC client supports Python 3.11 and later.
+
+## Install from GitHub Releases
+
+Use a GitHub account that can read this private repository. After authenticating `gh`, download a pinned version and install the wheel into your application's environment. Run the `uv pip` command in the same environment where Relayna is installed if using it with Relayna.
 
 ```sh
-uv sync --project python --locked
+sdk_version=0.0.1
+sdk_wheel="relayna_spooltail-${sdk_version}-py3-none-any.whl"
+gh release download "python-sdk-v${sdk_version}" --repo sarattha/relayna-spooltail \
+  --pattern "$sdk_wheel"
+uv pip install "./$sdk_wheel"
 ```
 
-Start the broker with [gRPC and TLS](../README.md#enable-grpc). Pass the broker CA certificate as PEM bytes for a private CA. Omitting `root_certificates` uses gRPC's default trust roots. For a loopback broker started in plaintext mode, pass `tls=False`. Save the example as `example.py` and run it with `uv run --project python --locked python example.py`.
+For automation in another repository, supply `GH_TOKEN` in the download step with a token that has read access to the Spooltail repository's contents. The consuming repository's default GitHub Actions token is scoped to that repository. The released wheel can be installed without a Spooltail checkout or an SDK build step. For a uv project that manages its own lockfile, keep the downloaded wheel in a reproducible location and add it as a path dependency with `uv add ./relayna_spooltail-0.0.1-py3-none-any.whl`.
+
+## Use the client
+
+Start the broker with [gRPC and TLS](../README.md#enable-grpc). Pass the broker CA certificate as PEM bytes for a private CA. Omitting `root_certificates` uses gRPC's default trust roots. For a loopback broker started in plaintext mode, pass `tls=False`. Save the example as `example.py` and run `python example.py` in the environment where the wheel is installed.
 
 ```python
 import asyncio
@@ -47,9 +59,24 @@ A browser that already received `T7-running` can resume the same task over SSE w
 
 ## Development
 
+Run these commands from the repository root.
+
 ```sh
+uv sync --project python --locked
 uv run --project python --locked python python/generate_wire.py
 uv build --project python
 ```
 
 The generator reads the broker's Protobuf schema. The build writes the source distribution and wheel to `python/dist`.
+
+## Publish a version
+
+Update `project.version` in `python/pyproject.toml`, regenerate `python/uv.lock` with `uv lock --project python`, and merge the version change. On an up-to-date `main`, create and push a new `python-sdk-v<version>` tag matching the version in `pyproject.toml`.
+
+```sh
+sdk_version=0.0.2
+git tag -a "python-sdk-v${sdk_version}" -m "Spooltail Python SDK ${sdk_version}"
+git push origin "refs/tags/python-sdk-v${sdk_version}"
+```
+
+GitHub Actions builds the source distribution and wheel, tests the installed wheel against a broker built from the tagged revision, and attaches both distributions to a versioned GitHub Release.
