@@ -9,7 +9,7 @@ Use a GitHub account that can read this private repository. After authenticating
 ```sh
 sdk_version=0.0.1
 sdk_wheel="relayna_spooltail-${sdk_version}-py3-none-any.whl"
-gh release download "python-sdk-v${sdk_version}" --repo sarattha/relayna-spooltail \
+gh release download "v${sdk_version}" --repo sarattha/relayna-spooltail \
   --pattern "$sdk_wheel"
 uv pip install "./$sdk_wheel"
 ```
@@ -71,12 +71,12 @@ The generator reads the broker's Protobuf schema. The build writes the source di
 
 ## Publish a version
 
-Update `project.version` in `python/pyproject.toml`, regenerate `python/uv.lock` with `uv lock --project python`, and merge the version change. On an up-to-date `main`, create and push a new `python-sdk-v<version>` tag matching the version in `pyproject.toml`.
+Set `project.version` in `python/pyproject.toml` to the next three-part [semantic version](https://semver.org/), regenerate `python/uv.lock` with `uv lock --project python`, and merge the version change. On an up-to-date `main`, create and push an annotated `vMAJOR.MINOR.PATCH` tag matching that version.
 
 ```sh
 sdk_version=0.0.2
-git tag -a "python-sdk-v${sdk_version}" -m "Spooltail Python SDK ${sdk_version}"
-git push origin "refs/tags/python-sdk-v${sdk_version}"
+git tag -a "v${sdk_version}" -m "Spooltail v${sdk_version}"
+git push origin "refs/tags/v${sdk_version}"
 ```
 
 GitHub Actions builds the source distribution and wheel, tests the installed wheel against a broker built from the tagged revision, and attaches both distributions to a versioned GitHub Release.
