@@ -235,4 +235,24 @@ uv run --project python --locked --no-editable python tests/python_sdk_acceptanc
 
 Regenerating the Python gRPC bindings should leave `git status` empty for the `_wire` directory. The acceptance drivers create temporary data directories and start real broker processes on loopback. The gRPC and Python SDK drivers use OpenSSL to create a test identity. The SDK driver checks task completion, replay gaps, and SSE resume after restart. Use `--events 1000` for a quick HTTP acceptance run.
 
+### Packed journal recovery
+
+These suites use a dedicated broker build with fault hooks.
+
+```sh
+cargo build --release --locked --features pack-fault-injection
+uv run --project python --locked python tests/packed_journal_acceptance.py
+uv run --project python --locked python tests/packed_journal_disk_full.py
+```
+
+CI runs both suites. The disk-full suite creates and fills its own filesystem image. Linux requires `mkfs.ext4`, loop mounting, and root or passwordless sudo for the mount. On macOS the suite uses an APFS disk image. It checks failed pack writes, SQLite manifest commits, and foreground publishes. The ext4 cases also verify truncation of a partially written journal frame.
+
+For the full-VM power-cut suite, build the same fault-injection binary for Linux ARM64. Run the driver on an Apple Silicon Mac with Lima and uv installed.
+
+```sh
+uv run --project python --locked python tests/packed_journal_power_cut.py --broker /path/to/linux-arm64/spooltail
+```
+
+The driver creates a disposable Ubuntu VM with no host directories mounted. It force-stops the VM at each of the five pack switch points in both index modes, checks the boot ID after restart, and verifies which journal copy the broker recovers. This exercises abrupt guest power loss on ext4.
+
 Read the [architecture draft](docs/design.md) for the durability model and the [prototype expectations](docs/expectations.md) for acceptance criteria, benchmarks, and open decisions.

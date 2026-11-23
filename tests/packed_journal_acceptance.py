@@ -28,7 +28,7 @@ def query(volume, sql):
         return db.execute(sql).fetchall()
 
 
-async def launch(volume, mode, *, packing=False, paused=True, cut=None):
+async def launch(volume, mode, *, packing=False, paused=True, cut=None, resume=None):
     env = {key: value for key, value in os.environ.items() if not key.startswith("SPOOLTAIL_")}
     env.update(
         SPOOLTAIL_DATA=str(volume),
@@ -44,6 +44,8 @@ async def launch(volume, mode, *, packing=False, paused=True, cut=None):
     )
     if cut:
         env["SPOOLTAIL_PACK_STOP_AT"] = cut
+    if resume is not None:
+        env["SPOOLTAIL_PACK_TEST_RESUME"] = str(resume)
     return await asyncio.create_subprocess_exec(
         BROKER, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
@@ -56,7 +58,7 @@ async def kill(process):
 
 
 @asynccontextmanager
-async def broker(volume, mode, **options):
+async def running_broker(volume, mode, **options):
     process = await launch(volume, mode, **options)
     try:
         async with asyncio.timeout(10):
@@ -67,9 +69,28 @@ async def broker(volume, mode, **options):
             raise AssertionError(error.decode())
         recovered = int(http.split()[-1].split("=")[1])
         async with SpooltailClient(grpc.split()[-1].removeprefix("http://"), tls=False) as client:
-            yield client, recovered
+            yield client, recovered, process
     finally:
         await kill(process)
+
+
+@asynccontextmanager
+async def broker(volume, mode, **options):
+    async with running_broker(volume, mode, **options) as (client, recovered, _):
+        yield client, recovered
+
+
+async def wait_for_log(process, predicate):
+    async with asyncio.timeout(15):
+        while line := await process.stderr.readline():
+            line = line.decode().strip()
+            if predicate(line):
+                return line
+    raise AssertionError("broker stopped before emitting the expected log entry")
+
+
+async def wait_for_cut(process, stage):
+    assert await wait_for_log(process, lambda line: line.startswith("PACK_STOP ")) == f"PACK_STOP {stage}"
 
 
 async def wait_for(predicate):
@@ -103,7 +124,7 @@ async def seed(volume, mode, *, archive_first=True):
     return work, lease, status, replay
 
 
-async def verify_reads(client, work, lease, status, replay):
+async def verify_history(client, status, replay):
     inputs, through = [], None
     while len(inputs) < len(status):
         after = inputs[-1][1]["event_id"] if inputs else None
@@ -122,6 +143,9 @@ async def verify_reads(client, work, lease, status, replay):
         after = replayed[-1][0]
     assert replayed == replay[1:]
 
+
+async def verify_reads(client, work, lease, status, replay):
+    await verify_history(client, status, replay)
     offset, terminal = status[0]
     assert await client.publish("status", terminal) == offset
     assert await client.complete(lease, "status", terminal) == offset
@@ -144,26 +168,31 @@ async def crash(volume, template, mode, stage, expected):
     pack = volume / FIRST_PACK
     writing = volume / (FIRST_PACK + ".writing")
     try:
-        async with asyncio.timeout(10):
-            while True:
-                line = (await process.stderr.readline()).decode()
-                assert line, f"broker quit before reaching {stage}"
-                if line.startswith("PACK_STOP "):
-                    assert line.strip().endswith(stage)
-                    break
+        await wait_for_cut(process, stage)
         committed = bool(query(volume, "SELECT 1 FROM packed_segments WHERE segment=0"))
         assert (committed, raw.exists(), pack.exists(), writing.exists()) == CUTS[stage]
     finally:
         await kill(process)
     assert process.returncode == -9
+    await verify_restart(volume, mode, committed, expected)
+    print(f"PASS {mode} {stage}", flush=True)
+
+
+async def verify_restart(volume, mode, committed, expected):
     async with broker(volume, mode) as (client, _):
         # Opening with packing disabled isolates startup cleanup from a fresh packing run.
-        assert not writing.exists()
-        assert raw.exists() != committed
-        assert pack.exists() == committed
+        assert not (volume / (FIRST_PACK + ".writing")).exists()
+        assert (volume / FIRST_RAW).exists() != committed
+        assert (volume / FIRST_PACK).exists() == committed
         assert (query(volume, "SELECT COUNT(*) FROM archive_records WHERE block_id=0")[0][0] > 0) == committed
         await verify_reads(client, *expected)
-    print(f"PASS {mode} {stage}", flush=True)
+        item = {"task_id": "after-restart", "event_id": "after-restart"}
+        offset = await client.publish("restart", item)
+        assert offset > max(expected[2][-1][0], expected[3][-1][0])
+        assert await client.publish("restart", item) == offset
+        records = await client.history("restart", "after-restart")
+        assert [(record.offset, record.event) for record in records] == [(offset, item)]
+    assert query(volume, "PRAGMA integrity_check") == [("ok",)]
 
 
 async def main(root):

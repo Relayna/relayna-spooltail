@@ -150,6 +150,7 @@ fn build(dir: &Path, segment: u64) -> Result<Option<u64>> {
     let final_path = packed_path(dir, segment);
     let temporary = TemporaryPack(final_path.with_extension("zst.writing"));
     let mut file = File::create(&temporary.0)?;
+    stop_at("pack_opened");
     file.write_all(&[0; HEADER as usize])?;
     let mut raw_pos = 0_u32;
     let mut block_start = 0_u32;
@@ -393,6 +394,12 @@ fn remove_unpublished(dir: &Path, partition: u32, entries: &Manifest) -> Result<
 fn stop_at(stage: &str) {
     if std::env::var("SPOOLTAIL_PACK_STOP_AT").as_deref() == Ok(stage) {
         eprintln!("PACK_STOP {stage}");
+        if let Some(path) = std::env::var_os("SPOOLTAIL_PACK_TEST_RESUME") {
+            while !Path::new(&path).exists() {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            return;
+        }
         loop {
             std::thread::park();
         }

@@ -91,3 +91,6 @@ jobs:
         run: |
           cargo build --release --locked --features pack-fault-injection
           uv run --project python --locked --no-editable python tests/packed_journal_acceptance.py
+
+      - name: Run packed journal disk-full recovery tests on ext4
+        run: uv run --project python --locked --no-editable python tests/packed_journal_disk_full.py
