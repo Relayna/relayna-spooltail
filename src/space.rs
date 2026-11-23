@@ -104,6 +104,7 @@ pub(crate) struct Stats {
     pub raw_journal_bytes: u64,
     pub packed_journal_bytes: u64,
     pub archive_pending_records: u64,
+    pub retired_segments: u64,
     pub packing_space_pauses: u64,
 }
 
@@ -130,6 +131,12 @@ impl Broker {
                         packed_journal_bytes: 0,
                         archive_pending_records: pending.try_into()?,
                         packing_space_pauses: store.space.packing_space_pauses,
+                        retired_segments: store
+                            .packed
+                            .values()
+                            .filter(|&&len| len == 0)
+                            .count()
+                            .try_into()?,
                     },
                     store.data_dir().to_owned(),
                     store.partition_ids(),

@@ -99,6 +99,7 @@ class BrokerStats:
     raw_journal_bytes: int = 0
     packed_journal_bytes: int = 0
     archive_pending_records: int = 0
+    retired_segments: int = 0
     packing_space_pauses: int = 0
 
 
@@ -448,5 +449,6 @@ class SpooltailClient:
             response.raw_journal_bytes,
             response.packed_journal_bytes,
             response.archive_pending_records,
+            response.retired_segments,
             response.packing_space_pauses,
         )

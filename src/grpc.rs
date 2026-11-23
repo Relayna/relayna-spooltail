@@ -354,6 +354,7 @@ impl Spooltail for Api {
             raw_journal_bytes: stats.raw_journal_bytes,
             packed_journal_bytes: stats.packed_journal_bytes,
             archive_pending_records: stats.archive_pending_records,
+            retired_segments: stats.retired_segments,
             packing_space_pauses: stats.packing_space_pauses,
         }))
     }

@@ -157,6 +157,7 @@ message StatsResponse {
   uint64 raw_journal_bytes = 5;
   uint64 packed_journal_bytes = 6;
   uint64 archive_pending_records = 7;
+  uint64 retired_segments = 8;
   uint64 packing_space_pauses = 9;
 }
 message TaskId { string task_id = 1; }

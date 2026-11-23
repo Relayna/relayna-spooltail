@@ -94,3 +94,6 @@ jobs:
 
       - name: Run packed journal disk-full recovery tests on ext4
         run: uv run --project python --locked --no-editable python tests/packed_journal_disk_full.py
+
+      - name: Run packed journal retirement recovery tests
+        run: uv run --project python --locked --no-editable python tests/packed_journal_retirement.py

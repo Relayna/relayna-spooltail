@@ -5,7 +5,7 @@ use crate::{
     },
     packing::{self, Manifest},
     partition_index::{self, SplitIndex},
-    retention,
+    retention, retire,
     space::Space,
     subscriptions::{WorkLease, now},
 };
@@ -56,7 +56,7 @@ pub fn identifier(s: &str) -> Result<()> {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Frame {
     pub(crate) topic: String,
-    event: Value,
+    pub(crate) event: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) completion: Option<WorkLease>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -205,6 +205,7 @@ pub struct Store {
     dir: PathBuf,
     pub(crate) packed: Manifest,
     pub(crate) space: Space,
+    pub(crate) audit_only: BTreeSet<String>,
     journals: BTreeMap<u32, Partition>,
     service_partitions: BTreeMap<String, Vec<u32>>,
     pub dynamic_placement: bool,
@@ -361,6 +362,7 @@ impl Store {
         migrate(&db)?;
         retention::init(&db)?;
         let packed = packing::init(&db)?;
+        let audit_only = retire::init(&db)?;
         let partitions = db
             .prepare("SELECT id FROM partitions ORDER BY id")?
             .query_map([], |row| row.get::<_, u32>(0))?
@@ -404,6 +406,7 @@ impl Store {
             dir: dir.to_owned(),
             packed,
             space: Space::default(),
+            audit_only,
             _lock: lock,
             journals,
             service_partitions: BTreeMap::new(),
@@ -785,6 +788,9 @@ impl Store {
         self.ensure_writable()?;
         let task = frame.key()?.0.to_owned();
         if let Some(offset) = self.existing_event(frame)? {
+            if let Some(position) = self.retired_duplicate(offset, frame)? {
+                return Ok(Prepared::Duplicate(position));
+            }
             let (partition, saved) = self.read_frame(offset)?;
             if saved.event != frame.event {
                 return Err(Problem::Conflict(

@@ -514,6 +514,9 @@ impl Store {
     ) -> Result<Option<Claim>> {
         self.ensure_writable()?;
         valid_group(topic, group)?;
+        if self.audit_only.contains(topic) {
+            return Err(Problem::Invalid("audit-only topics cannot be claimed".into()).into());
+        }
         if !(1..=3_600_000).contains(&lease_ms) {
             return Err(Problem::Invalid("lease_ms must be 1..3600000".into()).into());
         }

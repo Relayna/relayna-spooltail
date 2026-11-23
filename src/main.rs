@@ -7,6 +7,7 @@ mod journal;
 mod packing;
 mod partition_index;
 mod retention;
+mod retire;
 mod space;
 mod store;
 mod subscriptions;
@@ -634,6 +635,7 @@ async fn main() -> Result<()> {
     store.space = space::Space::configure()?;
     let retention_topics = retention::configure(&mut store)?;
     let pack_min_age = packing::configure(&mut store)?;
+    let retire = retire::configure(&mut store)?;
     let recovered = store.recovered_frames;
     let broker = Broker {
         store: Arc::new(Mutex::new(store)),
@@ -664,6 +666,9 @@ async fn main() -> Result<()> {
         return grpc::serve_benchmark(broker, &addr).await;
     }
     let grpc_listener = grpc::Listener::bind_from_env(broker.clone()).await?;
+    if retire {
+        tokio::spawn(retire::run(broker.clone()));
+    }
     if let Some(min_age) = pack_min_age {
         tokio::spawn(packing::run(broker.clone(), min_age));
     }
