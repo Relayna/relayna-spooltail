@@ -45,6 +45,14 @@ A browser that already received `T7-running` can resume the same task over SSE w
 - `history` returns one page. Use the last record's `event["event_id"]` as the next page's `after` cursor. `subscribe` yields `ready` and `status` deliveries. Use `contextlib.aclosing` if leaving a subscription early. Both methods raise `CursorGapError` for an unavailable cursor and expose `earliest_event_id`, which can be `None`.
 - `next` and `commit` let an independent consumer read and checkpoint status records in order.
 
+## Partitions
+
+Administrators can call `list_partitions()`, `ensure_partition(id)`, `task_partition(task_id)`, and `move_task(task_id, from_partition, to_partition)`. Pass `partition=id` to `claim()` to claim tasks assigned to that partition. For partition-scoped replay, pass it to both `next()` and `commit()`.
+
+`Record.partition` identifies the journal that stored a record. `Lease.partition` identifies the placement at claim time. A moved task's old work record can have a different original partition. Numeric offsets are still globally unique, and `settle()` and `complete()` accept leases issued before the move. See [broker partition operations](../README.md#add-partitions-and-move-tasks) for checkpoint behavior.
+
+For service-based placement, pass `owner_service="urgent"` to the first `publish()` for a task and configure that service in the broker's `SPOOLTAIL_SERVICE_PARTITIONS`. Other services can publish updates with the same task ID. The broker uses the saved placement.
+
 ## Development
 
 ```sh

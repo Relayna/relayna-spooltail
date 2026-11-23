@@ -13,6 +13,10 @@ service Spooltail {
   rpc Commit(CommitRequest) returns (Empty);
   rpc Subscribe(Task) returns (stream Delivery);
   rpc Stats(Empty) returns (StatsResponse);
+  rpc ListPartitions(Empty) returns (Partitions);
+  rpc EnsurePartition(Partition) returns (Partition);
+  rpc TaskPartition(TaskId) returns (Partition);
+  rpc MoveTask(MoveTaskRequest) returns (Partition);
 }
 
 message Empty {}
@@ -23,25 +27,35 @@ message Task {
   optional string after = 3;
 }
 message Record {
+  // Broker-wide offset and the original journal partition.
   int64 offset = 1;
   bytes event_json = 2;
+  uint32 partition = 3;
 }
 message Page { repeated Record records = 1; }
 message Publish {
   string topic = 1;
   bytes event_json = 2;
+  // Append placement hint for a new task. An existing task keeps its assignment.
+  optional string owner_service = 3;
 }
-message Offset { int64 offset = 1; }
+message Offset {
+  int64 offset = 1;
+  uint32 partition = 2;
+}
 message ClaimRequest {
   string topic = 1;
   string group = 2;
   int64 lease_ms = 3;
+  optional uint32 partition = 4;
 }
 message ClaimResponse {
   // Absent when no work is available.
   Record record = 1;
   int64 generation = 2;
   int64 lease_until_ms = 3;
+  // Current task placement; record.partition identifies the original append.
+  uint32 partition = 4;
 }
 enum SettlementAction {
   SETTLEMENT_ACTION_UNSPECIFIED = 0;
@@ -74,6 +88,7 @@ message Delivery {
 message StreamGroup {
   string topic = 1;
   string group = 2;
+  optional uint32 partition = 3;
 }
 message NextResponse {
   // Absent when the stream group has caught up.
@@ -83,8 +98,17 @@ message CommitRequest {
   string topic = 1;
   string group = 2;
   int64 offset = 3;
+  optional uint32 partition = 4;
 }
 message StatsResponse {
   uint64 payload_reads = 1;
   uint64 recovered_frames = 2;
+}
+message TaskId { string task_id = 1; }
+message Partition { uint32 id = 1; }
+message Partitions { repeated uint32 ids = 1; }
+message MoveTaskRequest {
+  string task_id = 1;
+  optional uint32 from_partition = 2;
+  optional uint32 to_partition = 3;
 }

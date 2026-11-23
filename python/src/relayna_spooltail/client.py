@@ -47,6 +47,7 @@ class SubscriptionError(SpooltailError):
 class Record:
     offset: int
     event: dict[str, Any]
+    partition: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +57,7 @@ class Lease:
     record: Record
     generation: int
     lease_until_ms: int
+    partition: int = 0
 
 
 class SettlementAction(IntEnum):
@@ -78,11 +80,13 @@ class BrokerStats:
     recovered_frames: int
 
 
-def _publish(topic: str, event: Mapping[str, Any]) -> wire.Publish:
+def _publish(
+    topic: str, event: Mapping[str, Any], *, owner_service: str | None = None
+) -> wire.Publish:
     data = json.dumps(
         dict(event), ensure_ascii=False, allow_nan=False, separators=(",", ":")
     ).encode("utf-8")
-    return wire.Publish(topic=topic, event_json=data)
+    return wire.Publish(topic=topic, event_json=data, owner_service=owner_service)
 
 
 def _object(data: bytes) -> dict[str, Any]:
@@ -93,7 +97,7 @@ def _object(data: bytes) -> dict[str, Any]:
 
 
 def _record(message: wire.Record) -> Record:
-    return Record(message.offset, _object(message.event_json))
+    return Record(message.offset, _object(message.event_json), message.partition)
 
 
 def _task(topic: str, task_id: str, after: str | None = None) -> wire.Task:
@@ -172,11 +176,14 @@ class SpooltailClient:
         """Check that the broker can serve requests."""
         await self._stub.Ping(wire.Empty(), timeout=self._timeout)
 
-    async def publish(self, topic: str, event: Mapping[str, Any]) -> int:
-        """Append an event with a caller-supplied task_id and event_id."""
+    async def publish(
+        self, topic: str, event: Mapping[str, Any], *, owner_service: str | None = None
+    ) -> int:
+        """Append an event, optionally selecting the owner service for a new task."""
         with _translate_conflict():
             response = await self._stub.Append(
-                _publish(topic, event), timeout=self._timeout
+                _publish(topic, event, owner_service=owner_service),
+                timeout=self._timeout,
             )
         return response.offset
 
@@ -233,11 +240,18 @@ class SpooltailClient:
             call.cancel()
 
     async def claim(
-        self, topic: str, group: str, *, lease_ms: int = 30_000
+        self,
+        topic: str,
+        group: str,
+        *,
+        lease_ms: int = 30_000,
+        partition: int | None = None,
     ) -> Lease | None:
         """Lease the next available work record in a group, if present."""
         response = await self._stub.Claim(
-            wire.ClaimRequest(topic=topic, group=group, lease_ms=lease_ms),
+            wire.ClaimRequest(
+                topic=topic, group=group, lease_ms=lease_ms, partition=partition
+            ),
             timeout=self._timeout,
         )
         if not response.HasField("record"):
@@ -248,6 +262,7 @@ class SpooltailClient:
             _record(response.record),
             response.generation,
             response.lease_until_ms,
+            response.partition,
         )
 
     async def settle(
@@ -280,19 +295,54 @@ class SpooltailClient:
             response = await self._stub.Complete(request, timeout=self._timeout)
         return response.offset
 
-    async def next(self, topic: str, group: str) -> Record | None:
+    async def next(
+        self, topic: str, group: str, *, partition: int | None = None
+    ) -> Record | None:
         """Read the next record after a stream group's durable checkpoint."""
         with _translate_conflict():
             response = await self._stub.Next(
-                wire.StreamGroup(topic=topic, group=group), timeout=self._timeout
+                wire.StreamGroup(topic=topic, group=group, partition=partition),
+                timeout=self._timeout,
             )
         return _record(response.record) if response.HasField("record") else None
 
-    async def commit(self, topic: str, group: str, offset: int) -> None:
+    async def commit(
+        self, topic: str, group: str, offset: int, *, partition: int | None = None
+    ) -> None:
         """Advance a stream group's checkpoint through its next record."""
-        request = wire.CommitRequest(topic=topic, group=group, offset=offset)
+        request = wire.CommitRequest(
+            topic=topic, group=group, offset=offset, partition=partition
+        )
         with _translate_conflict():
             await self._stub.Commit(request, timeout=self._timeout)
+
+    async def list_partitions(self) -> list[int]:
+        """List the broker's durable partition IDs."""
+        response = await self._stub.ListPartitions(wire.Empty(), timeout=self._timeout)
+        return list(response.ids)
+
+    async def ensure_partition(self, partition: int) -> None:
+        """Create a partition if its ID is new."""
+        await self._stub.EnsurePartition(
+            wire.Partition(id=partition), timeout=self._timeout
+        )
+
+    async def task_partition(self, task_id: str) -> int:
+        """Read a task's current placement."""
+        response = await self._stub.TaskPartition(
+            wire.TaskId(task_id=task_id), timeout=self._timeout
+        )
+        return response.id
+
+    async def move_task(
+        self, task_id: str, from_partition: int, to_partition: int
+    ) -> None:
+        """Change the placement of a task and its work claims."""
+        request = wire.MoveTaskRequest(
+            task_id=task_id, from_partition=from_partition, to_partition=to_partition
+        )
+        with _translate_conflict():
+            await self._stub.MoveTask(request, timeout=self._timeout)
 
     async def stats(self) -> BrokerStats:
         """Read the broker's process-local counters."""

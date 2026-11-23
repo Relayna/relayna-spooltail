@@ -186,9 +186,131 @@ async def exercise(directory):
         assert all(record.event["blob"] == blob for record in page)
 
 
+async def partitioning(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=cert.read_bytes()
+        ) as client,
+    ):
+        queued = {"task_id": "T7", "event_id": "queued"}
+        running = {"task_id": "T7", "event_id": "running", "status": "running"}
+        terminal = {"task_id": "T7", "event_id": "done", "status": "completed"}
+        work = await client.publish("work", queued)
+        first = await client.publish("status", running)
+        assert await client.list_partitions() == [0]
+        await client.ensure_partition(2)
+        assert await client.list_partitions() == [0, 2]
+        assert await client.task_partition("T7") == 0
+        lease = await client.claim("work", "workers", partition=0)
+        assert lease is not None and lease.record.offset == work
+
+        await client.move_task("T7", 0, 2)
+        assert await client.task_partition("T7") == 2
+        assert await client.claim("work", "workers", partition=2) is None
+        final = await client.complete(lease, "status", terminal)
+        assert await client.complete(lease, "status", terminal) == final
+        assert await client.next("status", "audit", partition=2) is None
+        progress = await client.next("status", "audit", partition=0)
+        assert (progress.partition, progress.offset) == (0, first)
+        await client.commit("status", "audit", first, partition=0)
+        done = await client.next("status", "audit", partition=2)
+        assert (done.partition, done.offset) == (2, final)
+        await client.commit("status", "audit", final, partition=2)
+        assert await client.history("status", "T7", after="running") == [done]
+
+
+async def service_routing(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    config["SPOOLTAIL_SERVICE_PARTITIONS"] = json.dumps({"urgent": 2, "worker": 4})
+    queued = {"task_id": "shared-task", "event_id": "queued"}
+    status = {"task_id": "shared-task", "event_id": "running", "status": "running"}
+
+    async with (
+        start(config) as (http_url, grpc_port),
+        SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=cert.read_bytes()
+        ) as client,
+        httpx.AsyncClient(base_url=http_url, trust_env=False, timeout=5) as http,
+    ):
+        assert await client.list_partitions() == [0, 2, 4]
+        work = await client.publish("work", queued, owner_service="urgent")
+        assert await client.task_partition("shared-task") == 2
+        assert await client.publish("work", queued, owner_service="worker") == work
+        reply = await http.post(
+            "/topics/status/records",
+            params={"owner_service": "worker"},
+            json=status,
+        )
+        assert reply.raise_for_status().json()["partition"] == 2
+        latest = await client.latest("status", "shared-task")
+        assert latest is not None and latest.event == status and latest.partition == 2
+
+        results = await asyncio.gather(
+            client.publish(
+                "work",
+                {"task_id": "race", "event_id": "queued"},
+                owner_service="urgent",
+            ),
+            client.publish(
+                "status",
+                {"task_id": "race", "event_id": "running"},
+                owner_service="worker",
+            ),
+        )
+        placement = await client.task_partition("race")
+        assert placement in {2, 4}
+        for topic, offset in zip(("work", "status"), results, strict=True):
+            latest = await client.latest(topic, "race")
+            assert (latest.offset, latest.partition) == (offset, placement)
+
+        for task, owner in [("general", None), ("unmapped", "unmapped")]:
+            await client.publish(
+                "work", {"task_id": task, "event_id": "queued"}, owner_service=owner
+            )
+            assert await client.task_partition(task) == 0
+
+        reply = await http.post(
+            "/topics/work/records",
+            params={"owner_service": "worker"},
+            json={"task_id": "worker-task", "event_id": "queued"},
+        )
+        assert reply.raise_for_status().json()["partition"] == 4
+
+    config["SPOOLTAIL_SERVICE_PARTITIONS"] = json.dumps({"urgent": 3, "worker": 4})
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=cert.read_bytes()
+        ) as client,
+    ):
+        await client.publish(
+            "status",
+            {**status, "event_id": "progress"},
+            owner_service="urgent",
+        )
+        assert await client.task_partition("shared-task") == 2
+        history = await client.history("status", "shared-task")
+        assert [record.partition for record in history] == [2, 2]
+        await client.publish(
+            "work",
+            {"task_id": "new-urgent", "event_id": "queued"},
+            owner_service="urgent",
+        )
+        assert await client.task_partition("new-urgent") == 3
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="spooltail-python-sdk-") as temp:
         asyncio.run(asyncio.wait_for(exercise(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-partition-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(partitioning(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-service-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(service_routing(Path(temp)), timeout=30))
     print(
-        "PASS: Python SDK publish, lease, completion, replay gaps, and SSE resume after restart"
+        "PASS: Python SDK publish, lease, completion, replay gaps, SSE resume, "
+        "partition moves, and service placement"
     )

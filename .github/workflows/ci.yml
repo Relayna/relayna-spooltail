@@ -76,6 +76,11 @@ jobs:
       - name: Run HTTP, SSE, and WebSocket acceptance tests
         run: uv run --python 3.11 --script tests/acceptance.py --events 800000
 
+      - name: Run partitioned SQLite recovery acceptance tests
+        env:
+          SPOOLTAIL_INDEX_MODE: partitioned
+        run: uv run --python 3.11 --script tests/acceptance.py --events 1000
+
       - name: Run gRPC acceptance tests
         run: uv run --python 3.13 --script tests/grpc_acceptance.py
 

@@ -26,45 +26,53 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fspooltail.proto\x12\x0cspooltail.v1\"\x07\n\x05\x45mpty\"D\n\x04Task\x12\r\n\x05topic\x18\x01 \x01(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x12\x12\n\x05\x61\x66ter\x18\x03 \x01(\tH\x00\x88\x01\x01\x42\x08\n\x06_after\",\n\x06Record\x12\x0e\n\x06offset\x18\x01 \x01(\x03\x12\x12\n\nevent_json\x18\x02 \x01(\x0c\"-\n\x04Page\x12%\n\x07records\x18\x01 \x03(\x0b\x32\x14.spooltail.v1.Record\",\n\x07Publish\x12\r\n\x05topic\x18\x01 \x01(\t\x12\x12\n\nevent_json\x18\x02 \x01(\x0c\"\x18\n\x06Offset\x12\x0e\n\x06offset\x18\x01 \x01(\x03\">\n\x0c\x43laimRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x10\n\x08lease_ms\x18\x03 \x01(\x03\"a\n\rClaimResponse\x12$\n\x06record\x18\x01 \x01(\x0b\x32\x14.spooltail.v1.Record\x12\x12\n\ngeneration\x18\x02 \x01(\x03\x12\x16\n\x0elease_until_ms\x18\x03 \x01(\x03\"\x93\x01\n\rSettleRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x0e\n\x06offset\x18\x03 \x01(\x03\x12\x12\n\ngeneration\x18\x04 \x01(\x03\x12.\n\x06\x61\x63tion\x18\x05 \x01(\x0e\x32\x1e.spooltail.v1.SettlementAction\x12\x10\n\x08\x64\x65lay_ms\x18\x06 \x01(\x03\"z\n\x0f\x43ompleteRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x0e\n\x06offset\x18\x03 \x01(\x03\x12\x12\n\ngeneration\x18\x04 \x01(\x03\x12%\n\x06status\x18\x05 \x01(\x0b\x32\x15.spooltail.v1.Publish\"O\n\x08\x44\x65livery\x12\x0c\n\x04kind\x18\x01 \x01(\t\x12\x15\n\x08\x65vent_id\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\tdata_json\x18\x03 \x01(\x0c\x42\x0b\n\t_event_id\"+\n\x0bStreamGroup\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\"4\n\x0cNextResponse\x12$\n\x06record\x18\x01 \x01(\x0b\x32\x14.spooltail.v1.Record\"=\n\rCommitRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x0e\n\x06offset\x18\x03 \x01(\x03\"@\n\rStatsResponse\x12\x15\n\rpayload_reads\x18\x01 \x01(\x04\x12\x18\n\x10recovered_frames\x18\x02 \x01(\x04*\xad\x01\n\x10SettlementAction\x12!\n\x1dSETTLEMENT_ACTION_UNSPECIFIED\x10\x00\x12\x19\n\x15SETTLEMENT_ACTION_ACK\x10\x01\x12\x1b\n\x17SETTLEMENT_ACTION_RENEW\x10\x02\x12\x1b\n\x17SETTLEMENT_ACTION_RETRY\x10\x03\x12!\n\x1dSETTLEMENT_ACTION_DEAD_LETTER\x10\x04\x32\x8b\x05\n\tSpooltail\x12\x30\n\x04Ping\x12\x13.spooltail.v1.Empty\x1a\x13.spooltail.v1.Empty\x12\x32\n\x06Latest\x12\x12.spooltail.v1.Task\x1a\x14.spooltail.v1.Record\x12\x31\n\x07History\x12\x12.spooltail.v1.Task\x1a\x12.spooltail.v1.Page\x12\x35\n\x06\x41ppend\x12\x15.spooltail.v1.Publish\x1a\x14.spooltail.v1.Offset\x12@\n\x05\x43laim\x12\x1a.spooltail.v1.ClaimRequest\x1a\x1b.spooltail.v1.ClaimResponse\x12:\n\x06Settle\x12\x1b.spooltail.v1.SettleRequest\x1a\x13.spooltail.v1.Empty\x12?\n\x08\x43omplete\x12\x1d.spooltail.v1.CompleteRequest\x1a\x14.spooltail.v1.Offset\x12=\n\x04Next\x12\x19.spooltail.v1.StreamGroup\x1a\x1a.spooltail.v1.NextResponse\x12:\n\x06\x43ommit\x12\x1b.spooltail.v1.CommitRequest\x1a\x13.spooltail.v1.Empty\x12\x39\n\tSubscribe\x12\x12.spooltail.v1.Task\x1a\x16.spooltail.v1.Delivery0\x01\x12\x39\n\x05Stats\x12\x13.spooltail.v1.Empty\x1a\x1b.spooltail.v1.StatsResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fspooltail.proto\x12\x0cspooltail.v1\"\x07\n\x05\x45mpty\"D\n\x04Task\x12\r\n\x05topic\x18\x01 \x01(\t\x12\x0f\n\x07task_id\x18\x02 \x01(\t\x12\x12\n\x05\x61\x66ter\x18\x03 \x01(\tH\x00\x88\x01\x01\x42\x08\n\x06_after\"?\n\x06Record\x12\x0e\n\x06offset\x18\x01 \x01(\x03\x12\x12\n\nevent_json\x18\x02 \x01(\x0c\x12\x11\n\tpartition\x18\x03 \x01(\r\"-\n\x04Page\x12%\n\x07records\x18\x01 \x03(\x0b\x32\x14.spooltail.v1.Record\"Z\n\x07Publish\x12\r\n\x05topic\x18\x01 \x01(\t\x12\x12\n\nevent_json\x18\x02 \x01(\x0c\x12\x1a\n\rowner_service\x18\x03 \x01(\tH\x00\x88\x01\x01\x42\x10\n\x0e_owner_service\"+\n\x06Offset\x12\x0e\n\x06offset\x18\x01 \x01(\x03\x12\x11\n\tpartition\x18\x02 \x01(\r\"d\n\x0c\x43laimRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x10\n\x08lease_ms\x18\x03 \x01(\x03\x12\x16\n\tpartition\x18\x04 \x01(\rH\x00\x88\x01\x01\x42\x0c\n\n_partition\"t\n\rClaimResponse\x12$\n\x06record\x18\x01 \x01(\x0b\x32\x14.spooltail.v1.Record\x12\x12\n\ngeneration\x18\x02 \x01(\x03\x12\x16\n\x0elease_until_ms\x18\x03 \x01(\x03\x12\x11\n\tpartition\x18\x04 \x01(\r\"\x93\x01\n\rSettleRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x0e\n\x06offset\x18\x03 \x01(\x03\x12\x12\n\ngeneration\x18\x04 \x01(\x03\x12.\n\x06\x61\x63tion\x18\x05 \x01(\x0e\x32\x1e.spooltail.v1.SettlementAction\x12\x10\n\x08\x64\x65lay_ms\x18\x06 \x01(\x03\"z\n\x0f\x43ompleteRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x0e\n\x06offset\x18\x03 \x01(\x03\x12\x12\n\ngeneration\x18\x04 \x01(\x03\x12%\n\x06status\x18\x05 \x01(\x0b\x32\x15.spooltail.v1.Publish\"O\n\x08\x44\x65livery\x12\x0c\n\x04kind\x18\x01 \x01(\t\x12\x15\n\x08\x65vent_id\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\tdata_json\x18\x03 \x01(\x0c\x42\x0b\n\t_event_id\"Q\n\x0bStreamGroup\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x16\n\tpartition\x18\x03 \x01(\rH\x00\x88\x01\x01\x42\x0c\n\n_partition\"4\n\x0cNextResponse\x12$\n\x06record\x18\x01 \x01(\x0b\x32\x14.spooltail.v1.Record\"c\n\rCommitRequest\x12\r\n\x05topic\x18\x01 \x01(\t\x12\r\n\x05group\x18\x02 \x01(\t\x12\x0e\n\x06offset\x18\x03 \x01(\x03\x12\x16\n\tpartition\x18\x04 \x01(\rH\x00\x88\x01\x01\x42\x0c\n\n_partition\"@\n\rStatsResponse\x12\x15\n\rpayload_reads\x18\x01 \x01(\x04\x12\x18\n\x10recovered_frames\x18\x02 \x01(\x04\"\x19\n\x06TaskId\x12\x0f\n\x07task_id\x18\x01 \x01(\t\"\x17\n\tPartition\x12\n\n\x02id\x18\x01 \x01(\r\"\x19\n\nPartitions\x12\x0b\n\x03ids\x18\x01 \x03(\r\"~\n\x0fMoveTaskRequest\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x1b\n\x0e\x66rom_partition\x18\x02 \x01(\rH\x00\x88\x01\x01\x12\x19\n\x0cto_partition\x18\x03 \x01(\rH\x01\x88\x01\x01\x42\x11\n\x0f_from_partitionB\x0f\n\r_to_partition*\xad\x01\n\x10SettlementAction\x12!\n\x1dSETTLEMENT_ACTION_UNSPECIFIED\x10\x00\x12\x19\n\x15SETTLEMENT_ACTION_ACK\x10\x01\x12\x1b\n\x17SETTLEMENT_ACTION_RENEW\x10\x02\x12\x1b\n\x17SETTLEMENT_ACTION_RETRY\x10\x03\x12!\n\x1dSETTLEMENT_ACTION_DEAD_LETTER\x10\x04\x32\x95\x07\n\tSpooltail\x12\x30\n\x04Ping\x12\x13.spooltail.v1.Empty\x1a\x13.spooltail.v1.Empty\x12\x32\n\x06Latest\x12\x12.spooltail.v1.Task\x1a\x14.spooltail.v1.Record\x12\x31\n\x07History\x12\x12.spooltail.v1.Task\x1a\x12.spooltail.v1.Page\x12\x35\n\x06\x41ppend\x12\x15.spooltail.v1.Publish\x1a\x14.spooltail.v1.Offset\x12@\n\x05\x43laim\x12\x1a.spooltail.v1.ClaimRequest\x1a\x1b.spooltail.v1.ClaimResponse\x12:\n\x06Settle\x12\x1b.spooltail.v1.SettleRequest\x1a\x13.spooltail.v1.Empty\x12?\n\x08\x43omplete\x12\x1d.spooltail.v1.CompleteRequest\x1a\x14.spooltail.v1.Offset\x12=\n\x04Next\x12\x19.spooltail.v1.StreamGroup\x1a\x1a.spooltail.v1.NextResponse\x12:\n\x06\x43ommit\x12\x1b.spooltail.v1.CommitRequest\x1a\x13.spooltail.v1.Empty\x12\x39\n\tSubscribe\x12\x12.spooltail.v1.Task\x1a\x16.spooltail.v1.Delivery0\x01\x12\x39\n\x05Stats\x12\x13.spooltail.v1.Empty\x1a\x1b.spooltail.v1.StatsResponse\x12?\n\x0eListPartitions\x12\x13.spooltail.v1.Empty\x1a\x18.spooltail.v1.Partitions\x12\x43\n\x0f\x45nsurePartition\x12\x17.spooltail.v1.Partition\x1a\x17.spooltail.v1.Partition\x12>\n\rTaskPartition\x12\x14.spooltail.v1.TaskId\x1a\x17.spooltail.v1.Partition\x12\x42\n\x08MoveTask\x12\x1d.spooltail.v1.MoveTaskRequest\x1a\x17.spooltail.v1.Partitionb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'relayna_spooltail._wire.spooltail_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_SETTLEMENTACTION']._serialized_start=1024
-  _globals['_SETTLEMENTACTION']._serialized_end=1197
+  _globals['_SETTLEMENTACTION']._serialized_start=1448
+  _globals['_SETTLEMENTACTION']._serialized_end=1621
   _globals['_EMPTY']._serialized_start=33
   _globals['_EMPTY']._serialized_end=40
   _globals['_TASK']._serialized_start=42
   _globals['_TASK']._serialized_end=110
   _globals['_RECORD']._serialized_start=112
-  _globals['_RECORD']._serialized_end=156
-  _globals['_PAGE']._serialized_start=158
-  _globals['_PAGE']._serialized_end=203
-  _globals['_PUBLISH']._serialized_start=205
-  _globals['_PUBLISH']._serialized_end=249
-  _globals['_OFFSET']._serialized_start=251
-  _globals['_OFFSET']._serialized_end=275
-  _globals['_CLAIMREQUEST']._serialized_start=277
-  _globals['_CLAIMREQUEST']._serialized_end=339
-  _globals['_CLAIMRESPONSE']._serialized_start=341
-  _globals['_CLAIMRESPONSE']._serialized_end=438
-  _globals['_SETTLEREQUEST']._serialized_start=441
-  _globals['_SETTLEREQUEST']._serialized_end=588
-  _globals['_COMPLETEREQUEST']._serialized_start=590
-  _globals['_COMPLETEREQUEST']._serialized_end=712
-  _globals['_DELIVERY']._serialized_start=714
-  _globals['_DELIVERY']._serialized_end=793
-  _globals['_STREAMGROUP']._serialized_start=795
-  _globals['_STREAMGROUP']._serialized_end=838
-  _globals['_NEXTRESPONSE']._serialized_start=840
-  _globals['_NEXTRESPONSE']._serialized_end=892
-  _globals['_COMMITREQUEST']._serialized_start=894
-  _globals['_COMMITREQUEST']._serialized_end=955
-  _globals['_STATSRESPONSE']._serialized_start=957
-  _globals['_STATSRESPONSE']._serialized_end=1021
-  _globals['_SPOOLTAIL']._serialized_start=1200
-  _globals['_SPOOLTAIL']._serialized_end=1851
+  _globals['_RECORD']._serialized_end=175
+  _globals['_PAGE']._serialized_start=177
+  _globals['_PAGE']._serialized_end=222
+  _globals['_PUBLISH']._serialized_start=224
+  _globals['_PUBLISH']._serialized_end=314
+  _globals['_OFFSET']._serialized_start=316
+  _globals['_OFFSET']._serialized_end=359
+  _globals['_CLAIMREQUEST']._serialized_start=361
+  _globals['_CLAIMREQUEST']._serialized_end=461
+  _globals['_CLAIMRESPONSE']._serialized_start=463
+  _globals['_CLAIMRESPONSE']._serialized_end=579
+  _globals['_SETTLEREQUEST']._serialized_start=582
+  _globals['_SETTLEREQUEST']._serialized_end=729
+  _globals['_COMPLETEREQUEST']._serialized_start=731
+  _globals['_COMPLETEREQUEST']._serialized_end=853
+  _globals['_DELIVERY']._serialized_start=855
+  _globals['_DELIVERY']._serialized_end=934
+  _globals['_STREAMGROUP']._serialized_start=936
+  _globals['_STREAMGROUP']._serialized_end=1017
+  _globals['_NEXTRESPONSE']._serialized_start=1019
+  _globals['_NEXTRESPONSE']._serialized_end=1071
+  _globals['_COMMITREQUEST']._serialized_start=1073
+  _globals['_COMMITREQUEST']._serialized_end=1172
+  _globals['_STATSRESPONSE']._serialized_start=1174
+  _globals['_STATSRESPONSE']._serialized_end=1238
+  _globals['_TASKID']._serialized_start=1240
+  _globals['_TASKID']._serialized_end=1265
+  _globals['_PARTITION']._serialized_start=1267
+  _globals['_PARTITION']._serialized_end=1290
+  _globals['_PARTITIONS']._serialized_start=1292
+  _globals['_PARTITIONS']._serialized_end=1317
+  _globals['_MOVETASKREQUEST']._serialized_start=1319
+  _globals['_MOVETASKREQUEST']._serialized_end=1445
+  _globals['_SPOOLTAIL']._serialized_start=1624
+  _globals['_SPOOLTAIL']._serialized_end=2541
 # @@protoc_insertion_point(module_scope)

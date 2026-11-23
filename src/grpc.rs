@@ -19,9 +19,9 @@ mod wire {
 }
 use wire::spooltail_server::{Spooltail, SpooltailServer};
 use wire::{
-    ClaimRequest, ClaimResponse, CommitRequest, CompleteRequest, Delivery, Empty, NextResponse,
-    Offset, Page, Publish, Record, SettleRequest, SettlementAction, StatsResponse, StreamGroup,
-    Task,
+    ClaimRequest, ClaimResponse, CommitRequest, CompleteRequest, Delivery, Empty, MoveTaskRequest,
+    NextResponse, Offset, Page, Partition, Partitions, Publish, Record, SettleRequest,
+    SettlementAction, StatsResponse, StreamGroup, Task, TaskId,
 };
 
 struct Api(Broker);
@@ -51,6 +51,7 @@ fn status(error: anyhow::Error) -> Status {
 fn encode(record: store::Record) -> Result<Record> {
     Ok(Record {
         offset: record.offset,
+        partition: record.partition,
         event_json: serde_json::to_vec(&record.event)?,
     })
 }
@@ -97,10 +98,13 @@ impl Spooltail for Api {
     async fn append(&self, request: Request<Publish>) -> Result<Response<Offset>, Status> {
         let q = request.into_inner();
         let event = decode(&q.event_json).map_err(status)?;
-        let offset = publish(self.0.clone(), q.topic, event, None)
+        let position = publish(self.0.clone(), q.topic, event, None, q.owner_service)
             .await
             .map_err(status)?;
-        Ok(Response::new(Offset { offset }))
+        Ok(Response::new(Offset {
+            offset: position.offset,
+            partition: position.partition,
+        }))
     }
 
     async fn claim(
@@ -110,7 +114,7 @@ impl Spooltail for Api {
         let q = request.into_inner();
         let claim = self
             .0
-            .run(move |s| s.claim(&q.topic, &q.group, q.lease_ms))
+            .run(move |s| s.claim(&q.topic, &q.group, q.lease_ms, q.partition))
             .await
             .map_err(status)?;
         let Some(claim) = claim else {
@@ -120,6 +124,7 @@ impl Spooltail for Api {
             record: Some(encode(claim.record).map_err(status)?),
             generation: claim.generation,
             lease_until_ms: claim.lease_until_ms,
+            partition: claim.partition,
         }))
     }
 
@@ -138,10 +143,13 @@ impl Spooltail for Api {
             generation: q.generation,
         };
         let event = decode(&terminal.event_json).map_err(status)?;
-        let offset = publish(self.0.clone(), terminal.topic, event, Some(lease))
+        let position = publish(self.0.clone(), terminal.topic, event, Some(lease), None)
             .await
             .map_err(status)?;
-        Ok(Response::new(Offset { offset }))
+        Ok(Response::new(Offset {
+            offset: position.offset,
+            partition: position.partition,
+        }))
     }
 
     async fn settle(&self, request: Request<SettleRequest>) -> Result<Response<Empty>, Status> {
@@ -173,7 +181,7 @@ impl Spooltail for Api {
         let q = request.into_inner();
         let record = self
             .0
-            .run(move |s| s.group_next(&q.topic, &q.group))
+            .run(move |s| s.group_next(&q.topic, &q.group, q.partition))
             .await
             .map_err(status)?;
         let record = record.map(encode).transpose().map_err(status)?;
@@ -183,10 +191,63 @@ impl Spooltail for Api {
     async fn commit(&self, request: Request<CommitRequest>) -> Result<Response<Empty>, Status> {
         let q = request.into_inner();
         self.0
-            .run(move |s| s.commit(&q.topic, &q.group, q.offset))
+            .run(move |s| s.commit(&q.topic, &q.group, q.offset, q.partition))
             .await
             .map_err(status)?;
         Ok(Response::new(Empty {}))
+    }
+
+    async fn list_partitions(&self, _: Request<Empty>) -> Result<Response<Partitions>, Status> {
+        let ids = self
+            .0
+            .run(|s| Ok(s.partition_ids()))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Partitions { ids }))
+    }
+
+    async fn ensure_partition(
+        &self,
+        request: Request<Partition>,
+    ) -> Result<Response<Partition>, Status> {
+        let partition = request.into_inner();
+        let id = partition.id;
+        self.0
+            .run(move |s| s.ensure_partition(id))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(partition))
+    }
+
+    async fn task_partition(
+        &self,
+        request: Request<TaskId>,
+    ) -> Result<Response<Partition>, Status> {
+        let task = request.into_inner().task_id;
+        let id = self
+            .0
+            .run(move |s| s.task_partition(&task))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Partition { id }))
+    }
+
+    async fn move_task(
+        &self,
+        request: Request<MoveTaskRequest>,
+    ) -> Result<Response<Partition>, Status> {
+        let q = request.into_inner();
+        let from = q
+            .from_partition
+            .ok_or_else(|| Status::invalid_argument("missing from_partition"))?;
+        let to = q
+            .to_partition
+            .ok_or_else(|| Status::invalid_argument("missing to_partition"))?;
+        self.0
+            .move_task(q.task_id, from, to)
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Partition { id: to }))
     }
 
     async fn stats(&self, _: Request<Empty>) -> Result<Response<StatsResponse>, Status> {
