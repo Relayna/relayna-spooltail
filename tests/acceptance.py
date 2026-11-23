@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import time
 import zlib
+from contextlib import closing
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -46,20 +47,21 @@ class Broker:
             self.process.stdout.close()
             self.process = None
 
-    def request(self, route, body=None):
+    def request(self, route, body=None, *, method=None):
         data = None if body is None else json.dumps(body).encode()
         req = Request(
             f"http://{self.address}{route}",
             data=data,
+            method=method,
             headers={"Content-Type": "application/json"},
         )
         with urlopen(req, timeout=10) as res:
             return json.load(res)
 
-    def sse(self, task, after=None):
+    def sse(self, task, after=None, *, topic="status"):
         headers = {"Last-Event-ID": after} if after else {}
         req = Request(
-            f"http://{self.address}/topics/status/tasks/{task}/events", headers=headers
+            f"http://{self.address}/topics/{topic}/tasks/{task}/events", headers=headers
         )
         return urlopen(req, timeout=10)
 
@@ -87,11 +89,9 @@ def sse_event(response):
             lines[key] = value.lstrip(" ")
 
 
-def subscribe(ws, task, after=None):
+def subscribe(ws, task, after=None, *, topic="status"):
     ws.send(
-        json.dumps(
-            {"op": "subscribe", "topic": "status", "task_id": task, "after": after}
-        )
+        json.dumps({"op": "subscribe", "topic": topic, "task_id": task, "after": after})
     )
 
 
@@ -234,12 +234,43 @@ def subscriptions(broker):
     assert broker.request(metrics + "/next")["offset"] == first
 
 
+def partition_expansion(broker):
+    assert broker.request("/partitions") == {"partitions": [0]}
+    old = broker.publish("moved", "before", status="running")
+    assert broker.request("/partitions/2", method="PUT") == {"partition": 2}
+    assert broker.request("/partitions/2", method="PUT") == {"partition": 2}
+    assert broker.request("/tasks/moved/partition") == {"partition": 0}
+    move = {"from_partition": 0, "to_partition": 2}
+    assert broker.request("/tasks/moved/move", move) == {"partition": 2}
+    with broker.sse("moved", "before") as stream:
+        assert sse_event(stream)[0] == "ready"
+        new = broker.request(
+            "/topics/status/records",
+            {"task_id": "moved", "event_id": "after", "status": "completed"},
+        )
+        assert new["partition"] == 2 and new["offset"] > old
+        assert sse_event(stream)[1] == "after"
+
+    broker.kill()
+    assert broker.start() == 0
+    assert broker.request("/partitions") == {"partitions": [0, 2]}
+    history = broker.request("/topics/status/tasks/moved/history")
+    assert [(item.get("partition", 0), item["offset"]) for item in history] == [
+        (0, old),
+        (2, new["offset"]),
+    ]
+    assert broker.publish("moved", "before", status="running") == old
+
+
 def kill_after_journal_write(broker, operation):
     """Kill after the complete frame reaches the journal and before SQLite commits."""
     journal = max(broker.directory.glob("*.seg"))
     before = journal.stat().st_size
+    index = broker.directory / "partition-indexes" / "0.sqlite"
+    if not index.exists():
+        index = broker.directory / "index.sqlite"
     with (
-        sqlite3.connect(broker.directory / "index.sqlite") as lock,
+        sqlite3.connect(index) as lock,
         concurrent.futures.ThreadPoolExecutor() as pool,
     ):
         lock.execute("BEGIN IMMEDIATE")
@@ -370,6 +401,235 @@ def crash_during_completion(broker):
     assert broker.request(f"/topics/status/tasks/{task}/history") == history
 
 
+def crash_after_partition_commit(broker):
+    task = "split-completion"
+    source = f"/topics/{task}/work/workers"
+    offset = broker.publish(task, "queued", task)
+    claim = broker.request(source + "/claim", {"lease_ms": 30_000})
+    # An independent topic avoids scanning the large status fixture.
+    audit = f"/topics/{task}.status/streams/audit"
+    before = broker.publish(task, "pre-completion", topic=f"{task}.status")
+    assert broker.request(audit + "/next")["offset"] == before
+    broker.request(audit + "/commit", {"offset": before})
+    broker.request("/partitions/3", method="PUT")
+    source_partition = broker.request(f"/tasks/{task}/partition")["partition"]
+    broker.request(
+        f"/tasks/{task}/move", {"from_partition": source_partition, "to_partition": 3}
+    )
+    completion = {
+        "offset": offset,
+        "generation": claim["generation"],
+        "status_topic": f"{task}.status",
+        "event": {"task_id": task, "event_id": "done", "status": "completed"},
+    }
+    with (
+        sqlite3.connect(broker.directory / "index.sqlite") as lock,
+        sqlite3.connect(broker.directory / "partition-indexes" / "3.sqlite") as shard,
+        concurrent.futures.ThreadPoolExecutor() as pool,
+    ):
+        lock.execute("BEGIN IMMEDIATE")
+        pending = pool.submit(broker.request, source + "/complete", completion)
+        deadline = time.monotonic() + 3
+        receipt = None
+        while receipt is None:
+            receipt = shard.execute(
+                "SELECT offset FROM records WHERE task=? AND event_id='done'", (task,)
+            ).fetchone()
+            assert time.monotonic() < deadline, (
+                "completion never reached the shard index"
+            )
+            if receipt is None:
+                time.sleep(0.002)
+        broker.kill()
+        lock.rollback()
+        assert pending.exception(timeout=5) is not None
+
+    assert broker.start() == 0
+    assert broker.request(audit + "/next")["offset"] == receipt[0]
+    assert broker.request(source + "/claim", {"lease_ms": 30_000}) is None
+    assert broker.request(source + "/complete", completion) == {
+        "offset": receipt[0],
+        "partition": 3,
+    }
+    broker.kill()
+    assert broker.start() == 0
+    assert broker.request(source + "/complete", completion)["offset"] == receipt[0]
+
+
+def background_index_recovery(broker):
+    broker.env.update(
+        SPOOLTAIL_INDEX_MODE="partitioned", SPOOLTAIL_INDEX_BATCH_SIZE="8"
+    )
+    assert broker.start() == 0
+    shard = broker.directory / "partition-indexes" / "0.sqlite"
+    work = "/topics/work/work/workers"
+    audit = "/topics/status/streams/audit"
+    with closing(sqlite3.connect(shard)) as index:
+        index.execute("BEGIN IMMEDIATE")
+        queued = broker.publish("T1", "queued", "work")
+        claim = broker.request(work + "/claim", {"lease_ms": 30_000})
+        assert claim["record"]["offset"] == queued
+        started = broker.publish("T1", "started", status="running")
+        assert broker.request(audit + "/next")["offset"] == started
+        broker.request(audit + "/commit", {"offset": started})
+        completion = {
+            "offset": queued,
+            "generation": claim["generation"],
+            "status_topic": "status",
+            "event": {"task_id": "T1", "event_id": "done", "status": "completed"},
+        }
+        finished = broker.request(work + "/complete", completion)["offset"]
+        assert broker.request(audit + "/next")["offset"] == finished
+        assert index.execute("SELECT count(*) FROM records").fetchone()[0] == 0
+        broker.kill()
+        index.rollback()
+
+    assert broker.start() == 3
+    assert broker.request(audit + "/next")["offset"] == finished
+    broker.request(audit + "/commit", {"offset": finished})
+    assert broker.request(work + "/claim", {"lease_ms": 30_000}) is None
+    assert broker.request(work + "/complete", completion)["offset"] == finished
+    assert broker.request(audit + "/next") is None
+
+    # An idle writer flushes a partial index batch without more publishes.
+    idle = broker.publish("T2", "isolated", status="running")
+    with closing(sqlite3.connect(shard)) as index:
+        deadline = time.monotonic() + 3
+        while (
+            index.execute("SELECT 1 FROM records WHERE offset=?", (idle,)).fetchone()
+            is None
+        ):
+            assert time.monotonic() < deadline, "partial index batch was never flushed"
+            time.sleep(0.002)
+
+
+def document_summary_streams(broker):
+    """Simulate a summary worker publishing progress as it processes each page."""
+    broker.env.update(
+        SPOOLTAIL_INDEX_MODE="partitioned",
+        SPOOLTAIL_INDEX_BATCH_SIZE="32",
+        SPOOLTAIL_DYNAMIC_PLACEMENT="1",
+        SPOOLTAIL_SERVICE_PARTITIONS='{"summary":[1,2]}',
+    )
+    assert broker.start() == 0
+    task = "document-42"
+    topic = "documents.status"
+    work = "/topics/documents.work/work/summary-workers"
+    page_count = 73
+    queued = broker.request(
+        "/topics/documents.work/records?owner_service=summary",
+        {"task_id": task, "event_id": "queued", "page_count": page_count},
+    )
+    source = queued["partition"]
+    assert source in (1, 2)
+    destination = 3 - source
+    claim = broker.request(work + "/claim", {"lease_ms": 120_000, "partition": source})
+    assert claim["record"]["offset"] == queued["offset"]
+
+    events = []
+    sizes = []
+    paragraph = (
+        "The quarterly inventory report compares goods received, shipped, and "
+        "returned. The appendix reconciles totals by warehouse and explains "
+        "the adjustments applied during the stock count.\n\n"
+    )
+    for page in range(1, page_count + 1):
+        size_kib = (
+            1000 if page in (2, page_count) else (8, 32, 128, 256)[(page - 1) % 4]
+        )
+        size = size_kib * 1024
+        header = f"Page {page} · Café inventory 📄\nRésumé — คลังสินค้า\n\n"
+        remaining = size - len(header.encode())
+        summary = header + (paragraph * (remaining // len(paragraph) + 1))[:remaining]
+        assert len(summary.encode()) == size
+        sizes.append(size)
+        events.append(
+            {
+                "task_id": task,
+                "event_id": f"page-{page}",
+                "status": "running",
+                "page_number": page,
+                "page_count": page_count,
+                "summary": summary,
+            }
+        )
+
+    previous_offset = queued["offset"]
+
+    def publish_page(event, partition):
+        nonlocal previous_offset
+        receipt = broker.request(f"/topics/{topic}/records", event)
+        assert receipt["partition"] == partition
+        assert receipt["offset"] > previous_offset
+        previous_offset = receipt["offset"]
+
+    def check_delivery(sse, ws, event):
+        event_id = event["event_id"]
+        assert sse_event(sse) == ("status", event_id, event), f"SSE changed {event_id}"
+        assert ws_event(ws) == {
+            "type": "status",
+            "topic": topic,
+            "task_id": task,
+            "data": event,
+        }, f"WebSocket changed {event_id}"
+
+    with broker.sse(task, topic=topic) as sse, broker.ws() as ws:
+        subscribe(ws, task, topic=topic)
+        assert sse_event(sse)[0] == "ready" and ws_event(ws)["type"] == "ready"
+        for event in events[:2]:
+            publish_page(event, source)
+            check_delivery(sse, ws, event)
+
+    # Miss 70 updates, enough to require a second replay page. Move the task
+    # while the subscribers are offline, then restart with the work lease active.
+    move_route = f"/tasks/{task}/move"
+    partition = source
+    for event in events[2:-1]:
+        if event["page_number"] == 37:
+            assert broker.request(
+                move_route, {"from_partition": source, "to_partition": destination}
+            ) == {"partition": destination}
+            partition = destination
+        publish_page(event, partition)
+    broker.kill()
+    broker.start()
+
+    completed = {
+        "task_id": task,
+        "event_id": "completed",
+        "status": "completed",
+        "page_count": page_count,
+    }
+    completion = {
+        "offset": queued["offset"],
+        "generation": claim["generation"],
+        "status_topic": topic,
+        "event": completed,
+    }
+    cursor = events[1]["event_id"]
+    with broker.sse(task, cursor, topic=topic) as sse, broker.ws() as ws:
+        subscribe(ws, task, cursor, topic=topic)
+        assert sse_event(sse)[0] == "ready" and ws_event(ws)["type"] == "ready"
+        for event in events[2:-1]:
+            check_delivery(sse, ws, event)
+        publish_page(events[-1], destination)
+        check_delivery(sse, ws, events[-1])
+        receipt = broker.request(work + "/complete", completion)
+        assert (
+            receipt["partition"] == destination and receipt["offset"] > previous_offset
+        )
+        check_delivery(sse, ws, completed)
+        assert not sse.readline()
+
+    assert broker.request(work + "/claim", {"lease_ms": 120_000}) is None
+    assert broker.request(work + "/complete", completion) == receipt
+    print(
+        f"PASS: summary worker streamed {page_count} page summaries over SSE and WebSocket "
+        f"({sum(sizes) / 1024**2:.1f} MiB total, largest {max(sizes) // 1024} KiB), "
+        "resumed across a partition move and restart, and completed its original lease"
+    )
+
+
 def expired(broker, floor):
     broker.kill()
     subprocess.run(
@@ -399,6 +659,7 @@ if __name__ == "__main__":
         prefix = args.events - offline
         fixture(directory, prefix)
         broker = Broker(args.binary.resolve(), directory)
+        broker.env["SPOOLTAIL_INDEX_BATCH_SIZE"] = "1"
         try:
             floor, latency = cross_protocol(broker, prefix, offline)
             subscriptions(broker)
@@ -406,10 +667,30 @@ if __name__ == "__main__":
             atomic_completion(broker)
             crash_during_completion(broker)
             expired(broker, floor)
+            partition_expansion(broker)
+            if (directory / "partition-indexes").exists():
+                crash_after_partition_commit(broker)
             print(
                 f"PASS: {args.events:,} fixture events; sample WebSocket resume {latency:.2f} ms; "
                 "both transport directions, independent groups, lease fencing, write/ack crash, "
-                "atomic completion and retention gap"
+                "atomic completion, retention gap, and partition expansion"
             )
+        finally:
+            broker.kill()
+
+    with tempfile.TemporaryDirectory() as path:
+        broker = Broker(args.binary.resolve(), Path(path))
+        try:
+            background_index_recovery(broker)
+            print(
+                "PASS: background index catch-up and recovery after acknowledged appends"
+            )
+        finally:
+            broker.kill()
+
+    with tempfile.TemporaryDirectory() as path:
+        broker = Broker(args.binary.resolve(), Path(path))
+        try:
+            document_summary_streams(broker)
         finally:
             broker.kill()

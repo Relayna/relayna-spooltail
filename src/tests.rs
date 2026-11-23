@@ -21,9 +21,16 @@ async fn append_during_replay_is_delivered_after_the_page() -> Result<()> {
     assert_eq!(sub.next().await.unwrap().kind, "ready");
     assert_eq!(sub.next().await.unwrap().id.as_deref(), Some("E42"));
     // The generator is suspended in its replay page, before its first live wait.
-    let reply = append(State(b), Path("status".into()), Json(record("E43")))
-        .await
-        .map_err(|e| e.0)?;
+    let reply = append(
+        State(b),
+        Path("status".into()),
+        Query(AppendQuery {
+            owner_service: None,
+        }),
+        Json(record("E43")),
+    )
+    .await
+    .map_err(|e| e.0)?;
     assert_eq!(reply.0["offset"], 3);
     let next = tokio::time::timeout(std::time::Duration::from_secs(1), sub.next()).await?;
     assert_eq!(next.unwrap().id.as_deref(), Some("E43"));
@@ -66,22 +73,136 @@ fn truncates_incomplete_tail_and_rejects_bad_checksum() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn partition_can_write_ahead_of_global_visibility() -> Result<()> {
+    use std::time::Duration;
+
+    let dir = tempdir()?;
+    let mut store = Store::open_mode(dir.path(), Some("partitioned"))?;
+    store.configure_index_batch_size(8)?;
+    store.configure_service_partitions([("orders".into(), vec![1])].into())?;
+    let slow_journal = store.journal(0)?;
+    let mut earlier = Frame::new("status".into(), record("earlier"), None)?;
+    let Prepared::Write(body) = store.prepare_append(&mut earlier, 0)? else {
+        panic!("expected a new record");
+    };
+    let broker = Broker {
+        store: Arc::new(Mutex::new(store)),
+        watchers: Default::default(),
+    };
+    let publish_order = |task: &str| {
+        tokio::spawn(publish(
+            broker.clone(),
+            "status".into(),
+            json!({"task_id":task,"event_id":"placed"}),
+            None,
+            Some("orders".into()),
+        ))
+    };
+    let first = publish_order("order-a");
+    let second = publish_order("order-b");
+    let staged = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if broker
+                .run(|s| Ok(s.is_appending("order-a")? && s.is_appending("order-b")?))
+                .await?
+            {
+                return Ok::<_, anyhow::Error>(
+                    !first.is_finished()
+                        && !second.is_finished()
+                        && broker
+                            .run(|s| s.group_next("status", "audit", None))
+                            .await?
+                            .is_none(),
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await;
+    let duplicate = publish_order("order-a");
+    // Release the earlier reservation even if staging timed out, so the
+    // blocking publishers can finish and the test runtime can shut down.
+    let write = slow_journal.lock().await.append(&earlier, 0, &body);
+    let earliest = finish_publish(&broker, &earlier, 0, write)?;
+    let first = first.await??;
+    let second = second.await??;
+    let repeated = duplicate.await??;
+    assert!(staged??, "a later record became visible across the gap");
+    assert_eq!(first.partition, 1);
+    assert_eq!(second.partition, 1);
+    assert_eq!(repeated.offset, first.offset);
+    assert_eq!(
+        [
+            first.offset.min(second.offset),
+            first.offset.max(second.offset)
+        ],
+        [earliest.offset + 1, earliest.offset + 2]
+    );
+    Ok(())
+}
+
+#[test]
+fn grouped_sync_seals_segments_before_rotation() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open_mode(dir.path(), Some("partitioned"))?;
+    store.configure_index_batch_size(8)?;
+    let payload = "x".repeat(1_000_000);
+    let mut staged = Vec::new();
+    {
+        let journal = store.journal(0)?;
+        let mut journal = journal.blocking_lock();
+        for n in 0..9 {
+            let mut frame = Frame::new(
+                "status".into(),
+                json!({"task_id":format!("order-{n}"),"event_id":"placed","payload":payload}),
+                None,
+            )?;
+            let Prepared::Write(body) = store.prepare_append(&mut frame, 0)? else {
+                panic!("expected a new record");
+            };
+            let append = journal.stage_append(Arc::new(frame), 0, &body)?;
+            assert_eq!(append.leader, n == 0 || n == 8);
+            staged.push(append);
+        }
+        // The first eight receipts must be ready with the next segment open,
+        // even though its own sync has not been called.
+        for append in staged.drain(..8) {
+            assert_eq!(append.wait()?.segment, 0);
+        }
+        journal.flush_staged()?;
+        assert_eq!(staged.pop().unwrap().wait()?.segment, 1);
+    }
+    assert!(store.group_next("status", "audit", None)?.is_none());
+    drop(store);
+    let store = Store::open(dir.path())?;
+    assert_eq!(store.read(1)?.event["task_id"], "order-0");
+    assert_eq!(store.read(9)?.event["task_id"], "order-8");
+    Ok(())
+}
+
 #[test]
 fn group_created_before_retention_cannot_skip_unprocessed_record() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
     let first = store.append("status", record("one"))?;
     let next = store.append("status", record("two"))?;
-    assert_eq!(store.group_next("status", "audit")?.unwrap().offset, first);
-    store.expire_before("status", next)?;
-    assert!(store.group_next("status", "audit").is_err());
     assert_eq!(
-        store.group_next("status", "new-group")?.unwrap().offset,
+        store.group_next("status", "audit", None)?.unwrap().offset,
+        first
+    );
+    store.expire_before("status", next)?;
+    assert!(store.group_next("status", "audit", None).is_err());
+    assert_eq!(
+        store
+            .group_next("status", "new-group", None)?
+            .unwrap()
+            .offset,
         next
     );
     assert_eq!(
         store
-            .claim("status", "worker", 1000)?
+            .claim("status", "worker", 1000, None)?
             .unwrap()
             .record
             .offset,
@@ -95,7 +216,7 @@ fn delayed_retry_has_no_active_completion_lease() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
     let offset = store.append("work", record("queued"))?;
-    let claim = store.claim("work", "workers", 60_000)?.unwrap();
+    let claim = store.claim("work", "workers", 60_000, None)?.unwrap();
     store.settle("work", "workers", offset, claim.generation, "retry", 60_000)?;
     for generation in [claim.generation, claim.generation + 1] {
         let lease = WorkLease {
@@ -112,7 +233,7 @@ fn delayed_retry_has_no_active_completion_lease() -> Result<()> {
         ));
     }
     assert!(store.page("status", "T7", 0)?.is_empty());
-    assert!(store.claim("work", "workers", 1000)?.is_none());
+    assert!(store.claim("work", "workers", 1000, None)?.is_none());
     Ok(())
 }
 
@@ -121,7 +242,7 @@ fn torn_completion_preserves_the_lease_and_publishes_nothing() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
     let offset = store.append("work", record("queued"))?;
-    let claim = store.claim("work", "workers", 60_000)?.unwrap();
+    let claim = store.claim("work", "workers", 60_000, None)?.unwrap();
     let lease = || WorkLease {
         topic: "work".into(),
         group: "workers".into(),
@@ -142,7 +263,7 @@ fn torn_completion_preserves_the_lease_and_publishes_nothing() -> Result<()> {
     assert!(error.to_string().contains("injected failure"));
     assert!(store.page("status", "T7", 0)?.is_empty());
     store.db.execute_batch("DROP TRIGGER fail_settlement")?;
-    assert!(store.claim("work", "workers", 1000).is_err());
+    assert!(store.claim("work", "workers", 1000, None).is_err());
     assert!(
         store
             .settle("work", "workers", offset, claim.generation, "ack", 0)
@@ -160,7 +281,7 @@ fn torn_completion_preserves_the_lease_and_publishes_nothing() -> Result<()> {
     assert!(store.page("status", "T7", 0)?.is_empty());
     let status_offset = store.complete(lease(), "status", event.clone())?;
     assert_eq!(store.complete(lease(), "status", event)?, status_offset);
-    assert!(store.claim("work", "workers", 1000)?.is_none());
+    assert!(store.claim("work", "workers", 1000, None)?.is_none());
     Ok(())
 }
 
@@ -180,5 +301,473 @@ fn rolling_segments_preserves_indexed_reads_and_topic_isolation() -> Result<()> 
     assert_eq!(store.recovered_frames, 0);
     assert_eq!(store.latest("status", "T7")?.offset, offset);
     assert_eq!(store.latest("bulk", "T7")?.event["event_id"], "E9");
+    Ok(())
+}
+
+#[test]
+fn expansion_and_move_preserve_offsets_leases_and_stream_order() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let first = store.append("status", record("started"))?;
+    let work = store.append("work", record("queued"))?;
+    let claim = store.claim("work", "workers", 60_000, None)?.unwrap();
+    assert_eq!(claim.record.offset, work);
+    assert_eq!(
+        store.group_next("status", "audit", None)?.unwrap().offset,
+        first
+    );
+    store.commit("status", "audit", first, None)?;
+
+    store.ensure_partition(1)?;
+    store.ensure_partition(2)?;
+    store.ensure_partition(2)?;
+    assert_eq!(store.partition_ids(), [0, 1, 2]);
+    assert_eq!(store.task_partition("T7")?, 0);
+    let second = store.append("status", record("running"))?;
+    assert_eq!(store.read(second)?.partition, 0);
+
+    store.move_task("T7", 0, 2)?;
+    store.move_task("T7", 0, 2)?;
+    assert!(store.move_task("T7", 0, 1).is_err());
+    assert!(store.claim("work", "workers", 1000, Some(2))?.is_none());
+    assert!(store.claim("work", "secondary", 1000, Some(0))?.is_none());
+    let independent = store.claim("work", "secondary", 1000, Some(2))?.unwrap();
+    assert_eq!(
+        (independent.partition, independent.record.partition),
+        (2, 0)
+    );
+    assert_eq!(independent.record.offset, work);
+    let completion = || WorkLease {
+        topic: "work".into(),
+        group: "workers".into(),
+        offset: work,
+        generation: claim.generation,
+    };
+    let mut terminal = record("done");
+    terminal["status"] = json!("completed");
+    let third = store.complete(completion(), "status", terminal.clone())?;
+    assert_eq!(store.read(third)?.partition, 2);
+    assert_eq!(store.append("status", record("started"))?, first);
+
+    // An old global reader retains its view. A reader opting into partitions
+    // starts at the old checkpoint and consumes the source before the target.
+    assert_eq!(
+        store.group_next("status", "legacy", None)?.unwrap().offset,
+        first
+    );
+    assert!(store.group_next("status", "audit", Some(2))?.is_none());
+    assert_eq!(
+        store
+            .group_next("status", "audit", Some(0))?
+            .unwrap()
+            .offset,
+        second
+    );
+    assert!(store.commit("status", "audit", third, Some(2)).is_err());
+    store.commit("status", "audit", second, Some(0))?;
+    assert_eq!(
+        store
+            .group_next("status", "audit", Some(2))?
+            .unwrap()
+            .offset,
+        third
+    );
+    store.commit("status", "audit", third, Some(2))?;
+
+    drop(store);
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.task_partition("T7")?, 2);
+    assert_eq!(store.complete(completion(), "status", terminal)?, third);
+    assert!(store.group_next("status", "audit", Some(2))?.is_none());
+    let after = store.resolve("status", "T7", Some("started"))?;
+    let history = store.page("status", "T7", after)?;
+    assert_eq!(
+        history
+            .iter()
+            .map(|r| (r.offset, r.partition))
+            .collect::<Vec<_>>(),
+        [(second, 0), (third, 2)]
+    );
+    Ok(())
+}
+
+#[test]
+fn recovers_cross_partition_completion_from_destination_journal() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let work = store.append("work", record("queued"))?;
+    let claim = store.claim("work", "workers", 30_000, None)?.unwrap();
+    store.ensure_partition(1)?;
+    store.move_task("T7", 0, 1)?;
+    let lease = || WorkLease {
+        topic: "work".into(),
+        group: "workers".into(),
+        offset: work,
+        generation: claim.generation,
+    };
+    let terminal = json!({"task_id":"T7","event_id":"final","status":"completed"});
+    let mut frame = Frame::new("status".into(), terminal.clone(), Some(lease()))?;
+    let Prepared::Write(body) = store.prepare_append(&mut frame, 1)? else {
+        panic!("expected to write the terminal event");
+    };
+    store.journal(1)?.blocking_lock().write(&body)?;
+    // Another broker operation cannot settle this lease while its completion is on disk.
+    assert!(
+        store
+            .settle("work", "workers", work, claim.generation, "ack", 0)
+            .is_err()
+    );
+    drop(store);
+
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.recovered_frames, 1);
+    let recovered = store.latest("status", "T7")?;
+    assert_eq!(recovered.partition, 1);
+    assert_eq!(
+        store.complete(lease(), "status", terminal)?,
+        recovered.offset
+    );
+    assert!(store.claim("work", "workers", 1000, Some(1))?.is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn expansion_during_publish_keeps_placement_and_other_journals_can_write() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let new_task = (0..100)
+        .map(|id| format!("new-{id}"))
+        .find(|id| crc32fast::hash(id.as_bytes()) % 2 == 1)
+        .unwrap();
+    let event = json!({"task_id":new_task,"event_id":"first"});
+    let mut frame = Frame::new("status".into(), event.clone(), None)?;
+    let Prepared::Write(body) = store.prepare_append(&mut frame, 0)? else {
+        panic!("expected to write the first event");
+    };
+    store.ensure_partition(1)?;
+    assert_eq!(store.partition_for(&new_task, None)?, 0);
+    let journal = store.journal(0)?;
+    let write = journal.lock().await.write(&body);
+    let initial = store.finish_append(&frame, 0, write)?;
+    store.move_task(&new_task, 0, 1)?;
+    let fresh = (0..100)
+        .map(|id| format!("fresh-{id}"))
+        .find(|id| {
+            let hash = crc32fast::hash(id.as_bytes());
+            hash % 2 == 1 && hash % 3 == 2
+        })
+        .unwrap();
+    let fresh_offset = store.append("status", json!({"task_id":fresh,"event_id":"first"}))?;
+    assert_eq!(store.read(fresh_offset)?.partition, 1);
+    store.ensure_partition(2)?;
+    assert_eq!(store.task_partition(&fresh)?, 1);
+    let next_offset = store.append("status", json!({"task_id":fresh,"event_id":"second"}))?;
+    assert_eq!(store.read(next_offset)?.partition, 1);
+    let broker = Broker {
+        store: Arc::new(Mutex::new(store)),
+        watchers: Default::default(),
+    };
+    let (locked, ready) = tokio::sync::oneshot::channel();
+    let (unlock, released) = tokio::sync::oneshot::channel();
+    let holder = tokio::task::spawn_blocking(move || {
+        let _guard = journal.blocking_lock();
+        locked.send(()).unwrap();
+        let _ = released.blocking_recv();
+    });
+    ready.await?;
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        publish(
+            broker.clone(),
+            "status".into(),
+            json!({"task_id":new_task,"event_id":"second"}),
+            None,
+            None,
+        ),
+    )
+    .await;
+    unlock.send(()).unwrap();
+    holder.await?;
+    let position = outcome??;
+    assert_eq!(position.partition, 1);
+    assert!(position.offset > initial.offset);
+    assert_eq!(
+        publish(broker, "status".into(), event, None, None)
+            .await?
+            .offset,
+        initial.offset
+    );
+    Ok(())
+}
+
+#[test]
+fn opens_legacy_index_without_rewriting_offsets_or_progress() -> Result<()> {
+    let dir = tempdir()?;
+    let event = record("queued");
+    let frame = Frame::new("work".into(), event.clone(), None)?;
+    let address = journal::Journal::create(dir.path())?.write(&serde_json::to_vec(&frame)?)?;
+    let db = rusqlite::Connection::open(dir.path().join("index.sqlite"))?;
+    db.execute_batch(
+        "CREATE TABLE records (
+            offset INTEGER PRIMARY KEY, topic TEXT NOT NULL, task TEXT NOT NULL,
+            event_id TEXT NOT NULL, segment INTEGER NOT NULL, pos INTEGER NOT NULL,
+            len INTEGER NOT NULL, UNIQUE(topic,task,event_id));
+         CREATE TABLE cursors (topic TEXT, name TEXT, offset INTEGER NOT NULL, PRIMARY KEY(topic,name));
+         CREATE TABLE leases (topic TEXT, name TEXT, offset INTEGER, generation INTEGER NOT NULL,
+            visible_at INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(topic,name,offset));
+         INSERT INTO cursors VALUES('work','audit',41);
+         INSERT INTO leases VALUES('work','workers',41,3,9223372036854775807,'pending');",
+    )?;
+    db.execute(
+        "INSERT INTO records VALUES(41,'work','T7','queued',0,0,?)",
+        [i64::try_from(address.len)?],
+    )?;
+    drop(db);
+
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.recovered_frames, 0);
+    assert_eq!(store.read(41)?.event, event);
+    assert!(store.group_next("work", "audit", None)?.is_none());
+    store.ensure_partition(1)?;
+    store.move_task("T7", 0, 1)?;
+    let lease = WorkLease {
+        topic: "work".into(),
+        group: "workers".into(),
+        offset: 41,
+        generation: 3,
+    };
+    let terminal = json!({"task_id":"T7","event_id":"done","status":"completed"});
+    assert_eq!(store.complete(lease, "status", terminal)?, 42);
+    assert_eq!(store.read(42)?.partition, 1);
+    assert_eq!(store.read(41)?.partition, 0);
+    Ok(())
+}
+
+#[test]
+fn split_indexes_publish_in_offset_order_and_recover_a_committed_suffix() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let previous = store.append("status", record("legacy"))?;
+    let cursor = store.group_next("status", "global", None)?.unwrap();
+    assert_eq!(cursor.offset, previous);
+    store.commit("status", "global", previous, None)?;
+    store.ensure_partition(1)?;
+    let other = json!({"task_id":"other","event_id":"legacy"});
+    store.append("other-topic", other)?;
+    store.move_task("other", 0, 1)?;
+    drop(store);
+
+    let mut store = Store::open_mode(dir.path(), Some("partitioned"))?;
+    assert_eq!(store.latest("status", "T7")?.offset, previous);
+    assert_eq!(store.task_partition("other")?, 1);
+    assert!(store.group_next("status", "global", None)?.is_none());
+    let mut earlier = Frame::new("status".into(), record("earlier"), None)?;
+    let mut later = Frame::new(
+        "status".into(),
+        json!({"task_id":"other","event_id":"later"}),
+        None,
+    )?;
+    let Prepared::Write(earlier_body) = store.prepare_append(&mut earlier, 0)? else {
+        panic!("expected a new record");
+    };
+    let Prepared::Write(later_body) = store.prepare_append(&mut later, 1)? else {
+        panic!("expected a new record");
+    };
+    let later_offset = later.offset.unwrap();
+    let later_write = store
+        .journal(1)?
+        .blocking_lock()
+        .append(&later, 1, &later_body);
+    assert!(later_write.is_ok());
+    assert!(!store.can_publish(later_offset));
+    assert!(store.group_next("status", "global", None)?.is_none());
+    assert!(store.latest("status", "other").is_err());
+    let earlier_offset = earlier.offset.unwrap();
+    let earlier_write = store
+        .journal(0)?
+        .blocking_lock()
+        .append(&earlier, 0, &earlier_body);
+    let earlier_receipt = store.finish_append(&earlier, 0, earlier_write)?;
+    assert_eq!(earlier_receipt.offset, earlier_offset);
+    assert!(store.can_publish(later_offset));
+    assert_eq!(
+        store.group_next("status", "global", None)?.unwrap().offset,
+        earlier_offset
+    );
+    store.commit("status", "global", earlier_offset, None)?;
+    // The second shard committed before the first one, but its result was never
+    // published before restart. Both receipt identities are already durable.
+    drop(store);
+    assert!(Store::open_mode(dir.path(), Some("shared")).is_err());
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.recovered_frames, 0);
+    assert_eq!(
+        store.group_next("status", "global", None)?.unwrap().offset,
+        later_offset
+    );
+    store.commit("status", "global", later_offset, None)?;
+    assert!(store.group_next("status", "global", None)?.is_none());
+    assert_eq!(
+        store.append("status", json!({"task_id":"other","event_id":"later"}))?,
+        later_offset
+    );
+    // An incomplete earlier reservation must not strand a later durable record.
+    let mut missing = Frame::new("status".into(), record("lost-reservation"), None)?;
+    let mut survivor = Frame::new(
+        "status".into(),
+        json!({"task_id":"other","event_id":"survivor"}),
+        None,
+    )?;
+    assert!(matches!(
+        store.prepare_append(&mut missing, 0)?,
+        Prepared::Write(_)
+    ));
+    let Prepared::Write(survivor_body) = store.prepare_append(&mut survivor, 1)? else {
+        panic!("expected a new record");
+    };
+    store
+        .journal(1)?
+        .blocking_lock()
+        .append(&survivor, 1, &survivor_body)?;
+    drop(store);
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(
+        store.group_next("status", "global", None)?.unwrap().offset,
+        survivor.offset.unwrap()
+    );
+    assert_eq!(
+        store.append("status", record("after-gap"))?,
+        survivor.offset.unwrap() + 1
+    );
+    Ok(())
+}
+
+#[test]
+fn partition_index_rollback_replays_acknowledged_completion() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open_mode(dir.path(), Some("partitioned"))?;
+    let work = store.append("work", record("queued"))?;
+    let claim = store.claim("work", "workers", 30_000, None)?.unwrap();
+    store.append("other-topic", json!({"task_id":"other","event_id":"seed"}))?;
+    store.ensure_partition(1)?;
+    store.move_task("T7", 0, 1)?;
+    let started = store.append("status", record("started"))?;
+    store.commit("status", "audit", started, None)?;
+
+    let index = dir.path().join("partition-indexes/1.sqlite");
+    let snapshot = dir.path().join("before-completion.sqlite");
+    {
+        let db = rusqlite::Connection::open(&index)?;
+        db.execute("VACUUM INTO ?", [snapshot.to_str().unwrap()])?;
+    }
+
+    let lease = || WorkLease {
+        topic: "work".into(),
+        group: "workers".into(),
+        offset: work,
+        generation: claim.generation,
+    };
+    let terminal = json!({"task_id":"T7","event_id":"done","status":"completed"});
+    let finished = store.complete(lease(), "status", terminal.clone())?;
+    let later = store.append("status", json!({"task_id":"other","event_id":"later"}))?;
+    drop(store);
+
+    // Model a power loss that rolls back the partition WAL while the synced
+    // journal and the coordinator's applied completion remain durable.
+    std::fs::rename(snapshot, index)?;
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.recovered_frames, 1);
+    assert_eq!(store.task_partition("T7")?, 1);
+    assert!(store.claim("work", "workers", 1000, Some(1))?.is_none());
+    assert_eq!(store.complete(lease(), "status", terminal)?, finished);
+    let next = store.group_next("status", "audit", None)?.unwrap();
+    assert_eq!((next.partition, next.offset), (1, finished));
+    store.commit("status", "audit", finished, None)?;
+    let next = store.group_next("status", "audit", None)?.unwrap();
+    assert_eq!((next.partition, next.offset), (0, later));
+    store.commit("status", "audit", later, None)?;
+    assert!(store.group_next("status", "audit", None)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn service_rules_protect_existing_routes_and_reserve_partitions_for_new_tasks() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("legacy"))?;
+
+    assert!(
+        store
+            .configure_service_partitions([("one".into(), vec![8]), ("two".into(), vec![8])].into())
+            .is_err()
+    );
+    assert_eq!(store.partition_ids(), [0]);
+
+    store.configure_service_partitions([("urgent".into(), vec![0])].into())?;
+    assert_eq!(store.partition_for("T7", Some("unmapped"))?, 0);
+    assert!(store.partition_for("new-general", None).is_err());
+    assert_eq!(store.partition_for("new-urgent", Some("urgent"))?, 0);
+
+    store.ensure_partition(3)?;
+    assert_eq!(store.partition_for("new-general", Some("unmapped"))?, 3);
+    assert_eq!(store.partition_for("new-general", Some("urgent"))?, 3);
+    Ok(())
+}
+
+#[test]
+fn dynamic_moves_wait_for_task_writes_and_fence_old_tickets() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.configure_service_partitions(
+        [("urgent".into(), vec![1]), ("general".into(), vec![4])].into(),
+    )?;
+    let original = store.route_for("T7", Some("urgent"))?;
+    for task in ["A", "B", "C", "D"] {
+        assert_eq!(store.partition_for(task, Some("urgent"))?, 1);
+    }
+    store.configure_service_partitions(
+        [("urgent".into(), vec![1, 2]), ("general".into(), vec![4])].into(),
+    )?;
+    store.dynamic_placement = true;
+    let queued = ["A", "B", "C", "D"]
+        .into_iter()
+        .map(|task| store.writer_ticket(task, None))
+        .collect::<Result<Vec<_>>>()?;
+    assert!(queued.iter().all(|ticket| ticket.placement.partition == 1));
+    assert_eq!(store.route_for("fresh", Some("urgent"))?.partition, 2);
+
+    let mut frame = Frame::new("work".into(), record("queued"), None)?;
+    let Prepared::Write(body) = store.prepare_append(&mut frame, 1)? else {
+        panic!("expected a new event");
+    };
+    assert_eq!(store.route_for("T7", Some("general"))?, original);
+    let write = store.journal(1)?.blocking_lock().append(&frame, 1, &body);
+    let work = store.finish_append(&frame, 1, write)?.offset;
+    let claim = store.claim("work", "worker", 30_000, Some(1))?.unwrap();
+    let moved = store.route_for("T7", Some("general"))?;
+    assert_eq!(moved.partition, 2);
+    assert_eq!(store.automatic_moves, 1);
+    assert_eq!(store.read(work)?.partition, 1);
+    let terminal = json!({"task_id":"T7","event_id":"done","status":"completed"});
+    let completion = store.complete(
+        WorkLease {
+            topic: "work".into(),
+            group: "worker".into(),
+            offset: work,
+            generation: claim.generation,
+        },
+        "status",
+        terminal,
+    )?;
+    assert_eq!(store.read(completion)?.partition, 2);
+    drop(queued);
+    store.move_task("T7", 2, 1)?;
+    let returned = store.route_for("T7", None)?;
+    assert_eq!(returned.partition, original.partition);
+    assert_ne!(returned, original);
+    drop(store);
+
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(store.route_for("T7", None)?, returned);
     Ok(())
 }

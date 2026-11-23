@@ -91,6 +91,26 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.Empty.SerializeToString,
                 response_deserializer=spooltail__pb2.StatsResponse.FromString,
                 _registered_method=True)
+        self.ListPartitions = channel.unary_unary(
+                '/spooltail.v1.Spooltail/ListPartitions',
+                request_serializer=spooltail__pb2.Empty.SerializeToString,
+                response_deserializer=spooltail__pb2.Partitions.FromString,
+                _registered_method=True)
+        self.EnsurePartition = channel.unary_unary(
+                '/spooltail.v1.Spooltail/EnsurePartition',
+                request_serializer=spooltail__pb2.Partition.SerializeToString,
+                response_deserializer=spooltail__pb2.Partition.FromString,
+                _registered_method=True)
+        self.TaskPartition = channel.unary_unary(
+                '/spooltail.v1.Spooltail/TaskPartition',
+                request_serializer=spooltail__pb2.TaskId.SerializeToString,
+                response_deserializer=spooltail__pb2.Partition.FromString,
+                _registered_method=True)
+        self.MoveTask = channel.unary_unary(
+                '/spooltail.v1.Spooltail/MoveTask',
+                request_serializer=spooltail__pb2.MoveTaskRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Partition.FromString,
+                _registered_method=True)
 
 
 class SpooltailServicer(object):
@@ -162,6 +182,30 @@ class SpooltailServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListPartitions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EnsurePartition(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def TaskPartition(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def MoveTask(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SpooltailServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -219,6 +263,26 @@ def add_SpooltailServicer_to_server(servicer, server):
                     servicer.Stats,
                     request_deserializer=spooltail__pb2.Empty.FromString,
                     response_serializer=spooltail__pb2.StatsResponse.SerializeToString,
+            ),
+            'ListPartitions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListPartitions,
+                    request_deserializer=spooltail__pb2.Empty.FromString,
+                    response_serializer=spooltail__pb2.Partitions.SerializeToString,
+            ),
+            'EnsurePartition': grpc.unary_unary_rpc_method_handler(
+                    servicer.EnsurePartition,
+                    request_deserializer=spooltail__pb2.Partition.FromString,
+                    response_serializer=spooltail__pb2.Partition.SerializeToString,
+            ),
+            'TaskPartition': grpc.unary_unary_rpc_method_handler(
+                    servicer.TaskPartition,
+                    request_deserializer=spooltail__pb2.TaskId.FromString,
+                    response_serializer=spooltail__pb2.Partition.SerializeToString,
+            ),
+            'MoveTask': grpc.unary_unary_rpc_method_handler(
+                    servicer.MoveTask,
+                    request_deserializer=spooltail__pb2.MoveTaskRequest.FromString,
+                    response_serializer=spooltail__pb2.Partition.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -518,6 +582,114 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/Stats',
             spooltail__pb2.Empty.SerializeToString,
             spooltail__pb2.StatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListPartitions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/ListPartitions',
+            spooltail__pb2.Empty.SerializeToString,
+            spooltail__pb2.Partitions.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EnsurePartition(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/EnsurePartition',
+            spooltail__pb2.Partition.SerializeToString,
+            spooltail__pb2.Partition.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TaskPartition(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/TaskPartition',
+            spooltail__pb2.TaskId.SerializeToString,
+            spooltail__pb2.Partition.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MoveTask(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/MoveTask',
+            spooltail__pb2.MoveTaskRequest.SerializeToString,
+            spooltail__pb2.Partition.FromString,
             options,
             channel_credentials,
             insecure,
