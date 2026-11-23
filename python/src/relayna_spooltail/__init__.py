@@ -11,6 +11,7 @@ from .client import (
     SpooltailClient,
     SpooltailError,
     StaleLeaseError,
+    StreamBatch,
     SubscriptionError,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "SpooltailClient",
     "SpooltailError",
     "StaleLeaseError",
+    "StreamBatch",
     "SubscriptionError",
 ]

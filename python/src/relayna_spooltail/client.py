@@ -51,6 +51,15 @@ class Record:
 
 
 @dataclass(frozen=True, slots=True)
+class StreamBatch:
+    topic: str
+    group: str
+    after: int
+    records: tuple[Record, ...]
+    partition: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Lease:
     topic: str
     group: str
@@ -315,6 +324,38 @@ class SpooltailClient:
         )
         with _translate_conflict():
             await self._stub.Commit(request, timeout=self._timeout)
+
+    async def next_batch(
+        self, topic: str, group: str, *, limit: int = 32, partition: int | None = None
+    ) -> StreamBatch:
+        """Fetch up to 64 records after a group's durable checkpoint."""
+        if not 1 <= limit <= 64:
+            raise ValueError("limit must be between 1 and 64")
+        request = wire.StreamBatchRequest(
+            topic=topic, group=group, partition=partition, limit=limit
+        )
+        with _translate_conflict():
+            response = await self._stub.NextBatch(request, timeout=self._timeout)
+        return StreamBatch(
+            topic, group, response.after, tuple(map(_record, response.records)), partition
+        )
+
+    async def commit_batch(self, batch: StreamBatch, *, count: int | None = None) -> None:
+        """Commit all records or a processed prefix of a fetched batch."""
+        if count is None:
+            count = len(batch.records)
+        if not 1 <= count <= len(batch.records):
+            raise ValueError("count must select a nonempty prefix of the batch")
+        request = wire.StreamBatchCommit(
+            topic=batch.topic,
+            group=batch.group,
+            partition=batch.partition,
+            after=batch.after,
+            through=batch.records[count - 1].offset,
+            count=count,
+        )
+        with _translate_conflict():
+            await self._stub.CommitBatch(request, timeout=self._timeout)
 
     async def list_partitions(self) -> list[int]:
         """List the broker's durable partition IDs."""

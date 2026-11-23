@@ -81,6 +81,16 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.CommitRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.Empty.FromString,
                 _registered_method=True)
+        self.NextBatch = channel.unary_unary(
+                '/spooltail.v1.Spooltail/NextBatch',
+                request_serializer=spooltail__pb2.StreamBatchRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamBatch.FromString,
+                _registered_method=True)
+        self.CommitBatch = channel.unary_unary(
+                '/spooltail.v1.Spooltail/CommitBatch',
+                request_serializer=spooltail__pb2.StreamBatchCommit.SerializeToString,
+                response_deserializer=spooltail__pb2.Empty.FromString,
+                _registered_method=True)
         self.Subscribe = channel.unary_stream(
                 '/spooltail.v1.Spooltail/Subscribe',
                 request_serializer=spooltail__pb2.Task.SerializeToString,
@@ -170,6 +180,18 @@ class SpooltailServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def NextBatch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CommitBatch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Subscribe(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -252,6 +274,16 @@ def add_SpooltailServicer_to_server(servicer, server):
             'Commit': grpc.unary_unary_rpc_method_handler(
                     servicer.Commit,
                     request_deserializer=spooltail__pb2.CommitRequest.FromString,
+                    response_serializer=spooltail__pb2.Empty.SerializeToString,
+            ),
+            'NextBatch': grpc.unary_unary_rpc_method_handler(
+                    servicer.NextBatch,
+                    request_deserializer=spooltail__pb2.StreamBatchRequest.FromString,
+                    response_serializer=spooltail__pb2.StreamBatch.SerializeToString,
+            ),
+            'CommitBatch': grpc.unary_unary_rpc_method_handler(
+                    servicer.CommitBatch,
+                    request_deserializer=spooltail__pb2.StreamBatchCommit.FromString,
                     response_serializer=spooltail__pb2.Empty.SerializeToString,
             ),
             'Subscribe': grpc.unary_stream_rpc_method_handler(
@@ -527,6 +559,60 @@ class Spooltail(object):
             target,
             '/spooltail.v1.Spooltail/Commit',
             spooltail__pb2.CommitRequest.SerializeToString,
+            spooltail__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def NextBatch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/NextBatch',
+            spooltail__pb2.StreamBatchRequest.SerializeToString,
+            spooltail__pb2.StreamBatch.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CommitBatch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/CommitBatch',
+            spooltail__pb2.StreamBatchCommit.SerializeToString,
             spooltail__pb2.Empty.FromString,
             options,
             channel_credentials,

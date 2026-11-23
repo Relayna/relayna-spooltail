@@ -305,6 +305,116 @@ fn rolling_segments_preserves_indexed_reads_and_topic_isolation() -> Result<()> 
 }
 
 #[test]
+fn stream_batch_commits_a_consecutive_prefix_and_recovers_checkpoint() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let first = store.append("status", record("first"))?;
+    let unrelated = store.append("other", record("unrelated"))?;
+    let second = store.append("status", record("second"))?;
+    let third = store.append("status", record("third"))?;
+    assert!(store.next_batch("status", "audit", None, 0).is_err());
+    assert!(store.next_batch("status", "audit", None, 65).is_err());
+    let (after, records) = store.next_batch("status", "audit", None, 2)?;
+    assert_eq!(
+        (after, records.iter().map(|r| r.offset).collect::<Vec<_>>()),
+        (0, vec![first, second])
+    );
+    assert!(
+        store
+            .commit_batch("status", "audit", None, after, unrelated, 2)
+            .is_err()
+    );
+    assert!(
+        store
+            .commit_batch("status", "audit", None, after, third, 2)
+            .is_err()
+    );
+    assert!(
+        store
+            .commit_batch("status", "audit", None, after, first, 65)
+            .is_err()
+    );
+    store.commit_batch("status", "audit", None, after, first, 1)?;
+    store.commit_batch("status", "audit", None, after, first, 1)?;
+    assert!(
+        store
+            .commit_batch("status", "audit", None, after, second, 2)
+            .is_err()
+    );
+
+    drop(store);
+    let mut store = Store::open(dir.path())?;
+    assert_eq!(
+        store.group_next("status", "audit", None)?.unwrap().offset,
+        second
+    );
+    let (after, records) = store.next_batch("status", "audit", None, 64)?;
+    assert_eq!(after, first);
+    assert_eq!(
+        records.iter().map(|r| r.offset).collect::<Vec<_>>(),
+        [second, third]
+    );
+    store.expire_before("status", third)?;
+    assert!(store.next_batch("status", "audit", None, 64).is_err());
+    assert!(
+        store
+            .commit_batch("status", "audit", None, after, third, 2)
+            .is_err()
+    );
+    let (after, records) = store.next_batch("status", "new-audit", None, 64)?;
+    assert_eq!(after, third - 1);
+    assert_eq!(records[0].offset, third);
+    Ok(())
+}
+
+#[test]
+fn partition_batch_stops_before_a_moved_tasks_uncommitted_predecessor() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let source = store.append("status", record("source"))?;
+    store.configure_service_partitions([("target".into(), vec![2])].into())?;
+    let mut local = record("local");
+    local["task_id"] = json!("local-task");
+    assert_eq!(store.partition_for("local-task", Some("target"))?, 2);
+    let ready = store.append("status", local.clone())?;
+    store.move_task("T7", 0, 2)?;
+    let blocked = store.append("status", record("destination"))?;
+    local["event_id"] = json!("later");
+    let later = store.append("status", local)?;
+    let (after, batch) = store.next_batch("status", "audit", Some(2), 32)?;
+    assert_eq!(batch.iter().map(|r| r.offset).collect::<Vec<_>>(), [ready]);
+    assert!(
+        store
+            .commit_batch(
+                "status",
+                "audit",
+                Some(2),
+                after,
+                blocked,
+                batch.len() as u32 + 1
+            )
+            .is_err()
+    );
+    store.commit_batch("status", "audit", Some(2), after, ready, batch.len() as u32)?;
+    assert!(
+        store
+            .next_batch("status", "audit", Some(2), 32)?
+            .1
+            .is_empty()
+    );
+    let (after, _) = store.next_batch("status", "audit", Some(0), 32)?;
+    store.commit_batch("status", "audit", Some(0), after, source, 1)?;
+    let (after, batch) = store.next_batch("status", "audit", Some(2), 32)?;
+    assert_eq!(after, ready);
+    assert_eq!(
+        batch.iter().map(|r| r.offset).collect::<Vec<_>>(),
+        [blocked, later]
+    );
+    assert!(store.next_batch("status", "audit", None, 32).is_err());
+    Ok(())
+}
+
+#[test]
 fn expansion_and_move_preserve_offsets_leases_and_stream_order() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;

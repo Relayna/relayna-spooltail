@@ -64,7 +64,11 @@ SPOOLTAIL_GRPC_LISTEN=127.0.0.1:7443 SPOOLTAIL_GRPC_TLS=off \
   ./target/release/spooltail
 ```
 
-Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1/spooltail.proto). Service clients use `Append`, `Latest`, `History`, `Subscribe`, `Claim`, `Settle`, `Complete`, `Next`, and `Commit`. `Ping` checks the connection and `Stats` reports broker counters. Event fields retain their JSON encoding inside the Protobuf messages. `Claim` and `Next` return an absent record when there is nothing to deliver.
+Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1/spooltail.proto). Service clients use `Append`, `Latest`, `History`, `Subscribe`, `Claim`, `Settle`, and `Complete`. Stream groups can use `Next` and `Commit` for one record at a time, or `NextBatch` and `CommitBatch` for a page. `Ping` checks the connection and `Stats` reports broker counters. Event fields retain their JSON encoding inside the Protobuf messages. `Claim` and `Next` return an absent record when there is nothing to deliver.
+
+`NextBatch` returns the group's saved checkpoint and up to 32 records by default. Request 1 to 64 records. Each encoded response is capped at 2 MiB, so a page can contain fewer records than requested. After processing a consecutive prefix, pass the returned checkpoint as `after`, the last processed record's offset as `through`, and the number of processed records as `count` to `CommitBatch`. The broker advances the checkpoint durably in its embedded SQLite database. A retry succeeds while the checkpoint is still at `through`. Fetch again after a checkpoint conflict. An empty page needs no commit.
+
+Batch operations share the same replay checkpoints and partition scope as single-record operations. The application assigns one logical reader per checkpoint and applies downstream effects durably before committing. A crash between applying effects and checkpointing can redeliver records. Use stable event IDs for idempotent effects.
 
 History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A unary history gap returns `FAILED_PRECONDITION` with `spooltail-earliest-event-id-bin` trailing metadata when a retained event exists. The metadata value is the UTF-8 event ID. A streaming gap carries `earliest_event_id` in its JSON body. The TLS listener authenticates the broker to its clients.
 
@@ -111,7 +115,7 @@ Creating the same partition ID again is safe. A move changes where future events
 | --- | --- |
 | Claim work | Include `"partition":1` in the claim body to claim tasks currently assigned there. Omit it to claim across all partitions. |
 | Read or commit stream progress | Add `?partition=1` to both the `next` and `commit` paths. The group keeps a separate checkpoint for each partition. |
-| Call from gRPC | Use `ListPartitions`, `EnsurePartition`, `TaskPartition`, and `MoveTask`. `Claim`, `Next`, and `Commit` accept an optional `partition`. |
+| Call from gRPC | Use `ListPartitions`, `EnsurePartition`, `TaskPartition`, and `MoveTask`. `Claim`, `Next`, `Commit`, and both batch replay operations accept an optional `partition`. |
 
 Unscoped stream groups continue to read in broker-wide offset order across all partitions. Stop the unscoped reader before switching its group to partition-scoped reads. The first scoped read uses the saved unscoped checkpoint as its starting point, then that group uses scoped operations. Assign one logical reader per partition in each group and poll all partitions. After a task move, a destination reader waits until its group commits the task's preceding record on the source partition.
 

@@ -121,6 +121,14 @@ async def exercise(directory):
         assert await client.history("status", task_id, after="running") == [latest]
         assert len(await client.history("status", task_id)) == 2
         assert await client.history("status", task_id, after="done") == []
+        batch = await client.next_batch("status", "batch-audit", limit=2)
+        assert [record.offset for record in batch.records] == [progress_offset, status_offset]
+        await client.commit_batch(batch, count=1)
+        await client.commit_batch(batch, count=1)
+        await expect_error(ConflictError, client.commit_batch(batch))
+        remaining = await client.next_batch("status", "batch-audit")
+        assert remaining.after == progress_offset and remaining.records == (latest,)
+        await client.commit_batch(remaining)
         assert await client.next("status", "audit") == latest
         await client.commit("status", "audit", status_offset)
         assert await client.next("status", "audit") is None
@@ -169,6 +177,8 @@ async def exercise(directory):
         SpooltailClient(f"127.0.0.1:{grpc_port}", tls=False) as client,
     ):
         assert await client.latest("status", task_id) == latest
+        batch = await client.next_batch("status", "batch-audit")
+        assert batch.after == status_offset and not batch.records
         # This history page exceeds gRPC's default client receive limit.
         blob = "x" * (900 * 1024)
         for i in range(5):
@@ -184,6 +194,11 @@ async def exercise(directory):
             "4",
         ]
         assert all(record.event["blob"] == blob for record in page)
+        batch = await client.next_batch("large", "bounded-audit", limit=64)
+        assert batch.records == tuple(page[:2])
+        await client.commit_batch(batch)
+        batch = await client.next_batch("large", "bounded-audit", limit=1)
+        assert batch.records == (page[2],)
 
 
 async def partitioning(directory):

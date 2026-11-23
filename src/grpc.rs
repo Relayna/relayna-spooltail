@@ -1,6 +1,7 @@
 //! gRPC service over the same store and subscription machinery as the HTTP API.
 use crate::{Broker, Problem, WorkLease, feed, publish, store};
 use anyhow::{Context, Result};
+use prost::Message;
 use serde_json::Value;
 use std::{path::Path, pin::Pin};
 use tokio::net::TcpListener;
@@ -17,11 +18,13 @@ use tonic::{
 mod wire {
     tonic::include_proto!("spooltail.v1");
 }
+use crate::subscriptions::{DEFAULT_STREAM_BATCH_RECORDS, MAX_STREAM_BATCH_BYTES};
 use wire::spooltail_server::{Spooltail, SpooltailServer};
 use wire::{
     ClaimRequest, ClaimResponse, CommitRequest, CompleteRequest, Delivery, Empty, MoveTaskRequest,
     NextResponse, Offset, Page, Partition, Partitions, Publish, Record, SettleRequest,
-    SettlementAction, StatsResponse, StreamGroup, Task, TaskId,
+    SettlementAction, StatsResponse, StreamBatch, StreamBatchCommit, StreamBatchRequest,
+    StreamGroup, Task, TaskId,
 };
 
 struct Api(Broker);
@@ -192,6 +195,49 @@ impl Spooltail for Api {
         let q = request.into_inner();
         self.0
             .run(move |s| s.commit(&q.topic, &q.group, q.offset, q.partition))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn next_batch(
+        &self,
+        request: Request<StreamBatchRequest>,
+    ) -> Result<Response<StreamBatch>, Status> {
+        let q = request.into_inner();
+        let (after, records) = self
+            .0
+            .run(move |s| {
+                s.next_batch(
+                    &q.topic,
+                    &q.group,
+                    q.partition,
+                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+                )
+            })
+            .await
+            .map_err(status)?;
+        let records = records
+            .into_iter()
+            .map(encode)
+            .collect::<Result<_>>()
+            .map_err(status)?;
+        let mut page = StreamBatch { after, records };
+        while page.encoded_len() > MAX_STREAM_BATCH_BYTES {
+            page.records.pop();
+        }
+        Ok(Response::new(page))
+    }
+
+    async fn commit_batch(
+        &self,
+        request: Request<StreamBatchCommit>,
+    ) -> Result<Response<Empty>, Status> {
+        let q = request.into_inner();
+        self.0
+            .run(move |s| {
+                s.commit_batch(&q.topic, &q.group, q.partition, q.after, q.through, q.count)
+            })
             .await
             .map_err(status)?;
         Ok(Response::new(Empty {}))
