@@ -3,6 +3,7 @@ use crate::{
         self, ACCEPTED_AT_FIELD_BYTES, Address, Journal, MAX_FRAME, OFFSET_FIELD_BYTES,
         partition_dir,
     },
+    packing::{self, Manifest},
     partition_index::{self, SplitIndex},
     retention,
     subscriptions::{WorkLease, now},
@@ -14,7 +15,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map::Entry},
     fs::{self, File, OpenOptions},
-    io::{BufReader, Seek, SeekFrom},
+    io::{Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -199,6 +200,7 @@ impl Drop for WriteTicket {
 pub struct Store {
     pub(crate) db: Connection,
     dir: PathBuf,
+    pub(crate) packed: Manifest,
     journals: BTreeMap<u32, Partition>,
     service_partitions: BTreeMap<String, Vec<u32>>,
     pub dynamic_placement: bool,
@@ -354,6 +356,7 @@ impl Store {
         }
         migrate(&db)?;
         retention::init(&db)?;
+        let packed = packing::init(&db)?;
         let partitions = db
             .prepare("SELECT id FROM partitions ORDER BY id")?
             .query_map([], |row| row.get::<_, u32>(0))?
@@ -363,7 +366,8 @@ impl Store {
         if !enabled {
             // Finish any pre-upgrade suffix using the legacy offset allocator.
             for &id in &partitions {
-                let (journal, recovered) = Journal::open(&partition_dir(dir, id), &mut db, id)?;
+                let (journal, recovered) =
+                    Journal::open(&partition_dir(dir, id), &mut db, id, &packed)?;
                 journals.insert(id, Partition::new(journal));
                 recovered_frames += recovered;
             }
@@ -377,6 +381,7 @@ impl Store {
                     partition_index::open(dir, id)?,
                     id,
                     partition_index::legacy_checkpoint(&db, id)?,
+                    &packed,
                 )?;
                 journals.insert(id, Partition::new(journal));
                 recovered_frames += recovered;
@@ -389,9 +394,11 @@ impl Store {
         } else {
             None
         };
+        packing::recover(dir, &partitions, &packed)?;
         Ok(Self {
             db,
             dir: dir.to_owned(),
+            packed,
             _lock: lock,
             journals,
             service_partitions: BTreeMap::new(),
@@ -419,6 +426,10 @@ impl Store {
             self.ensure_writable()?;
         }
         Ok(())
+    }
+
+    pub(crate) fn data_dir(&self) -> &Path {
+        &self.dir
     }
 
     pub fn partition_ids(&self) -> Vec<u32> {
@@ -910,8 +921,9 @@ impl Store {
                     let file = journal::open_segment(
                         &partition_dir(&self.dir, partition),
                         address.segment,
+                        self.packed.get(&(partition, address.segment)).copied(),
                     )?;
-                    entry.insert((BufReader::new(file), 0))
+                    entry.insert((file, 0))
                 }
             };
             if *position != address.pos {
@@ -938,7 +950,11 @@ impl Store {
             pos: u64::try_from(pos)?,
             len: usize::try_from(len)?,
         };
-        let frame = journal::read(&partition_dir(&self.dir, partition), address)?;
+        let frame = journal::read(
+            &partition_dir(&self.dir, partition),
+            address,
+            self.packed.get(&(partition, address.segment)).copied(),
+        )?;
         self.payload_reads.set(self.payload_reads.get() + 1);
         Ok((partition, frame))
     }

@@ -121,7 +121,17 @@ Background sweeps process consecutive prefixes in topic order. They compress inp
 
 `AuditHistory` spans both tiers. `History`, `Latest`, subscriptions, and consumer replay use the hot window. A consumer that falls behind hot retention receives a gap. Archive expiry applies to original inputs. The consumer manages its outcome database separately.
 
-Retention is logical. Expired archive rows are removed and their SQLite pages can be reused. Original journal segment files and lease state remain on disk. Back up the broker volume and the consumer's outcome SQLite separately to preserve a full audit timeline.
+Retention is logical. Expired archive rows are removed and their SQLite pages can be reused. Back up the broker volume and the consumer's outcome SQLite separately to preserve a full audit timeline.
+
+### Reclaim space from sealed journals
+
+Enable background packing with `SPOOLTAIL_PACK_SEALED=1`. By default a sealed segment becomes eligible one hour after its last write. Set `SPOOLTAIL_PACK_MIN_AGE_SECS` to adjust that delay. The broker works through older segments first and starts at most one pack per second. The active journal in each partition stays raw.
+
+Spooltail packs complete journal frames in seekable Zstd blocks at level 1. It keeps a raw segment when packing would increase its size. For each replacement it syncs the packed file and directory, commits the manifest in SQLite, then removes the raw file. A restart can clean up an interrupted switch. The packer needs free disk space for one temporary replacement.
+
+Packed frames retain their original offsets and completion receipts. Replay, work claims, publish retries, index recovery, and audit reads can all use them. Auditing a packed input shares its journal payload. When all references to an old archive BLOB move to packed frames, SQLite can reuse the freed pages.
+
+Disabling packing stops new replacements. Existing packed volumes require a broker that supports this format. Archive expiry removes inputs from audit history, while packed frames can still serve work claims and publish retries. Packed files remain on disk for those operations.
 
 ### Add partitions and move tasks
 

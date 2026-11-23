@@ -4,6 +4,7 @@ mod bench_lock;
 mod bench_tls;
 mod grpc;
 mod journal;
+mod packing;
 mod partition_index;
 mod retention;
 mod store;
@@ -624,6 +625,7 @@ async fn main() -> Result<()> {
         Err(error) => return Err(error).context("read SPOOLTAIL_INDEX_BATCH_SIZE"),
     }
     let retention_topics = retention::configure(&mut store)?;
+    let pack_min_age = packing::configure(&mut store)?;
     let recovered = store.recovered_frames;
     let broker = Broker {
         store: Arc::new(Mutex::new(store)),
@@ -654,6 +656,9 @@ async fn main() -> Result<()> {
         return grpc::serve_benchmark(broker, &addr).await;
     }
     let grpc_listener = grpc::Listener::bind_from_env(broker.clone()).await?;
+    if let Some(min_age) = pack_min_age {
+        tokio::spawn(packing::run(broker.clone(), min_age));
+    }
     let app = Router::new()
         .route("/topics/{topic}/records", post(append))
         .route("/topics/{topic}/tasks/{task}/latest", get(latest))

@@ -1,10 +1,12 @@
 use crate::{
+    packing::{Manifest, PackedReader},
     partition_index,
     store::{Frame, index},
 };
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OptionalExtension, Transaction};
 use std::{
+    collections::BTreeSet,
     fs::{self, File},
     io::{BufReader, ErrorKind, IoSlice, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -14,12 +16,13 @@ use std::{
     },
 };
 
-const SEGMENT_BYTES: u64 = 8 * 1024 * 1024;
+pub(crate) const SEGMENT_BYTES: u64 = 8 * 1024 * 1024;
 const SYNC_BATCH_LIMIT: usize = 16;
 pub const MAX_FRAME: usize = 1024 * 1024;
 pub const OFFSET_FIELD_BYTES: usize = r#","offset":"#.len();
 pub const ACCEPTED_AT_FIELD_BYTES: usize = r#","accepted_at_ms":"#.len();
-const MAX_STORED_FRAME: usize = MAX_FRAME + OFFSET_FIELD_BYTES + ACCEPTED_AT_FIELD_BYTES + 38;
+pub(crate) const MAX_STORED_FRAME: usize =
+    MAX_FRAME + OFFSET_FIELD_BYTES + ACCEPTED_AT_FIELD_BYTES + 38;
 
 #[derive(Clone, Copy)]
 pub struct Address {
@@ -69,7 +72,7 @@ pub fn partition_dir(root: &Path, partition: u32) -> PathBuf {
     }
 }
 
-fn segment_path(dir: &Path, id: u64) -> PathBuf {
+pub(crate) fn segment_path(dir: &Path, id: u64) -> PathBuf {
     dir.join(format!("{id:020}.seg"))
 }
 
@@ -112,8 +115,17 @@ impl Journal {
         })
     }
 
-    pub fn open(dir: &Path, db: &mut Connection, partition: u32) -> Result<(Self, usize)> {
-        Self::open_with(dir, db, partition, (0, 0), index)
+    pub fn active_segment(&self) -> u64 {
+        self.segment
+    }
+
+    pub fn open(
+        dir: &Path,
+        db: &mut Connection,
+        partition: u32,
+        packed: &Manifest,
+    ) -> Result<(Self, usize)> {
+        Self::open_with(dir, db, partition, (0, 0), packed, index)
     }
 
     pub fn open_partitioned(
@@ -121,12 +133,14 @@ impl Journal {
         mut db: Connection,
         partition: u32,
         legacy_checkpoint: (i64, i64),
+        packed: &Manifest,
     ) -> Result<(Self, usize)> {
         let (mut journal, recovered) = Self::open_with(
             dir,
             &mut db,
             partition,
             legacy_checkpoint,
+            packed,
             partition_index::index_frame,
         )?;
         journal.enable_index(db);
@@ -152,6 +166,7 @@ impl Journal {
         db: &mut Connection,
         partition: u32,
         fallback: (i64, i64),
+        packed: &Manifest,
         apply: fn(&Transaction<'_>, &Frame, u32, Address) -> Result<i64>,
     ) -> Result<(Self, usize)> {
         let mut checkpoint = db.query_row(
@@ -164,7 +179,10 @@ impl Journal {
         }
         let (mut segment, mut end) = (u64::try_from(checkpoint.0)?, u64::try_from(checkpoint.1)?);
         let mut recovered_frames: usize = 0;
-        let mut ids = Vec::new();
+        let mut ids: BTreeSet<_> = packed
+            .range((partition, 0)..=(partition, u64::MAX))
+            .map(|(&(.., segment), _)| segment)
+            .collect();
         for f in fs::read_dir(dir)? {
             let path = f?.path();
             if path.extension().and_then(|s| s.to_str()) == Some("seg") {
@@ -174,10 +192,9 @@ impl Journal {
                     .context("invalid segment name")?
                     .parse()?;
                 ensure!(segment_path(dir, id) == path, "unexpected segment name");
-                ids.push(id);
+                ids.insert(id);
             }
         }
-        ids.sort_unstable();
         for (expected, actual) in ids.iter().enumerate() {
             ensure!(
                 *actual == expected as u64,
@@ -187,23 +204,32 @@ impl Journal {
         if ids.is_empty() {
             ensure!(end == 0 && segment == 0, "missing indexed journal files");
             create_segment(dir, 0)?;
-            ids.push(0);
+            ids.insert(0);
         }
         let last = *ids.last().unwrap();
+        ensure!(
+            !packed.contains_key(&(partition, last)),
+            "the active segment must stay raw"
+        );
         ensure!(segment <= last, "indexed segment missing");
         loop {
-            let file = File::options()
-                .read(true)
-                .write(true)
-                .open(segment_path(dir, segment))?;
-            let size = file.metadata()?.len();
+            let packed_len = packed.get(&(partition, segment)).copied();
+            let (mut reader, size) = match packed_len {
+                Some(len) => (open_segment(dir, segment, Some(len))?, len),
+                None => {
+                    let file = File::options()
+                        .read(true)
+                        .write(true)
+                        .open(segment_path(dir, segment))?;
+                    let size = file.metadata()?.len();
+                    if size > end {
+                        // Restore journal durability before indexing a recovered suffix.
+                        file.sync_data()?;
+                    }
+                    (SegmentReader::Raw(BufReader::new(file)), size)
+                }
+            };
             ensure!(size >= end, "segment ends before durable index checkpoint");
-            if size > end {
-                // A prior process may have died before flushing a complete suffix frame.
-                // Make these bytes durable before committing their addresses.
-                file.sync_data()?;
-            }
-            let mut reader = BufReader::new(&file);
             reader.seek(SeekFrom::Start(end))?;
             let mut tx = db.transaction()?;
             while end < size {
@@ -221,8 +247,11 @@ impl Journal {
                 }
                 if !complete_header || size - end - 8 < len as u64 {
                     ensure!(segment == last, "truncated sealed segment");
-                    file.set_len(end)?;
-                    file.sync_all()?;
+                    let SegmentReader::Raw(raw) = &reader else {
+                        anyhow::bail!("truncated packed segment");
+                    };
+                    raw.get_ref().set_len(end)?;
+                    raw.get_ref().sync_all()?;
                     break;
                 }
                 let mut body = vec![0; len];
@@ -394,14 +423,49 @@ impl Journal {
     }
 }
 
-pub fn read(dir: &Path, address: Address) -> Result<Frame> {
-    let mut file = open_segment(dir, address.segment)?;
+pub fn read(dir: &Path, address: Address, packed_len: Option<u64>) -> Result<Frame> {
+    if let Some(len) = packed_len {
+        let mut reader = PackedReader::open(dir, address.segment, len)?;
+        reader.seek(SeekFrom::Start(address.pos))?;
+        return read_frame(&mut reader, address.len);
+    }
+    let mut file = File::open(segment_path(dir, address.segment))?;
     file.seek(SeekFrom::Start(address.pos))?;
     read_frame(&mut file, address.len)
 }
 
-pub(crate) fn open_segment(dir: &Path, segment: u64) -> Result<File> {
-    Ok(File::open(segment_path(dir, segment))?)
+pub(crate) enum SegmentReader {
+    Raw(BufReader<File>),
+    Packed(PackedReader),
+}
+
+impl Read for SegmentReader {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Raw(file) => file.read(buffer),
+            Self::Packed(file) => file.read(buffer),
+        }
+    }
+}
+
+impl Seek for SegmentReader {
+    fn seek(&mut self, to: SeekFrom) -> std::io::Result<u64> {
+        match self {
+            Self::Raw(file) => file.seek(to),
+            Self::Packed(file) => file.seek(to),
+        }
+    }
+}
+
+pub(crate) fn open_segment(
+    dir: &Path,
+    segment: u64,
+    packed_len: Option<u64>,
+) -> Result<SegmentReader> {
+    Ok(match packed_len {
+        Some(len) => SegmentReader::Packed(PackedReader::open(dir, segment, len)?),
+        None => SegmentReader::Raw(BufReader::new(File::open(segment_path(dir, segment))?)),
+    })
 }
 
 pub(crate) fn read_frame(file: &mut impl Read, len: usize) -> Result<Frame> {

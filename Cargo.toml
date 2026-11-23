@@ -9,6 +9,7 @@ description = "Prototype Rust broker for durable work queues and replayable topi
 bench-lock-timing = []
 bench-transports = ["axum/http2", "tokio-stream/net"]
 bench-tls = ["bench-transports", "dep:axum-server"]
+pack-fault-injection = []
 
 [dependencies]
 anyhow = "1"
