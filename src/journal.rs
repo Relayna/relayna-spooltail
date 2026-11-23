@@ -18,7 +18,8 @@ const SEGMENT_BYTES: u64 = 8 * 1024 * 1024;
 const SYNC_BATCH_LIMIT: usize = 16;
 pub const MAX_FRAME: usize = 1024 * 1024;
 pub const OFFSET_FIELD_BYTES: usize = r#","offset":"#.len();
-const MAX_STORED_FRAME: usize = MAX_FRAME + OFFSET_FIELD_BYTES + 19;
+pub const ACCEPTED_AT_FIELD_BYTES: usize = r#","accepted_at_ms":"#.len();
+const MAX_STORED_FRAME: usize = MAX_FRAME + OFFSET_FIELD_BYTES + ACCEPTED_AT_FIELD_BYTES + 38;
 
 #[derive(Clone, Copy)]
 pub struct Address {

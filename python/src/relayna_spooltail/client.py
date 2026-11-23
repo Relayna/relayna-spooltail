@@ -124,6 +124,20 @@ def _task(topic: str, task_id: str, after: str | None = None) -> wire.Task:
 
 
 @contextmanager
+def _translate_cursor_gap(after: str | None) -> Iterator[None]:
+    try:
+        yield
+    except grpc.aio.AioRpcError as error:
+        if error.code() != grpc.StatusCode.FAILED_PRECONDITION:
+            raise
+        metadata = dict(error.trailing_metadata() or ())
+        earliest = metadata.get("spooltail-earliest-event-id-bin")
+        raise CursorGapError(
+            after, earliest.decode("utf-8") if earliest is not None else None
+        ) from error
+
+
+@contextmanager
 def _translate_conflict(stale_detail: str | None = None) -> Iterator[None]:
     try:
         yield
@@ -219,19 +233,33 @@ class SpooltailClient:
         self, topic: str, task_id: str, *, after: str | None = None
     ) -> list[Record]:
         """Return one page of retained records after the exclusive event ID."""
-        try:
+        with _translate_cursor_gap(after):
             response = await self._stub.History(
                 _task(topic, task_id, after), timeout=self._timeout
             )
-        except grpc.aio.AioRpcError as error:
-            if error.code() != grpc.StatusCode.FAILED_PRECONDITION:
-                raise
-            metadata = dict(error.trailing_metadata() or ())
-            earliest = metadata.get("spooltail-earliest-event-id-bin")
-            raise CursorGapError(
-                after, earliest.decode("utf-8") if earliest is not None else None
-            ) from error
         return [_record(record) for record in response.records]
+
+    async def audit_history(
+        self,
+        topic: str,
+        task_id: str,
+        *,
+        after: str | None = None,
+        through: int | None = None,
+        limit: int = 32,
+    ) -> tuple[list[Record], int | None]:
+        """Return a bounded page of hot and archived inputs and its snapshot offset."""
+        with _translate_cursor_gap(after):
+            response = await self._stub.AuditHistory(
+                wire.AuditHistoryRequest(
+                    topic=topic, task_id=task_id, after=after, through=through, limit=limit
+                ),
+                timeout=self._timeout,
+            )
+        return (
+            [_record(record) for record in response.records],
+            response.through if response.HasField("through") else None,
+        )
 
     async def subscribe(
         self,

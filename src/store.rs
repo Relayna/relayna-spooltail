@@ -1,6 +1,10 @@
 use crate::{
-    journal::{self, Address, Journal, MAX_FRAME, OFFSET_FIELD_BYTES, partition_dir},
+    journal::{
+        self, ACCEPTED_AT_FIELD_BYTES, Address, Journal, MAX_FRAME, OFFSET_FIELD_BYTES,
+        partition_dir,
+    },
     partition_index::{self, SplitIndex},
+    retention,
     subscriptions::{WorkLease, now},
 };
 use anyhow::{Context, Result, ensure};
@@ -53,6 +57,8 @@ pub(crate) struct Frame {
     pub(crate) completion: Option<WorkLease>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) offset: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) accepted_at_ms: Option<i64>,
 }
 
 pub fn terminal_status(event: &Value) -> bool {
@@ -71,6 +77,7 @@ impl Frame {
             event,
             completion,
             offset: None,
+            accepted_at_ms: None,
         };
         frame.key()?;
         Ok(frame)
@@ -89,12 +96,20 @@ impl Frame {
         };
         Ok((field("task_id")?, field("event_id")?))
     }
+
+    pub fn into_record(self, offset: i64, partition: u32) -> Record {
+        Record {
+            offset,
+            partition,
+            event: self.event,
+        }
+    }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Record {
     pub offset: i64,
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub partition: u32,
     pub event: Value,
 }
@@ -338,6 +353,7 @@ impl Store {
             db.pragma_update(None, "temp_store", "MEMORY")?;
         }
         migrate(&db)?;
+        retention::init(&db)?;
         let partitions = db
             .prepare("SELECT id FROM partitions ORDER BY id")?
             .query_map([], |row| row.get::<_, u32>(0))?
@@ -770,11 +786,15 @@ impl Store {
         }
         let next = self.split.as_ref().map(SplitIndex::reserve).transpose()?;
         frame.offset = next;
+        let accepted_at = now()?;
+        frame.accepted_at_ms = Some(accepted_at);
         let body = serde_json::to_vec(&frame)?;
         let offset_bytes = next.map_or(0, |offset| {
             OFFSET_FIELD_BYTES + offset.ilog10() as usize + 1
         });
-        if body.len() > MAX_FRAME + offset_bytes {
+        let time_bytes =
+            ACCEPTED_AT_FIELD_BYTES + accepted_at.checked_ilog10().unwrap_or(0) as usize + 1;
+        if body.len() > MAX_FRAME + offset_bytes + time_bytes {
             return Err(Problem::Invalid("frame exceeds 1 MiB".into()).into());
         }
         let work_offset = frame.completion.as_ref().map(|lease| lease.offset);
@@ -861,23 +881,29 @@ impl Store {
 
     pub fn read(&self, offset: i64) -> Result<Record> {
         let (partition, frame) = self.read_frame(offset)?;
-        Ok(Record {
-            offset,
-            partition,
-            event: frame.event,
-        })
+        Ok(frame.into_record(offset, partition))
     }
 
     pub(crate) fn read_indexed_page(&self, locations: Vec<RecordLocation>) -> Result<Vec<Record>> {
+        let mut records = Vec::with_capacity(locations.len());
+        self.visit_indexed_page(locations, |location, frame| {
+            records.push(frame.into_record(location.offset, location.partition));
+            true
+        })?;
+        Ok(records)
+    }
+
+    pub(crate) fn visit_indexed_page(
+        &self,
+        locations: Vec<RecordLocation>,
+        mut visit: impl FnMut(RecordLocation, Frame) -> bool,
+    ) -> Result<()> {
         // Reuse readers only within this bounded page. Segment IDs are local to a partition.
         let mut segments = HashMap::new();
-        let mut records = Vec::with_capacity(locations.len());
-        for RecordLocation {
-            offset,
-            partition,
-            address,
-        } in locations
-        {
+        for location in locations {
+            let RecordLocation {
+                partition, address, ..
+            } = location;
             let (reader, position) = match segments.entry((partition, address.segment)) {
                 Entry::Occupied(entry) => entry.into_mut(),
                 Entry::Vacant(entry) => {
@@ -894,13 +920,11 @@ impl Store {
             let frame = journal::read_frame(reader, address.len)?;
             *position = address.pos + 8 + address.len as u64;
             self.payload_reads.set(self.payload_reads.get() + 1);
-            records.push(Record {
-                offset,
-                partition,
-                event: frame.event,
-            });
+            if !visit(location, frame) {
+                break;
+            }
         }
-        Ok(records)
+        Ok(())
     }
 
     fn read_frame(&self, offset: i64) -> Result<(u32, Frame)> {
@@ -933,6 +957,9 @@ impl Store {
 
     pub fn expire_before(&self, topic: &str, offset: i64) -> Result<()> {
         identifier(topic)?;
+        if self.retention_policy(topic)?.is_some() {
+            return Err(Problem::Invalid("topic uses automatic archive retention".into()).into());
+        }
         let tail: i64 = self.db.query_row(
             "SELECT COALESCE(MAX(offset),0) FROM records WHERE topic=?",
             [topic],

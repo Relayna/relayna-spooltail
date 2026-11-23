@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import heapq
 import inspect
@@ -277,7 +276,7 @@ class AuditStore:
 
 
 class AuditTimeline:
-    """Read retained journal inputs and local outcomes in source-offset order."""
+    """Read hot and archived inputs and local outcomes in source-offset order."""
 
     def __init__(self, client: SpooltailClient, store: AuditStore) -> None:
         self._client = client
@@ -296,33 +295,34 @@ class AuditTimeline:
             raise ValueError("limit must be between 1 and 64")
         if cursor is None:
             watermark = self._store._head(topic, task_id)
-            latest, inputs = await asyncio.gather(
-                self._client.latest(topic, task_id), self._client.history(topic, task_id)
+            inputs, through = await self._client.audit_history(
+                topic, task_id, limit=limit
             )
-            if latest is not None and not inputs:
-                # The first publish may have landed between the two reads.
-                inputs = await self._client.history(topic, task_id)
             cursor = AuditCursor(
-                self._store._id, topic, task_id, latest.offset if latest else None,
-                watermark, inputs[0].offset if latest and inputs else None,
-                input_done=latest is None,
+                self._store._id, topic, task_id, through,
+                watermark, inputs[0].offset if inputs else None,
+                input_done=through is None,
             )
         else:
             if (cursor.store_id, cursor.topic, cursor.task_id) != (
                 self._store._id, topic, task_id
             ):
                 raise ValueError("audit cursor belongs to another task or store")
-            inputs = [] if cursor.input_done else await self._client.history(
-                topic, task_id, after=cursor.input_after
-            )
-
-        if cursor.input_through is None or cursor.input_done:
             inputs = []
-        else:
-            inputs = [record for record in inputs if record.offset <= cursor.input_through]
-            if not inputs:
-                raise CursorGapError(cursor.input_after, None)
+            if not cursor.input_done:
+                inputs, _ = await self._client.audit_history(
+                    topic, task_id, after=cursor.input_after,
+                    through=cursor.input_through, limit=limit,
+                )
+                if not inputs or (
+                    cursor.input_after is None and inputs[0].offset != cursor.earliest_input_offset
+                ):
+                    earliest = inputs[0].event["event_id"] if inputs else None
+                    raise CursorGapError(cursor.input_after, earliest)
         outcomes = self._store._outcomes(cursor, limit + 1)
+        if inputs and inputs[-1].offset != cursor.input_through:
+            # A byte-limited input page may end before the next outcome's source.
+            outcomes = [row for row in outcomes if row[1].source_offset <= inputs[-1].offset]
         merged = list(heapq.merge(
             ((0, _input_entry(record)) for record in inputs), outcomes,
             key=lambda row: (row[1].source_offset, row[0]),

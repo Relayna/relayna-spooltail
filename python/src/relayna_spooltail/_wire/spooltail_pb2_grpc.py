@@ -51,6 +51,11 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.Task.SerializeToString,
                 response_deserializer=spooltail__pb2.Page.FromString,
                 _registered_method=True)
+        self.AuditHistory = channel.unary_unary(
+                '/spooltail.v1.Spooltail/AuditHistory',
+                request_serializer=spooltail__pb2.AuditHistoryRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.AuditHistoryPage.FromString,
+                _registered_method=True)
         self.Append = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Append',
                 request_serializer=spooltail__pb2.Publish.SerializeToString,
@@ -144,6 +149,12 @@ class SpooltailServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def History(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AuditHistory(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -256,6 +267,11 @@ def add_SpooltailServicer_to_server(servicer, server):
                     servicer.History,
                     request_deserializer=spooltail__pb2.Task.FromString,
                     response_serializer=spooltail__pb2.Page.SerializeToString,
+            ),
+            'AuditHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.AuditHistory,
+                    request_deserializer=spooltail__pb2.AuditHistoryRequest.FromString,
+                    response_serializer=spooltail__pb2.AuditHistoryPage.SerializeToString,
             ),
             'Append': grpc.unary_unary_rpc_method_handler(
                     servicer.Append,
@@ -414,6 +430,33 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/History',
             spooltail__pb2.Task.SerializeToString,
             spooltail__pb2.Page.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AuditHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/AuditHistory',
+            spooltail__pb2.AuditHistoryRequest.SerializeToString,
+            spooltail__pb2.AuditHistoryPage.FromString,
             options,
             channel_credentials,
             insecure,

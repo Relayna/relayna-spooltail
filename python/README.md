@@ -92,7 +92,9 @@ async def project_status(client):
 
 For application state in the same file, initialize your application tables before processing. Pass a synchronous `apply_state(execute)` callback to `commit_batch` and use its executor for application queries and writes. The SDK commits those changes, the outcomes, and the cursor together. Pass an empty outcomes list to advance over records that produce no audit entries. Retrying the same committed batch returns `False` and skips the callback. External effects need their own idempotency handling.
 
-The timeline orders entries by source offset, with inputs before outcomes at the same offset. The producer provides the event ID, and the consumer supplies the outcome actor. Follow `page.cursor` with the same task and store to keep the first page's input and outcome bounds. A fresh read sees later arrivals. If retention removes the input cursor between pages, the SDK raises `CursorGapError`. A fresh read marks local outcomes whose original input is outside retained history.
+The timeline orders entries by source offset, with inputs before outcomes at the same offset. The producer provides the event ID, and the consumer supplies the outcome actor. The timeline uses the broker's `AuditHistory` RPC to read originals from hot history and the Zstd archive, when a [topic retention policy](../README.md#configure-audit-input-retention) is configured. Deploy a broker that supports this RPC when upgrading the SDK.
+
+Follow `page.cursor` with the same task and store to keep the first page's input and outcome bounds. A fresh read sees later arrivals. The cursor stays valid while its event moves into the archive. If retention removes the input cursor between pages, the SDK raises `CursorGapError`. A fresh read marks local outcomes whose original input is outside retained history.
 
 ## Partitions
 

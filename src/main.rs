@@ -5,6 +5,7 @@ mod bench_tls;
 mod grpc;
 mod journal;
 mod partition_index;
+mod retention;
 mod store;
 mod subscriptions;
 
@@ -622,11 +623,15 @@ async fn main() -> Result<()> {
         Err(std::env::VarError::NotPresent) => {}
         Err(error) => return Err(error).context("read SPOOLTAIL_INDEX_BATCH_SIZE"),
     }
+    let retention_topics = retention::configure(&mut store)?;
     let recovered = store.recovered_frames;
     let broker = Broker {
         store: Arc::new(Mutex::new(store)),
         watchers: Default::default(),
     };
+    if !retention_topics.is_empty() {
+        tokio::spawn(retention::run(broker.clone(), retention_topics));
+    }
     #[cfg(feature = "bench-transports")]
     if grpc::SETTINGS
         .iter()

@@ -72,6 +72,8 @@ Batch operations share the same replay checkpoints and partition scope as single
 
 `ReadAfterBatch` reads a bounded page in topic offset order for consumers that persist their own cursors. Omit `after` to start at the first retained record. An explicit offset behind the retention floor returns a failed precondition. The RPC uses the same page bounds as `NextBatch`, with replay progress owned by the caller. The [Python SDK audit timeline](python/README.md#audit-a-task) uses this operation to save consumer outcomes and replay progress together in local SQLite.
 
+`AuditHistory` reads a task's original inputs across the journal and the Zstd archive. Omit `through` on the first page to capture the latest retained offset. Pass that offset and the last event ID as `through` and `after` for each subsequent page. Responses contain up to 64 records and at most 2 MiB. An expired event ID returns the same gap metadata as `History`. The Python SDK uses this RPC to join inputs with local outcomes.
+
 History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A unary history gap returns `FAILED_PRECONDITION` with `spooltail-earliest-event-id-bin` trailing metadata when a retained event exists. The metadata value is the UTF-8 event ID. A streaming gap carries `earliest_event_id` in its JSON body. The TLS listener authenticates the broker to its clients.
 
 ## Python client
@@ -97,6 +99,29 @@ Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/
 Without a cursor, history starts at the first retained event for the task. Streaming clients receive a `gap` with `earliest_event_id` if an ID is unknown or outside retention. An empty retained history gives a null earliest ID. For the offline retention experiment, stop the broker and run `SPOOLTAIL_DATA=./data ./target/release/spooltail expire-before status 42`. This sets a logical floor for readers. Lease state and physical bytes are retained.
 
 Identifiers are scoped by topic and task. Retrying an unchanged JSON event with the same ID returns its original offset. Reusing that ID with a different payload returns HTTP 409. This prototype’s HTTP routes are experimental. Use loopback and synthetic inputs while it lacks authentication and a released SDK adapter.
+
+### Configure audit input retention
+
+The broker can archive a topic's inputs before advancing its hot history floor. Configure the policy at broker startup with `SPOOLTAIL_RETENTION`.
+
+```sh
+SPOOLTAIL_RETENTION='{"status":{"hot_for":"7d","retain_for":"90d"}}' \
+  ./target/release/spooltail
+```
+
+| Setting | Meaning |
+| --- | --- |
+| `hot_for` | Age at which an input becomes eligible to move out of ordinary history and replay. Set this above the expected consumer lag. |
+| `retain_for` | Total age at which an archived input becomes eligible to expire from audit reads. It must be at least `hot_for`. |
+| `paused` | Optional boolean. Set it to `true` to pause archiving and expiry at the current floors. Resume with `false`. |
+
+Durations are positive integers followed by `s`, `m`, `h`, or `d`. Both windows use the broker's acceptance time. Older journal records that lack an acceptance timestamp use the time the topic policy was first configured. Automatic retention is opt-in per topic. The broker persists each supplied policy, and omitted topics keep their saved settings. On configured topics, the automatic policy owns the hot floor. Topics without a policy can still use the offline `expire-before` command. Existing floors define the starting point for archiving.
+
+Background sweeps process consecutive prefixes in topic order. They compress inputs with Zstd level 1 in blocks targeting 64 KiB, with larger inputs stored individually. The broker commits the block, its index, and the updated hot floor together in `index.sqlite`. A failed archive write leaves the hot floor at its previous offset. Expiry is asynchronous and may lag during backlog or downtime. Reducing a window can make existing records eligible on the next sweep.
+
+`AuditHistory` spans both tiers. `History`, `Latest`, subscriptions, and consumer replay use the hot window. A consumer that falls behind hot retention receives a gap. Archive expiry applies to original inputs. The consumer manages its outcome database separately.
+
+Retention is logical. Expired archive rows are removed and their SQLite pages can be reused. Original journal segment files and lease state remain on disk. Back up the broker volume and the consumer's outcome SQLite separately to preserve a full audit timeline.
 
 ### Add partitions and move tasks
 

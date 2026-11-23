@@ -18,13 +18,15 @@ use tonic::{
 mod wire {
     tonic::include_proto!("spooltail.v1");
 }
-use crate::subscriptions::{DEFAULT_STREAM_BATCH_RECORDS, MAX_STREAM_BATCH_BYTES};
+use crate::subscriptions::{
+    DEFAULT_STREAM_BATCH_RECORDS, MAX_STREAM_BATCH_BYTES, validate_batch_count,
+};
 use wire::spooltail_server::{Spooltail, SpooltailServer};
 use wire::{
-    ClaimRequest, ClaimResponse, CommitRequest, CompleteRequest, Delivery, Empty, MoveTaskRequest,
-    NextResponse, Offset, Page, Partition, Partitions, Publish, Record, SettleRequest,
-    SettlementAction, StatsResponse, StreamBatch, StreamBatchCommit, StreamBatchRequest,
-    StreamGroup, Task, TaskId, TopicReplayRequest,
+    AuditHistoryPage, AuditHistoryRequest, ClaimRequest, ClaimResponse, CommitRequest,
+    CompleteRequest, Delivery, Empty, MoveTaskRequest, NextResponse, Offset, Page, Partition,
+    Partitions, Publish, Record, SettleRequest, SettlementAction, StatsResponse, StreamBatch,
+    StreamBatchCommit, StreamBatchRequest, StreamGroup, Task, TaskId, TopicReplayRequest,
 };
 
 struct Api(Broker);
@@ -109,6 +111,28 @@ impl Spooltail for Api {
             .collect::<Result<_>>()
             .map_err(status)?;
         Ok(Response::new(Page { records }))
+    }
+
+    async fn audit_history(
+        &self,
+        request: Request<AuditHistoryRequest>,
+    ) -> Result<Response<AuditHistoryPage>, Status> {
+        let q = request.into_inner();
+        let limit = q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS);
+        validate_batch_count(limit).map_err(status)?;
+        let (through, records) = self
+            .0
+            .run(move |s| {
+                s.audit_history(&q.topic, &q.task_id, q.after.as_deref(), q.through, limit)
+            })
+            .await
+            .map_err(status)?;
+        let records = records
+            .into_iter()
+            .map(encode)
+            .collect::<Result<_>>()
+            .map_err(status)?;
+        Ok(Response::new(AuditHistoryPage { records, through }))
     }
 
     async fn append(&self, request: Request<Publish>) -> Result<Response<Offset>, Status> {

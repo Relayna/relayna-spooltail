@@ -498,6 +498,59 @@ async def audit_timeline(directory):
             assert all(entry.input_before_retained_history for entry in fresh)
 
 
+async def archive_timeline(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    roots = cert.read_bytes()
+    policy = {"hot_for": "1s", "retain_for": "1h", "paused": True}
+    path = directory / "outcomes.sqlite"
+    events = [
+        {"task_id": "T1", "event_id": f"large-{i}", "payload": str(i) * 730_000}
+        for i in range(3)
+    ]
+    config["SPOOLTAIL_RETENTION"] = json.dumps({"status": policy})
+    with AuditStore(path) as store:
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            offsets = [await client.publish("status", event) for event in events]
+            batch = await client.read_after_batch("status")
+            assert [record.offset for record in batch.records] == offsets[:2]
+            assert store.commit_batch("audit", batch, [])
+            batch = await client.read_after_batch("status", after=offsets[1])
+            decision = AuditOutcome(offsets[2], "review", "accepted", "review-service")
+            assert store.commit_batch("audit", batch, [decision])
+            initial = await AuditTimeline(client, store).read("status", "T1", limit=1)
+            assert initial.cursor and initial.entries[0].source_offset == offsets[0]
+
+        policy["paused"] = False
+        config["SPOOLTAIL_RETENTION"] = json.dumps({"status": policy})
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            async with asyncio.timeout(10):
+                while await client.latest("status", "T1") is not None:
+                    await asyncio.sleep(0.1)
+            assert not (await client.read_after_batch("status")).records
+            await expect_error(ConflictError, client.read_after_batch("status", after=0))
+            await expect_error(CursorGapError, client.history("status", "T1", after="large-0"))
+            timeline = AuditTimeline(client, store)
+            fresh = await audit_pages(timeline, limit=64)
+            frozen = [*initial.entries, *await audit_pages(timeline, initial.cursor)]
+            assert fresh == frozen
+            assert [entry.kind for entry in fresh] == ["input", "input", "input", "outcome"]
+            assert [entry.event for entry in fresh[:-1]] == events
+            assert fresh[-1].outcome == decision
+            assert not fresh[-1].input_before_retained_history
+
+        # The broker resumes the saved policy without a configuration override.
+        del config["SPOOLTAIL_RETENTION"]
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            assert await audit_pages(AuditTimeline(client, store), limit=64) == fresh
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--audit-crash"]:
         audit_crash_child(Path(sys.argv[2]), sys.argv[3])
@@ -510,7 +563,9 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="spooltail-audit-sdk-") as temp:
         verify_audit_crashes(Path(temp))
         asyncio.run(asyncio.wait_for(audit_timeline(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-archive-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(archive_timeline(Path(temp)), timeout=30))
     print(
         "PASS: Python SDK publish, lease, completion, replay gaps, SSE resume, "
-        "partition moves, service placement, and audit timeline recovery"
+        "partition moves, service placement, audit timeline recovery, and archive reads"
     )

@@ -5,6 +5,7 @@ service Spooltail {
   rpc Ping(Empty) returns (Empty);
   rpc Latest(Task) returns (Record);
   rpc History(Task) returns (Page);
+  rpc AuditHistory(AuditHistoryRequest) returns (AuditHistoryPage);
   rpc Append(Publish) returns (Offset);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
   rpc Settle(SettleRequest) returns (Empty);
@@ -36,6 +37,21 @@ message Record {
   uint32 partition = 3;
 }
 message Page { repeated Record records = 1; }
+message AuditHistoryRequest {
+  string topic = 1;
+  string task_id = 2;
+  // Exclusive event ID, resolved across hot and archived history.
+  optional string after = 3;
+  // Inclusive snapshot bound. Omit to capture the latest retained offset.
+  optional int64 through = 4;
+  // Requested count, 1 through 64. When omitted, defaults to 32.
+  optional uint32 limit = 5;
+}
+message AuditHistoryPage {
+  // A consecutive prefix of the task's records, also limited by response bytes.
+  repeated Record records = 1;
+  optional int64 through = 2;
+}
 message Publish {
   string topic = 1;
   bytes event_json = 2;

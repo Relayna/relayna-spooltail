@@ -83,7 +83,7 @@ fn valid_group(topic: &str, group: &str) -> Result<()> {
     identifier(group)
 }
 
-fn validate_batch_count(count: u32) -> Result<()> {
+pub(crate) fn validate_batch_count(count: u32) -> Result<()> {
     if !(1..=MAX_STREAM_BATCH_RECORDS).contains(&count) {
         return Err(Problem::Invalid(format!(
             "batch count must be between 1 and {MAX_STREAM_BATCH_RECORDS}"
