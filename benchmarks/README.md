@@ -64,3 +64,17 @@ RabbitMQ documents its offset and chunk semantics in the [streams guide](https:/
 - **Worker lifecycle** runs one task at a time. The SDK uses `TaskConsumer` to publish a deterministic completed status, acknowledge the task and materialize the result via `StatusHub`. Spooltail uses claim and atomic completion, with no Redis access in this lane. Both timers end after a successful latest-status read and settlement. The raw data also records time from submission to handler entry or claim response. Per-trial percentiles use the nearest-rank method.
 
 The local workload uses one node per service, no per-container CPU quota, Redis AOF with `appendfsync always`, persistent RabbitMQ messages with publisher confirms, and Spooltail's synchronous single-volume journal and index. No storage service restarts during the comparison. Task execution uses one healthy worker and a synthetic handler. These measurements cover this configuration’s consumer restart and normal task latency. Sustained saturation, storage-node failure, replication, cold caches and AKS performance need separate runs.
+
+## Saved-offset replay under live publishing
+
+The durable replay driver creates disposable Linux Docker services and volumes. Build a Linux Spooltail release binary with `--features pack-fault-injection` and pass it to the driver. The test hook lets the driver release a sealed-segment pack when the catch-up timer starts.
+
+```sh
+python3 benchmarks/durable_replay.py --broker /path/to/linux/spooltail --output /tmp/durable-replay.json
+```
+
+Each trial seeds an acknowledged prefix and an offline backlog, restarts the broker, and opens a fresh consumer. Spooltail applies outcomes and its saved offset in one local SQLite transaction. RabbitMQ uses an AMQP stream consumer with prefetch 128 and an atomic Redis script for task IDs, payload digests, and the saved offset. Both consumers apply 32 records per batch. Redis uses AOF with `appendfsync always`. The driver verifies record order for the backlog, every final outcome, and the saved checkpoint. It measures catch-up latency alongside p95 confirmed publish latency from two paced publishers. The default event payload combines repeated text and base64-encoded opaque bytes.
+
+The standard RabbitMQ stream arm uses normal publisher confirms. The synchronous-storage arm uses Linux `chattr +S` on its fresh named volume and verifies that stream segment files inherit the synchronous-write flag. It requires a Docker volume filesystem that supports that attribute. The sync arm tests a stricter local-write configuration. The arms exercise process restarts on one machine with warm caches.
+
+The recorded mixed-payload run includes three trials per arm, with 768 missed records and about 240 live publishes per second. [Raw trial results](durable-replay-results.json)
