@@ -94,6 +94,12 @@ class Delivery:
 class BrokerStats:
     payload_reads: int
     recovered_frames: int
+    free_bytes: int = 0
+    disk_reserve_bytes: int = 0
+    raw_journal_bytes: int = 0
+    packed_journal_bytes: int = 0
+    archive_pending_records: int = 0
+    packing_space_pauses: int = 0
 
 
 def _publish(
@@ -432,6 +438,15 @@ class SpooltailClient:
             await self._stub.MoveTask(request, timeout=self._timeout)
 
     async def stats(self) -> BrokerStats:
-        """Read the broker's process-local counters."""
+        """Read process counters and a snapshot of journal storage."""
         response = await self._stub.Stats(wire.Empty(), timeout=self._timeout)
-        return BrokerStats(response.payload_reads, response.recovered_frames)
+        return BrokerStats(
+            response.payload_reads,
+            response.recovered_frames,
+            response.free_bytes,
+            response.disk_reserve_bytes,
+            response.raw_journal_bytes,
+            response.packed_journal_bytes,
+            response.archive_pending_records,
+            response.packing_space_pauses,
+        )

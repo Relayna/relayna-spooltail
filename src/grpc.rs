@@ -33,6 +33,7 @@ struct Api(Broker);
 
 fn status(error: anyhow::Error) -> Status {
     match error.downcast_ref::<Problem>() {
+        Some(Problem::Capacity) => Status::resource_exhausted(error.to_string()),
         Some(Problem::Missing) => Status::not_found(error.to_string()),
         Some(Problem::Invalid(_)) => Status::invalid_argument(error.to_string()),
         Some(Problem::Conflict(_)) => Status::failed_precondition(error.to_string()),
@@ -344,17 +345,17 @@ impl Spooltail for Api {
     }
 
     async fn stats(&self, _: Request<Empty>) -> Result<Response<StatsResponse>, Status> {
-        let stats = self
-            .0
-            .run(|s| {
-                Ok(StatsResponse {
-                    payload_reads: s.payload_reads.get(),
-                    recovered_frames: s.recovered_frames.try_into()?,
-                })
-            })
-            .await
-            .map_err(status)?;
-        Ok(Response::new(stats))
+        let stats = self.0.stats().await.map_err(status)?;
+        Ok(Response::new(StatsResponse {
+            payload_reads: stats.payload_reads,
+            recovered_frames: stats.recovered_frames,
+            free_bytes: stats.free_bytes,
+            disk_reserve_bytes: stats.disk_reserve_bytes,
+            raw_journal_bytes: stats.raw_journal_bytes,
+            packed_journal_bytes: stats.packed_journal_bytes,
+            archive_pending_records: stats.archive_pending_records,
+            packing_space_pauses: stats.packing_space_pauses,
+        }))
     }
 
     type SubscribeStream = Pin<Box<dyn Stream<Item = Result<Delivery, Status>> + Send>>;

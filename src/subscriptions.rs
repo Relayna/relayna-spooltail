@@ -520,6 +520,7 @@ impl Store {
         if let Some(partition) = partition {
             self.validate_partition(partition)?;
         }
+        self.admit_disk_write(0, false)?;
         let now = now()?;
         let tx = self.db.transaction()?;
         let filter = if partition.is_some() {

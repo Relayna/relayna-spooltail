@@ -6,6 +6,7 @@ use crate::{
     packing::{self, Manifest},
     partition_index::{self, SplitIndex},
     retention,
+    space::Space,
     subscriptions::{WorkLease, now},
 };
 use anyhow::{Context, Result, ensure};
@@ -36,6 +37,8 @@ pub enum Problem {
     Conflict(String),
     #[error("cursor unavailable")]
     Gap { earliest: Option<String> },
+    #[error("insufficient disk headroom, retry after freeing space")]
+    Capacity,
     #[error("resource not found")]
     Missing,
 }
@@ -201,6 +204,7 @@ pub struct Store {
     pub(crate) db: Connection,
     dir: PathBuf,
     pub(crate) packed: Manifest,
+    pub(crate) space: Space,
     journals: BTreeMap<u32, Partition>,
     service_partitions: BTreeMap<String, Vec<u32>>,
     pub dynamic_placement: bool,
@@ -264,7 +268,7 @@ fn migrate(db: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS partition_cursors (
             topic TEXT NOT NULL, name TEXT NOT NULL, partition INTEGER NOT NULL, offset INTEGER NOT NULL,
             PRIMARY KEY(topic,name,partition));
-         CREATE TEMP TABLE appending (task TEXT PRIMARY KEY, partition INTEGER NOT NULL, work_offset INTEGER UNIQUE);",
+         CREATE TEMP TABLE appending (task TEXT PRIMARY KEY, partition INTEGER NOT NULL, work_offset INTEGER UNIQUE, reserved_bytes INTEGER NOT NULL);",
     )?;
     let mut columns = db.prepare("SELECT name FROM pragma_table_info('task_routes')")?;
     let existing = columns
@@ -399,6 +403,7 @@ impl Store {
             db,
             dir: dir.to_owned(),
             packed,
+            space: Space::default(),
             _lock: lock,
             journals,
             service_partitions: BTreeMap::new(),
@@ -767,19 +772,19 @@ impl Store {
         })
     }
 
+    pub fn existing_event(&self, frame: &Frame) -> Result<Option<i64>> {
+        let (task, id) = frame.key()?;
+        Ok(self
+            .db
+            .prepare_cached("SELECT offset FROM records WHERE topic=? AND task=? AND event_id=?")?
+            .query_row(params![frame.topic, task, id], |row| row.get(0))
+            .optional()?)
+    }
+
     pub fn prepare_append(&mut self, frame: &mut Frame, partition: u32) -> Result<Prepared> {
         self.ensure_writable()?;
-        let (task, id) = frame.key()?;
-        let task = task.to_owned();
-        let old: Option<i64> = self
-            .db
-            .query_row(
-                "SELECT offset FROM records WHERE topic=? AND task=? AND event_id=?",
-                params![frame.topic, task, id],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if let Some(offset) = old {
+        let task = frame.key()?.0.to_owned();
+        if let Some(offset) = self.existing_event(frame)? {
             let (partition, saved) = self.read_frame(offset)?;
             if saved.event != frame.event {
                 return Err(Problem::Conflict(
@@ -812,9 +817,10 @@ impl Store {
         if let Some(lease) = &frame.completion {
             lease.validate_completion(&self.db, &task)?;
         }
+        let reserved = self.admit_disk_write(body.len() as u64 + 8, work_offset.is_some())?;
         self.db.execute(
-            "INSERT INTO appending VALUES(?,?,?)",
-            params![task, partition, work_offset],
+            "INSERT INTO appending VALUES(?,?,?,?)",
+            params![task, partition, work_offset, i64::try_from(reserved)?],
         )?;
         if let Some(split) = &mut self.split {
             split.reserve_next();

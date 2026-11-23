@@ -7,6 +7,7 @@ mod journal;
 mod packing;
 mod partition_index;
 mod retention;
+mod space;
 mod store;
 mod subscriptions;
 
@@ -121,6 +122,11 @@ fn error_body(e: &anyhow::Error) -> (StatusCode, &'static str, Value) {
             "error",
             json!({"error":e.to_string()}),
         ),
+        Some(Problem::Capacity) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "error",
+            json!({"error":e.to_string()}),
+        ),
         Some(Problem::Missing) => (StatusCode::NOT_FOUND, "error", json!({"error":"not found"})),
         None => {
             eprintln!("broker error: {e:#}");
@@ -199,6 +205,12 @@ async fn publish(
         let task = frame.key()?.0.to_owned();
         let position = loop {
             let ticket = with_store(&b.store, |store| {
+                if store.space.reserve > 0
+                    && frame.completion.is_none()
+                    && store.existing_event(&frame)?.is_none()
+                {
+                    store.admit_disk_write(0, false)?;
+                }
                 store.writer_ticket(&task, owner_service.as_deref())
             })?;
             let partition = ticket.placement.partition;
@@ -434,12 +446,7 @@ async fn session(b: Broker, mut socket: WebSocket) {
 
 async fn stats(State(b): State<Broker>) -> Reply {
     Ok(Json(
-        b.run(|s| {
-            Ok(json!({"payload_reads":s.payload_reads.get(),
-                                 "recovered_frames":s.recovered_frames,
-                                 "automatic_task_moves":s.automatic_moves}))
-        })
-        .await?,
+        serde_json::to_value(b.stats().await?).map_err(anyhow::Error::from)?,
     ))
 }
 
@@ -624,6 +631,7 @@ async fn main() -> Result<()> {
         Err(std::env::VarError::NotPresent) => {}
         Err(error) => return Err(error).context("read SPOOLTAIL_INDEX_BATCH_SIZE"),
     }
+    store.space = space::Space::configure()?;
     let retention_topics = retention::configure(&mut store)?;
     let pack_min_age = packing::configure(&mut store)?;
     let recovered = store.recovered_frames;

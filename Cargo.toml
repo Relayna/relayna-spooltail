@@ -17,6 +17,7 @@ async-stream = "0.3"
 axum = { version = "0.8", features = ["ws"] }
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"], optional = true }
 crc32fast = "1"
+libc = "0.2"
 prost = "0.14"
 rusqlite = { version = "0.43", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

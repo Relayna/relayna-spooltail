@@ -1183,6 +1183,7 @@ dependencies = [
  "axum",
  "axum-server",
  "crc32fast",
+ "libc",
  "prost",
  "protoc-bin-vendored",
  "rusqlite",

@@ -94,7 +94,7 @@ Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/
 | `POST /topics/{topic}/work/{group}/claim` | Send `{"lease_ms":30000}`. Returns `{record,generation,lease_until_ms}` or JSON `null`. |
 | `POST /topics/{topic}/work/{group}/settle` | Send the claimed `offset`, `generation`, and an `action` of `ack`, `renew`, `retry`, or `dead-letter`. Set `delay_ms` for renewal or delayed retry. Stale settlements return HTTP 409. |
 | `POST /topics/{topic}/work/{group}/complete` | Acknowledge the claim and append its terminal event to `status_topic` atomically. Returns the status record’s `offset`. |
-| `GET /stats` | Process-local counts of recovered frames and indexed record payload reads. |
+| `GET /stats` | Process counters and journal storage statistics. |
 
 Without a cursor, history starts at the first retained event for the task. Streaming clients receive a `gap` with `earliest_event_id` if an ID is unknown or outside retention. An empty retained history gives a null earliest ID. For the offline retention experiment, stop the broker and run `SPOOLTAIL_DATA=./data ./target/release/spooltail expire-before status 42`. This sets a logical floor for readers. Lease state and physical bytes are retained.
 
@@ -132,6 +132,14 @@ Spooltail packs complete journal frames in seekable Zstd blocks at level 1. It k
 Packed frames retain their original offsets and completion receipts. Replay, work claims, publish retries, index recovery, and audit reads can all use them. Auditing a packed input shares its journal payload. When all references to an old archive BLOB move to packed frames, SQLite can reuse the freed pages.
 
 Disabling packing stops new replacements. Existing packed volumes require a broker that supports this format. Archive expiry removes inputs from audit history, while packed frames can still serve work claims and publish retries. Packed files remain on disk for those operations.
+
+### Limit disk pressure
+
+Set `SPOOLTAIL_DISK_RESERVE_BYTES` to protect free space for work already in flight. The default of `0` disables admission checks. Below the configured headroom, Spooltail rejects new appends and work claims with HTTP 503 or gRPC `RESOURCE_EXHAUSTED` before writing a journal frame. Exact publish retries can still return their saved receipt. Settlement and completion can use the reserve. Completion still requires enough room for its frame and index updates.
+
+The packer checks and reserves room for a replacement before starting. Packing and archive BLOB writes retry when enough space is available. Admission accounts for broker writes in flight and uses the volume's current free space. Other writers and filesystem allocation overhead can still cause I/O failures.
+
+The HTTP and gRPC stats report free bytes, the configured reserve, raw and packed journal file bytes, and the number of packing checks paused by low space. `archive_pending_records` counts unarchived records on configured topics, including records still inside their hot window.
 
 ### Add partitions and move tasks
 
@@ -245,7 +253,7 @@ uv run --project python --locked python tests/packed_journal_acceptance.py
 uv run --project python --locked python tests/packed_journal_disk_full.py
 ```
 
-CI runs both suites. The disk-full suite creates and fills its own filesystem image. Linux requires `mkfs.ext4`, loop mounting, and root or passwordless sudo for the mount. On macOS the suite uses an APFS disk image. It checks failed pack writes, SQLite manifest commits, and foreground publishes. The ext4 cases also verify truncation of a partially written journal frame.
+CI runs these suites. The disk-full suite creates and fills its own filesystem image. Linux requires `mkfs.ext4`, loop mounting, and root or passwordless sudo for the mount. On macOS the suite uses an APFS disk image. It checks admission, failed pack writes, SQLite manifest commits, and foreground publishes. The ext4 cases also verify truncation of a partially written journal frame.
 
 For the full-VM power-cut suite, build the same fault-injection binary for Linux ARM64. Run the driver on an Apple Silicon Mac with Lima and uv installed.
 

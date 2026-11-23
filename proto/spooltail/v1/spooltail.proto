@@ -152,6 +152,12 @@ message StreamBatchCommit {
 message StatsResponse {
   uint64 payload_reads = 1;
   uint64 recovered_frames = 2;
+  uint64 free_bytes = 3;
+  uint64 disk_reserve_bytes = 4;
+  uint64 raw_journal_bytes = 5;
+  uint64 packed_journal_bytes = 6;
+  uint64 archive_pending_records = 7;
+  uint64 packing_space_pauses = 9;
 }
 message TaskId { string task_id = 1; }
 message Partition { uint32 id = 1; }

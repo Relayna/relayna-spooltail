@@ -431,12 +431,6 @@ struct Scan {
     pending_unlink: Option<(PathBuf, u64)>,
 }
 
-enum Build {
-    Young,
-    KeptRaw,
-    Packed(u64),
-}
-
 impl Scan {
     async fn one(&mut self, broker: &Broker, min_age: Duration) -> Result<bool> {
         self.finish_unlink().await?;
@@ -473,27 +467,39 @@ impl Scan {
             }
             let dir = partition_dir(&root, partition);
             let source = dir.clone();
-            let outcome = tokio::task::spawn_blocking(move || {
-                let modified = fs::metadata(segment_path(&source, segment))?.modified()?;
-                if modified.elapsed().unwrap_or_default() < min_age {
-                    return Ok(Build::Young);
-                }
-                Ok::<_, anyhow::Error>(match build(&source, segment)? {
-                    Some(len) => Build::Packed(len),
-                    None => Build::KeptRaw,
-                })
-            })
-            .await??;
-            match outcome {
-                Build::Young => continue,
-                Build::KeptRaw => {}
-                Build::Packed(raw_len) => {
+            let metadata =
+                tokio::task::spawn_blocking(move || fs::metadata(segment_path(&source, segment)))
+                    .await??;
+            if metadata.modified()?.elapsed().unwrap_or_default() < min_age {
+                continue;
+            }
+            let budget = metadata.len();
+            if !broker
+                .run(move |store| store.reserve_pack_space(budget))
+                .await?
+            {
+                return Ok(false);
+            }
+            let result = async {
+                let source = dir.clone();
+                if let Some(raw_len) =
+                    tokio::task::spawn_blocking(move || build(&source, segment)).await??
+                {
                     broker
                         .run(move |store| store.publish_packed(partition, segment, raw_len))
                         .await?;
                     self.pending_unlink = Some((dir, segment));
                 }
+                Ok::<_, anyhow::Error>(())
             }
+            .await;
+            broker
+                .run(|store| {
+                    store.release_pack_space();
+                    Ok(())
+                })
+                .await?;
+            result?;
             self.next.insert(partition, segment + 1);
             self.last_partition = Some(partition);
             self.finish_unlink().await?;

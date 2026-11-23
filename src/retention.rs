@@ -321,12 +321,20 @@ impl Store {
             .offset
             .checked_add(1)
             .context("archive offset overflow")?;
-        let tx = self.db.transaction()?;
         let needs_blob = candidate.inputs.iter().any(|input| {
             !self
                 .packed
                 .contains_key(&(input.record.partition, input.segment))
         });
+        if needs_blob {
+            let bytes = block
+                .as_ref()
+                .context("missing compressed archive block")?
+                .compressed
+                .len();
+            self.admit_disk_write(bytes as u64, false)?;
+        }
+        let tx = self.db.transaction()?;
         let block_id = if needs_blob {
             let block = block.context("missing compressed archive block")?;
             tx.execute(

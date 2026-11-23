@@ -28,7 +28,10 @@ def query(volume, sql):
         return db.execute(sql).fetchall()
 
 
-async def launch(volume, mode, *, packing=False, paused=True, cut=None, resume=None):
+async def launch(
+    volume, mode, *, packing=False, paused=True, cut=None, resume=None,
+    disk_reserve=0,
+):
     env = {key: value for key, value in os.environ.items() if not key.startswith("SPOOLTAIL_")}
     env.update(
         SPOOLTAIL_DATA=str(volume),
@@ -38,6 +41,7 @@ async def launch(volume, mode, *, packing=False, paused=True, cut=None, resume=N
         SPOOLTAIL_GRPC_TLS="off",
         SPOOLTAIL_PACK_SEALED=str(int(packing)),
         SPOOLTAIL_PACK_MIN_AGE_SECS="0",
+        SPOOLTAIL_DISK_RESERVE_BYTES=str(disk_reserve),
         SPOOLTAIL_RETENTION=json.dumps(
             {"status": {"hot_for": "1s", "retain_for": "1h", "paused": paused}}
         ),

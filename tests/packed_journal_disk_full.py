@@ -171,6 +171,50 @@ async def append_fails(mount, template, mode, expected, *, torn=False):
     print(f"PASS full disk {mode} foreground append and retry (discarded {written} bytes)", flush=True)
 
 
+
+async def protection(mount, template, mode, expected):
+    volume = mount / "protection"
+    shutil.copytree(template, volume)
+    async with broker(volume, mode) as (client, _):
+        lease = await client.claim("work", "pressure", lease_ms=600_000)
+        assert lease is not None
+    reserve = volume / "reserve"
+    stat = os.statvfs(mount)
+    to_write = stat.f_bavail * stat.f_frsize - 16 * 1024**2
+    assert to_write > 0
+    chunk = os.urandom(1024**2)
+    with reserve.open("xb", buffering=0) as file:
+        while to_write:
+            to_write -= file.write(chunk[:to_write])
+        os.fsync(file.fileno())
+    disk_reserve = 32 * 1024**2
+    async with broker(volume, mode, packing=True, disk_reserve=disk_reserve) as (client, _):
+        async with asyncio.timeout(10):
+            while (stats := await client.stats()).packing_space_pauses == 0:
+                await asyncio.sleep(0.05)
+        assert stats.free_bytes < stats.disk_reserve_bytes == disk_reserve
+        assert stats.raw_journal_bytes > 0 and stats.packed_journal_bytes == 0
+        await verify_history(client, expected[2], expected[3])
+        terminal = {"task_id": lease.record.event["task_id"], "event_id": "done-under-pressure",
+                    "status": "completed"}
+        completed = await client.complete(lease, "status", terminal)
+        assert (await client.latest("status", terminal["task_id"])).offset == completed
+        item = {"task_id": "pressure", "event_id": "pressure"}
+        try:
+            await client.publish("foreground", item)
+        except grpc.aio.AioRpcError as error:
+            assert error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED
+        else:
+            raise AssertionError("publish used the emergency reserve")
+        assert await client.latest("foreground", "pressure") is None
+        reserve.unlink()
+        offset = await client.publish("foreground", item)
+        assert await client.publish("foreground", item) == offset
+        await wait_for(lambda: published(volume) and not (volume / FIRST_RAW).exists())
+        assert (await client.stats()).packed_journal_bytes > 0
+    shutil.rmtree(volume)
+    print(f"PASS {mode} disk guard rejected new work and resumed publishing and packing", flush=True)
+
 async def main(mount, control):
     for mode in ("shared", "partitioned"):
         template = mount / "template"
@@ -180,6 +224,7 @@ async def main(mount, control):
         await append_fails(mount, template, mode, expected)
         if platform.system() == "Linux":
             await append_fails(mount, template, mode, expected, torn=True)
+        await protection(mount, template, mode, expected)
         shutil.rmtree(template)
 
 
