@@ -12,7 +12,7 @@ The single-node prototype runs one broker process with one persistent directory.
 - **Atomic task completion.** A worker can acknowledge its claim and publish a terminal status in one request. After a crash, retrying the same completion returns the original status offset.
 - **Service and browser listeners.** A broker can serve gRPC over TLS and HTTP/SSE at the same time, using the same journal, leases, cursors, and live notifications.
 
-The [native Python client](#python-client) is available from this checkout. Replication and failover, physical storage reclamation, and an adapter for the existing Relayna SDK remain open. The [local RabbitMQ and Redis benchmark](benchmarks/README.md) compares status recovery and task completion with the Relayna SDK. A [random-read benchmark](benchmarks/random-reads.md) measures latest status and recent history by task ID. AKS measurements remain open. See the [acceptance cases and benchmark plan](docs/expectations.md).
+The [native Python client](#python-client) is distributed through GitHub Releases. Replication and failover, physical storage reclamation, and an adapter for the existing Relayna SDK remain open. The [local RabbitMQ and Redis benchmark](benchmarks/README.md) compares status recovery and task completion with the Relayna SDK. A [random-read benchmark](benchmarks/random-reads.md) measures latest status and recent history by task ID. AKS measurements remain open. See the [acceptance cases and benchmark plan](docs/expectations.md).
 
 ## Run the prototype
 
@@ -70,13 +70,7 @@ History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A
 
 ## Python client
 
-The SDK is a uv library project under `python/`. Set it up from the repository root with
-
-```sh
-uv sync --project python --locked
-```
-
-See the [Python SDK quickstart](python/README.md) for a publish-and-complete example.
+Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/sarattha/relayna-spooltail/releases). The [Python SDK quickstart](python/README.md) shows how to install it into a Relayna environment and use the native client to publish and complete work.
 
 ## Broker operations
 

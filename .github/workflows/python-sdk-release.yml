@@ -1,0 +1,87 @@
+name: Publish Python SDK
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-sdk-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and test SDK distributions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RUSTUP_TOOLCHAIN: '1.95.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: '0.13.9'
+
+      - name: Validate the SemVer release tag
+        run: |
+          uv run --no-project --python 3.11 python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("python/pyproject.toml").read_text())["project"]["version"]
+          number = r"(?:0|[1-9][0-9]*)"
+          if re.fullmatch(rf"{number}\.{number}\.{number}", version) is None:
+              raise SystemExit(f"Expected a MAJOR.MINOR.PATCH package version, got {version!r}")
+          expected = f"v{version}"
+          if os.environ["GITHUB_REF_NAME"] != expected:
+              raise SystemExit(f"Expected release tag {expected}")
+          PY
+
+      - name: Build source distribution and wheel
+        run: uv build --project python
+
+      - name: Build the broker
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --no-self-update
+          cargo build --release --locked
+
+      - name: Test the installed release wheel against the broker
+        run: |
+          wheel=(python/dist/*.whl)
+          uv run --isolated --no-project --python 3.11 --with "./${wheel[0]}" \
+            --with 'httpx==0.28.1' python tests/python_sdk_acceptance.py
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: python-sdk-distributions
+          path: python/dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to GitHub Releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: python-sdk-distributions
+          path: dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Spooltail ${GITHUB_REF_NAME}" \
+            --notes 'Install the wheel attached to this release to use the native Spooltail client.'
