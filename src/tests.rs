@@ -365,6 +365,37 @@ fn stream_batch_reads_sparse_records_across_partitions_and_segment_rollover() ->
 }
 
 #[test]
+fn stateless_replay_obeys_retention_without_creating_checkpoints() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let expired = store.append("status", record("expired"))?;
+    store.append("other", record("interleaved"))?;
+    let retained = store.append("status", record("retained"))?;
+
+    let (after, records) = store.read_after_batch("status", Some(expired), 1)?;
+    assert_eq!(after, expired);
+    assert_eq!(records[0].offset, retained);
+    store.expire_before("status", retained)?;
+    assert!(store.read_after_batch("status", Some(expired), 1).is_err());
+    let (after, records) = store.read_after_batch("status", None, 1)?;
+    assert_eq!(after, retained - 1);
+    assert_eq!(records[0].offset, retained);
+    assert!(
+        store
+            .read_after_batch("status", Some(retained), 1)?
+            .1
+            .is_empty()
+    );
+    assert!(store.read_after_batch("status", Some(-1), 1).is_err());
+    assert!(store.read_after_batch("status", None, 65).is_err());
+    let count: i64 = store
+        .db
+        .query_row("SELECT count(*) FROM cursors", [], |row| row.get(0))?;
+    assert_eq!(count, 0);
+    Ok(())
+}
+
+#[test]
 fn stream_batch_commits_a_consecutive_prefix_and_recovers_checkpoint() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;

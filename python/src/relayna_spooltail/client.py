@@ -60,6 +60,13 @@ class StreamBatch:
 
 
 @dataclass(frozen=True, slots=True)
+class ReplayBatch:
+    topic: str
+    after: int
+    records: tuple[Record, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Lease:
     topic: str
     group: str
@@ -356,6 +363,17 @@ class SpooltailClient:
         )
         with _translate_conflict():
             await self._stub.CommitBatch(request, timeout=self._timeout)
+
+    async def read_after_batch(
+        self, topic: str, *, after: int | None = None, limit: int = 32
+    ) -> ReplayBatch:
+        """Fetch topic records for a consumer that stores its own checkpoint."""
+        if not 1 <= limit <= 64:
+            raise ValueError("limit must be between 1 and 64")
+        request = wire.TopicReplayRequest(topic=topic, after=after, limit=limit)
+        with _translate_conflict():
+            response = await self._stub.ReadAfterBatch(request, timeout=self._timeout)
+        return ReplayBatch(topic, response.after, tuple(map(_record, response.records)))
 
     async def list_partitions(self) -> list[int]:
         """List the broker's durable partition IDs."""

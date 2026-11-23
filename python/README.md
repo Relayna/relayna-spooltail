@@ -59,6 +59,41 @@ A browser that already received `T7-running` can resume the same task over SSE w
 
 For catch-up, use `next_batch(topic, group, limit=32)`. Process the returned `batch.records` in order, then call `await client.commit_batch(batch)`. Pass `count=n` to checkpoint only the first `n` records after their effects are durable. A page with no records needs no commit. The broker persists the cursor, so reconnecting with the same topic, group, and partition resumes from the last commit.
 
+## Audit a task
+
+The SDK joins retained journal inputs with outcomes from a local `AuditStore`. Use a separate on-disk `consumer.sqlite` for application state and audit records, and bind that file to one broker data directory. Several consumers can record outcomes in the file, each with a separate checkpoint per topic. Pass `None` to `read_after_batch` when you have no saved checkpoint and want to start at the earliest retained record.
+
+```python
+from relayna_spooltail import AuditOutcome, AuditStore, AuditTimeline
+
+
+async def project_status(client):
+    topic, consumer = "status", "policy-worker"
+    with AuditStore("consumer.sqlite") as store:
+        after = store.checkpoint(topic, consumer)
+        batch = await client.read_after_batch(topic, after=after)
+        if batch.records:
+            outcomes = [
+                AuditOutcome(record.offset, "policy_check", "rejected",
+                             actor="policy-worker", reason="policy-v2")
+                for record in batch.records
+            ]
+            store.commit_batch(consumer, batch, outcomes)
+
+        timeline = AuditTimeline(client, store)
+        page = await timeline.read(topic, "T7", limit=16)
+        for entry in page.entries:
+            print(entry.kind, entry.source_event_id, entry.event or entry.outcome)
+        if page.cursor is not None:
+            next_page = await timeline.read(topic, "T7", cursor=page.cursor)
+            for entry in next_page.entries:
+                print(entry.kind, entry.source_event_id, entry.event or entry.outcome)
+```
+
+For application state in the same file, initialize your application tables before processing. Pass a synchronous `apply_state(execute)` callback to `commit_batch` and use its executor for application queries and writes. The SDK commits those changes, the outcomes, and the cursor together. Pass an empty outcomes list to advance over records that produce no audit entries. Retrying the same committed batch returns `False` and skips the callback. External effects need their own idempotency handling.
+
+The timeline orders entries by source offset, with inputs before outcomes at the same offset. The producer provides the event ID, and the consumer supplies the outcome actor. Follow `page.cursor` with the same task and store to keep the first page's input and outcome bounds. A fresh read sees later arrivals. If retention removes the input cursor between pages, the SDK raises `CursorGapError`. A fresh read marks local outcomes whose original input is outside retained history.
+
 ## Partitions
 
 Administrators can call `list_partitions()`, `ensure_partition(id)`, `task_partition(task_id)`, and `move_task(task_id, from_partition, to_partition)`. Pass `partition=id` to `claim()` to claim tasks assigned to that partition. For partition-scoped replay, pass it to both `next()` and `commit()`, or to `next_batch()` before committing the returned batch.

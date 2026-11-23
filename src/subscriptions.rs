@@ -351,8 +351,7 @@ impl Store {
     fn batch_locations(
         &self,
         topic: &str,
-        group: &str,
-        scope: Option<(u32, i64)>,
+        scope: Option<(&str, u32, i64)>,
         after: i64,
         limit: u32,
     ) -> Result<Vec<RecordLocation>> {
@@ -367,7 +366,7 @@ impl Store {
         };
         let mut stmt = self.db.prepare(sql)?;
         let mut rows = match scope {
-            Some((partition, _)) => stmt.query(params![topic, after, limit, partition])?,
+            Some((_, partition, _)) => stmt.query(params![topic, after, limit, partition])?,
             None => stmt.query(params![topic, after, limit])?,
         };
         let mut locations = Vec::new();
@@ -380,7 +379,7 @@ impl Store {
                 ))
                 .into());
             }
-            if let Some((partition, baseline)) = scope
+            if let Some((group, partition, baseline)) = scope
                 && !self.partition_record_ready(topic, group, partition, baseline, offset)?
             {
                 break;
@@ -412,9 +411,11 @@ impl Store {
     ) -> Result<(i64, Vec<Record>)> {
         validate_batch_count(limit)?;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
-        let scope = partition.zip(baseline);
+        let scope = partition
+            .zip(baseline)
+            .map(|(partition, baseline)| (group, partition, baseline));
         let after = match scope {
-            Some((partition, baseline)) => {
+            Some((_, partition, baseline)) => {
                 if !initialized {
                     self.db.execute(
                         "INSERT INTO partitioned_groups VALUES(?,?,?)",
@@ -426,8 +427,31 @@ impl Store {
             }
             None => self.init_global_checkpoint(topic, group, self.floor(topic)?)?,
         };
-        let locations = self.batch_locations(topic, group, scope, after, limit)?;
+        let locations = self.batch_locations(topic, scope, after, limit)?;
         let records = self.read_indexed_page(locations)?;
+        Ok((after, records))
+    }
+
+    pub fn read_after_batch(
+        &self,
+        topic: &str,
+        after: Option<i64>,
+        limit: u32,
+    ) -> Result<(i64, Vec<Record>)> {
+        identifier(topic)?;
+        validate_batch_count(limit)?;
+        let floor = self.floor(topic)?;
+        let after = after.unwrap_or(floor - 1);
+        if after < 0 {
+            return Err(Problem::Invalid("after must be a nonnegative offset".into()).into());
+        }
+        if after < floor - 1 {
+            return Err(Problem::Conflict(format!(
+                "replay offset fell behind retention; earliest allowed record offset {floor}"
+            ))
+            .into());
+        }
+        let records = self.read_indexed_page(self.batch_locations(topic, None, after, limit)?)?;
         Ok((after, records))
     }
 
@@ -448,9 +472,11 @@ impl Store {
             .into());
         }
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
-        let scope = partition.zip(baseline);
+        let scope = partition
+            .zip(baseline)
+            .map(|(partition, baseline)| (group, partition, baseline));
         let saved = match scope {
-            Some((partition, baseline)) if initialized => Some(
+            Some((_, partition, baseline)) if initialized => Some(
                 self.partition_checkpoint(topic, group, partition)?
                     .unwrap_or(baseline),
             ),
@@ -463,7 +489,7 @@ impl Store {
         if saved != Some(after) {
             return Err(Problem::Conflict("stream checkpoint changed since fetch".into()).into());
         }
-        let locations = self.batch_locations(topic, group, scope, after, count)?;
+        let locations = self.batch_locations(topic, scope, after, count)?;
         if locations.len() != count as usize
             || locations.last().map(|record| record.offset) != Some(through)
         {

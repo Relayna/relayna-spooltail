@@ -70,6 +70,8 @@ Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1
 
 Batch operations share the same replay checkpoints and partition scope as single-record operations. The application assigns one logical reader per checkpoint and applies downstream effects durably before committing. A crash between applying effects and checkpointing can redeliver records. Use stable event IDs for idempotent effects.
 
+`ReadAfterBatch` reads a bounded page in topic offset order for consumers that persist their own cursors. Omit `after` to start at the first retained record. An explicit offset behind the retention floor returns a failed precondition. The RPC uses the same page bounds as `NextBatch`, with replay progress owned by the caller. The [Python SDK audit timeline](python/README.md#audit-a-task) uses this operation to save consumer outcomes and replay progress together in local SQLite.
+
 History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A unary history gap returns `FAILED_PRECONDITION` with `spooltail-earliest-event-id-bin` trailing metadata when a retained event exists. The metadata value is the UTF-8 event ID. A streaming gap carries `earliest_event_id` in its JSON body. The TLS listener authenticates the broker to its clients.
 
 ## Python client

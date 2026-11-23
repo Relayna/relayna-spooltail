@@ -13,6 +13,7 @@ service Spooltail {
   rpc Commit(CommitRequest) returns (Empty);
   rpc NextBatch(StreamBatchRequest) returns (StreamBatch);
   rpc CommitBatch(StreamBatchCommit) returns (Empty);
+  rpc ReadAfterBatch(TopicReplayRequest) returns (StreamBatch);
   rpc Subscribe(Task) returns (stream Delivery);
   rpc Stats(Empty) returns (StatsResponse);
   rpc ListPartitions(Empty) returns (Partitions);
@@ -110,10 +111,17 @@ message StreamBatchRequest {
   optional uint32 limit = 4;
 }
 message StreamBatch {
-  // The durable checkpoint the batch starts after.
+  // The exclusive starting offset. NextBatch uses the durable group checkpoint.
   int64 after = 1;
   // A consecutive prefix of eligible records, also limited by response bytes.
   repeated Record records = 2;
+}
+message TopicReplayRequest {
+  string topic = 1;
+  // Exclusive offset. Omit it to start from the first retained record.
+  optional int64 after = 2;
+  // Requested record count, 1 through 64. When omitted, defaults to 32.
+  optional uint32 limit = 3;
 }
 message StreamBatchCommit {
   string topic = 1;

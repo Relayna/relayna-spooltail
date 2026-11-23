@@ -24,7 +24,7 @@ use wire::{
     ClaimRequest, ClaimResponse, CommitRequest, CompleteRequest, Delivery, Empty, MoveTaskRequest,
     NextResponse, Offset, Page, Partition, Partitions, Publish, Record, SettleRequest,
     SettlementAction, StatsResponse, StreamBatch, StreamBatchCommit, StreamBatchRequest,
-    StreamGroup, Task, TaskId,
+    StreamGroup, Task, TaskId, TopicReplayRequest,
 };
 
 struct Api(Broker);
@@ -57,6 +57,19 @@ fn encode(record: store::Record) -> Result<Record> {
         partition: record.partition,
         event_json: serde_json::to_vec(&record.event)?,
     })
+}
+
+fn encode_batch(after: i64, records: Vec<store::Record>) -> Result<Response<StreamBatch>, Status> {
+    let records = records
+        .into_iter()
+        .map(encode)
+        .collect::<Result<_>>()
+        .map_err(status)?;
+    let mut page = StreamBatch { after, records };
+    while page.encoded_len() > MAX_STREAM_BATCH_BYTES {
+        page.records.pop();
+    }
+    Ok(Response::new(page))
 }
 
 fn decode(bytes: &[u8]) -> Result<Value> {
@@ -217,16 +230,7 @@ impl Spooltail for Api {
             })
             .await
             .map_err(status)?;
-        let records = records
-            .into_iter()
-            .map(encode)
-            .collect::<Result<_>>()
-            .map_err(status)?;
-        let mut page = StreamBatch { after, records };
-        while page.encoded_len() > MAX_STREAM_BATCH_BYTES {
-            page.records.pop();
-        }
-        Ok(Response::new(page))
+        encode_batch(after, records)
     }
 
     async fn commit_batch(
@@ -241,6 +245,25 @@ impl Spooltail for Api {
             .await
             .map_err(status)?;
         Ok(Response::new(Empty {}))
+    }
+
+    async fn read_after_batch(
+        &self,
+        request: Request<TopicReplayRequest>,
+    ) -> Result<Response<StreamBatch>, Status> {
+        let q = request.into_inner();
+        let (after, records) = self
+            .0
+            .run(move |s| {
+                s.read_after_batch(
+                    &q.topic,
+                    q.after,
+                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+                )
+            })
+            .await
+            .map_err(status)?;
+        encode_batch(after, records)
     }
 
     async fn list_partitions(&self, _: Request<Empty>) -> Result<Response<Partitions>, Status> {
