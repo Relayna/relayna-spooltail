@@ -8,8 +8,9 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap, hash_map::Entry},
     fs::{self, File, OpenOptions},
+    io::{BufReader, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -96,6 +97,12 @@ pub struct Record {
     #[serde(skip_serializing_if = "is_zero")]
     pub partition: u32,
     pub event: Value,
+}
+
+pub(crate) struct RecordLocation {
+    pub offset: i64,
+    pub partition: u32,
+    pub address: Address,
 }
 
 pub(crate) fn is_zero(partition: &u32) -> bool {
@@ -859,6 +866,41 @@ impl Store {
             partition,
             event: frame.event,
         })
+    }
+
+    pub(crate) fn read_indexed_page(&self, locations: Vec<RecordLocation>) -> Result<Vec<Record>> {
+        // Reuse readers only within this bounded page. Segment IDs are local to a partition.
+        let mut segments = HashMap::new();
+        let mut records = Vec::with_capacity(locations.len());
+        for RecordLocation {
+            offset,
+            partition,
+            address,
+        } in locations
+        {
+            let (reader, position) = match segments.entry((partition, address.segment)) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => {
+                    let file = journal::open_segment(
+                        &partition_dir(&self.dir, partition),
+                        address.segment,
+                    )?;
+                    entry.insert((BufReader::new(file), 0))
+                }
+            };
+            if *position != address.pos {
+                reader.seek(SeekFrom::Start(address.pos))?;
+            }
+            let frame = journal::read_frame(reader, address.len)?;
+            *position = address.pos + 8 + address.len as u64;
+            self.payload_reads.set(self.payload_reads.get() + 1);
+            records.push(Record {
+                offset,
+                partition,
+                event: frame.event,
+            });
+        }
+        Ok(records)
     }
 
     fn read_frame(&self, offset: i64) -> Result<(u32, Frame)> {

@@ -305,6 +305,66 @@ fn rolling_segments_preserves_indexed_reads_and_topic_isolation() -> Result<()> 
 }
 
 #[test]
+fn stream_batch_reads_sparse_records_across_partitions_and_segment_rollover() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let large = |id: &str| {
+        let mut event = record(id);
+        event["payload"] = Value::String("x".repeat(950_000));
+        event
+    };
+    for i in 0..6 {
+        store.append("other", large(&format!("fill-{i}")))?;
+    }
+    let first = large("first");
+    let first_offset = store.append("status", first.clone())?;
+    store.append("other", large("skipped"))?;
+
+    store.configure_service_partitions([("other-partition".into(), vec![2])].into())?;
+    let mut other = record("from-partition-two");
+    other["task_id"] = json!("another-task");
+    assert_eq!(
+        store.partition_for("another-task", Some("other-partition"))?,
+        2
+    );
+    let other_offset = store.append("status", other.clone())?;
+
+    let second = large("on-next-segment");
+    let second_offset = store.append("status", second.clone())?;
+    let third = record("same-segment");
+    let third_offset = store.append("status", third.clone())?;
+    let tail_offset = store.append("status", large("over-byte-limit"))?;
+    assert!(dir.path().join("00000000000000000001.seg").exists());
+
+    let before = store.payload_reads.get();
+    let (after, page) = store.next_batch("status", "audit", None, 64)?;
+    let expected = [
+        (first_offset, 0, first),
+        (other_offset, 2, other),
+        (second_offset, 0, second),
+        (third_offset, 0, third),
+    ];
+    assert_eq!(page.len(), expected.len());
+    for (record, (offset, partition, event)) in page.into_iter().zip(expected) {
+        assert_eq!(
+            (record.offset, record.partition, record.event),
+            (offset, partition, event)
+        );
+    }
+    let fetched = store.payload_reads.get();
+    assert_eq!(fetched - before, 4);
+    store.commit_batch("status", "audit", None, after, third_offset, 4)?;
+    assert_eq!(store.payload_reads.get(), fetched);
+    let (after, tail) = store.next_batch("status", "audit", None, 64)?;
+    assert_eq!(after, third_offset);
+    assert_eq!(
+        tail.iter().map(|record| record.offset).collect::<Vec<_>>(),
+        [tail_offset]
+    );
+    Ok(())
+}
+
+#[test]
 fn stream_batch_commits_a_consecutive_prefix_and_recovers_checkpoint() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;

@@ -394,10 +394,17 @@ impl Journal {
 }
 
 pub fn read(dir: &Path, address: Address) -> Result<Frame> {
-    let Address { segment, pos, len } = address;
+    let mut file = open_segment(dir, address.segment)?;
+    file.seek(SeekFrom::Start(address.pos))?;
+    read_frame(&mut file, address.len)
+}
+
+pub(crate) fn open_segment(dir: &Path, segment: u64) -> Result<File> {
+    Ok(File::open(segment_path(dir, segment))?)
+}
+
+pub(crate) fn read_frame(file: &mut impl Read, len: usize) -> Result<Frame> {
     ensure!(len <= MAX_STORED_FRAME, "invalid size in address index");
-    let mut file = File::open(segment_path(dir, segment))?;
-    file.seek(SeekFrom::Start(pos))?;
     let mut header = [0; 8];
     file.read_exact(&mut header)?;
     ensure!(

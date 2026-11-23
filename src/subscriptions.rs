@@ -1,4 +1,7 @@
-use crate::store::{Problem, Record, Store, identifier};
+use crate::{
+    journal::Address,
+    store::{Problem, Record, RecordLocation, Store, identifier},
+};
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -345,27 +348,29 @@ impl Store {
         Ok(())
     }
 
-    fn batch_offsets(
+    fn batch_locations(
         &self,
         topic: &str,
         group: &str,
         scope: Option<(u32, i64)>,
         after: i64,
         limit: u32,
-    ) -> Result<Vec<i64>> {
+    ) -> Result<Vec<RecordLocation>> {
         let floor = self.floor(topic)?;
         let sql = if scope.is_some() {
-            "SELECT offset, len FROM records WHERE topic=?1 AND offset>?2 AND partition=?4
+            "SELECT offset, len, partition, segment, pos
+             FROM records WHERE topic=?1 AND offset>?2 AND partition=?4
              ORDER BY offset LIMIT ?3"
         } else {
-            "SELECT offset, len FROM records WHERE topic=?1 AND offset>?2 ORDER BY offset LIMIT ?3"
+            "SELECT offset, len, partition, segment, pos
+             FROM records WHERE topic=?1 AND offset>?2 ORDER BY offset LIMIT ?3"
         };
         let mut stmt = self.db.prepare(sql)?;
         let mut rows = match scope {
             Some((partition, _)) => stmt.query(params![topic, after, limit, partition])?,
             None => stmt.query(params![topic, after, limit])?,
         };
-        let mut offsets = Vec::new();
+        let mut locations = Vec::new();
         let mut remaining = MAX_STREAM_BATCH_BYTES;
         while let Some(row) = rows.next()? {
             let offset: i64 = row.get(0)?;
@@ -385,9 +390,17 @@ impl Store {
                 break;
             };
             remaining = left;
-            offsets.push(offset);
+            locations.push(RecordLocation {
+                offset,
+                partition: row.get(2)?,
+                address: Address {
+                    segment: u64::try_from(row.get::<_, i64>(3)?)?,
+                    pos: u64::try_from(row.get::<_, i64>(4)?)?,
+                    len: frame_bytes,
+                },
+            });
         }
-        Ok(offsets)
+        Ok(locations)
     }
 
     pub fn next_batch(
@@ -413,11 +426,8 @@ impl Store {
             }
             None => self.init_global_checkpoint(topic, group, self.floor(topic)?)?,
         };
-        let records = self
-            .batch_offsets(topic, group, scope, after, limit)?
-            .into_iter()
-            .map(|offset| self.read(offset))
-            .collect::<Result<_>>()?;
+        let locations = self.batch_locations(topic, group, scope, after, limit)?;
+        let records = self.read_indexed_page(locations)?;
         Ok((after, records))
     }
 
@@ -453,8 +463,10 @@ impl Store {
         if saved != Some(after) {
             return Err(Problem::Conflict("stream checkpoint changed since fetch".into()).into());
         }
-        let offsets = self.batch_offsets(topic, group, scope, after, count)?;
-        if offsets.len() != count as usize || offsets.last() != Some(&through) {
+        let locations = self.batch_locations(topic, group, scope, after, count)?;
+        if locations.len() != count as usize
+            || locations.last().map(|record| record.offset) != Some(through)
+        {
             return Err(
                 Problem::Conflict("commit must cover the next consecutive records".into()).into(),
             );
