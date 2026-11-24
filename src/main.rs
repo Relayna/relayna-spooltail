@@ -28,7 +28,7 @@ use axum::{
     routing::{get, post, put},
 };
 use live::Delivery;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     convert::Infallible,
@@ -425,6 +425,15 @@ fn change_subscription(
     Ok(())
 }
 
+#[derive(Serialize)]
+struct WebSocketDelivery<'a> {
+    #[serde(rename = "type")]
+    kind: &'a str,
+    topic: &'a str,
+    task_id: &'a str,
+    data: &'a serde_json::value::RawValue,
+}
+
 async fn session(b: Broker, mut socket: WebSocket) {
     let mut feeds = StreamMap::new();
     loop {
@@ -432,22 +441,20 @@ async fn session(b: Broker, mut socket: WebSocket) {
             message = socket.recv() => match message {
                 Some(Ok(Message::Text(text))) => match change_subscription(&b, &mut feeds, &text) {
                     Ok(()) => continue,
-                    Err(error) => json!({"type":"error","error":error.to_string()}),
+                    Err(error) => json!({"type":"error","error":error.to_string()}).to_string(),
                 },
                 Some(Ok(Message::Ping(_) | Message::Pong(_))) => continue,
-                Some(Ok(Message::Binary(_))) => json!({"type":"error","error":"expected JSON text"}),
+                Some(Ok(Message::Binary(_))) => json!({"type":"error","error":"expected JSON text"}).to_string(),
                 _ => break,
             },
             item = feeds.next(), if !feeds.is_empty() => {
                 let Some(((topic,task), delivery)) = item else { continue; };
-                json!({"type":delivery.kind, "topic":topic, "task_id":task, "data":delivery.data})
+                serde_json::to_string(&WebSocketDelivery {
+                    kind: delivery.kind, topic: &topic, task_id: &task, data: &delivery.data,
+                }).expect("delivery contains valid JSON")
             },
         };
-        if socket
-            .send(Message::Text(reply.to_string().into()))
-            .await
-            .is_err()
-        {
+        if socket.send(Message::Text(reply.into())).await.is_err() {
             break;
         }
     }
