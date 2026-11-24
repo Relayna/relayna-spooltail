@@ -1,4 +1,4 @@
-"""One-task fan-out over the two public SSE endpoints. Run inside the benchmark network."""
+"""Check same-task fan-out through the public SSE endpoints or Python SDKs."""
 
 import asyncio
 import json
@@ -116,6 +116,8 @@ async def watchers(case, task, url, shard, shards):
                     async for msg in stream:
                         if msg.kind == "status":
                             yield msg.event_id, msg.data
+                        elif msg.kind != "ready":
+                            raise ValueError(f"unexpected gRPC delivery {msg.kind}")
                 return
             headers = {"Last-Event-ID": last_id} if last_id else {}
             async with http.stream("GET", url, headers=headers) as response:

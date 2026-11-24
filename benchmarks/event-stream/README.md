@@ -34,6 +34,8 @@ With one reader, eliminating duplicate work buys little. The default single-part
 
 A separate 160-update HTTPX trace measured 3.76 ms p95 from application dispatch to the first socket send, 2.67 ms p95 inside the journal sync and 0.97 ms p95 from sync completion to receipt. The end-to-end p95 was 8.68 ms. These are independent percentiles. This diagnostic shared one asyncio loop between producer and reader. The comparative runs use separate reader processes. [Monotonic timestamp samples](runs/httpx-trace.json)
 
+Running the same Go producers and SSE readers against the unmodified #14 head isolates the broker change. Last-reader p95 on #14 was 3.14, 4.44, 7.77 and 23.63 ms at 1, 16, 64 and 256 readers. At 256, **zero of 256** matched readers beat RabbitMQ + Redis on #14. With the fix **all 256** did. Both versions used 192 events per trial. The parent ran three paired trials and the fix ran five. [Parent with matched Go producers](runs/parent-go.json) · [Fix with matched Go producers](runs/matched-go.json)
+
 ## Python SDKs
 
 Using Spooltail’s existing Python `SpooltailClient.publish` and `SpooltailClient.subscribe` together over plaintext gRPC, the median last-reader p95 was lower at all four original subscriber counts. Both SDKs delivered decoded dictionaries. The control published through the Relayna AMQP client and received SSE from the SDK API. Three paired trials used 128 updates at 40/s. The small-count lead was narrow and varied by trial.

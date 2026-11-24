@@ -1,4 +1,4 @@
-"""Run the same-task SSE comparison in an isolated Compose project."""
+"""Compare same-task live delivery in an isolated Compose project."""
 
 import argparse
 import concurrent.futures
@@ -22,7 +22,7 @@ def output(*args, **kwargs):
 
 
 def main():
-    parser = argparse.ArgumentParser(__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--sdk", type=Path, required=True, help="Relayna SDK v1.14.0 checkout"
     )
