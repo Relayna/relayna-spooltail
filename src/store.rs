@@ -202,6 +202,7 @@ impl Drop for WriteTicket {
 
 pub struct Store {
     pub(crate) db: Connection,
+    pub(crate) live: crate::live::LiveTasks,
     dir: PathBuf,
     pub(crate) packed: Manifest,
     pub(crate) space: Space,
@@ -404,6 +405,7 @@ impl Store {
         Ok(Self {
             db,
             dir: dir.to_owned(),
+            live: Default::default(),
             packed,
             space: Space::default(),
             audit_only,
@@ -861,9 +863,10 @@ impl Store {
             tx.commit()?;
             Ok(Position { partition, offset })
         });
+        let task = frame.key()?.0;
         let cleanup = self
             .db
-            .execute("DELETE FROM appending WHERE task=?", [frame.key()?.0]);
+            .execute("DELETE FROM appending WHERE task=?", [task]);
         if result.is_err() || cleanup.is_err() {
             // Recover every uncertain suffix before allowing another mutation.
             self.failed_write = true;
@@ -873,6 +876,9 @@ impl Store {
         if let Some(split) = &mut self.split {
             split.visible_next += 1;
         }
+        // Publish in commit order while the store is locked, including when the caller disconnected.
+        self.live
+            .publish(&frame.topic, task, position.offset, &frame.event);
         Ok(position)
     }
 
@@ -997,6 +1003,7 @@ impl Store {
             return Err(Problem::Invalid("floor outside topic bounds".into()).into());
         }
         self.db.execute("INSERT INTO floors VALUES(?,?) ON CONFLICT(topic) DO UPDATE SET first_offset=MAX(first_offset,excluded.first_offset)",params![topic,offset])?;
+        self.live.advance_floor(topic, offset);
         Ok(())
     }
 
