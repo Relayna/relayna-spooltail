@@ -60,6 +60,35 @@ async def publisher(port, cert, size, publishes):
         print(json.dumps(times))
 
 
+async def file_sync_control(directory, size, publishes):
+    # The publisher process deliberately opens no connection to the broker.
+    if sys.platform == "darwin":
+        import fcntl
+
+        def sync_data(fd):
+            fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+    else:
+        sync_data = os.fdatasync
+
+    with tempfile.TemporaryFile(dir=directory, buffering=0) as probe:
+        print("ready", flush=True)
+        epoch = float(sys.stdin.readline())
+        times = []
+        digest = hashlib.sha256()
+        for n in range(publishes):
+            await asyncio.sleep(max(0, epoch + n / 75 - perf_counter()))
+            body = json.dumps(payload("live", n, size)).encode() + b"\n"
+            digest.update(body)
+            before = perf_counter()
+            written = probe.write(body)
+            sync_data(probe.fileno())
+            times.append((perf_counter() - before) * 1000)
+            assert written == len(body)
+        probe.seek(0)
+        assert hashlib.file_digest(probe, "sha256").digest() == digest.digest()
+        print(json.dumps(times))
+
+
 async def seed(config, cert):
     expected = [[] for _ in range(TASKS)]
     async with fixture.start(config) as (_, port), channel(port, cert) as conn:
@@ -109,12 +138,15 @@ async def measure(config, cert, expected, args):
             assert all(r.partition == 0 for r in page.records)
             wire[task] = [(r.offset, r.partition, r.event_json) for r in page.records]
 
+        target = (
+            ["file-sync-control", str(cert.parent)]
+            if args.file_sync_control
+            else ["publisher", str(port), str(cert)]
+        )
         writer = await asyncio.create_subprocess_exec(
             sys.executable,
             __file__,
-            "publisher",
-            str(port),
-            str(cert),
+            *target,
             str(args.writer_bytes),
             str(args.publishes),
             stdin=asyncio.subprocess.PIPE,
@@ -136,19 +168,20 @@ async def measure(config, cert, expected, args):
                 )
             elapsed = perf_counter() - epoch
             assert writer.returncode == 0
-            acks = json.loads(output[0])
-            assert len(acks) == args.publishes
+            writer_times = json.loads(output[0])
+            assert len(writer_times) == args.publishes
         finally:
             if writer.returncode is None:
                 writer.kill()
                 await writer.wait()
         reads = [t for s in series for t in s]
+        metric = "file_write_and_sync" if args.file_sync_control else "publish"
         return {
             "elapsed_s": elapsed,
             "history_p50": median(reads) if reads else None,
             "history_p99": p99(reads) if reads else None,
-            "publish_p50": median(acks),
-            "publish_p99": p99(acks),
+            f"{metric}_p50": median(writer_times),
+            f"{metric}_p99": p99(writer_times),
         }
 
 
@@ -172,6 +205,7 @@ async def compare(args, root):
                 print(rows[-1], flush=True)
     return {
         "platform": platform.platform(),
+        "publisher_target": "separate_file" if args.file_sync_control else "broker",
         "readers": args.readers,
         "publishes_per_trial": args.publishes,
         "writer_payload_bytes": args.writer_bytes,
@@ -184,7 +218,11 @@ async def compare(args, root):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["publisher"]:
+    if sys.argv[1:2] == ["file-sync-control"]:
+        asyncio.run(
+            file_sync_control(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]))
+        )
+    elif sys.argv[1:2] == ["publisher"]:
         asyncio.run(
             publisher(
                 sys.argv[2],
@@ -199,11 +237,18 @@ if __name__ == "__main__":
             "brokers", nargs="+", help="Release binaries with distinct filenames"
         )
         parser.add_argument("--rounds", type=int, default=8)
+        parser.add_argument(
+            "--file-sync-control",
+            action="store_true",
+            help="Time a separate file write and data sync while the broker only serves history",
+        )
         parser.add_argument("--publishes", type=int, default=PUBLISHES)
         parser.add_argument("--readers", type=int, default=READERS)
         parser.add_argument("--writer-bytes", type=int, default=256)
         parser.add_argument("--output", type=Path, required=True)
         args = parser.parse_args()
+        if args.file_sync_control and sys.platform not in {"darwin", "linux"}:
+            parser.error("--file-sync-control supports macOS and Linux")
         if (
             len({Path(p).name for p in args.brokers}) != len(args.brokers)
             or args.rounds < 1
