@@ -127,3 +127,46 @@ git push origin "refs/tags/v${sdk_version}"
 ```
 
 GitHub Actions builds the source distribution and wheel, tests the installed wheel against a broker built from the tagged revision, and attaches both distributions to a versioned GitHub Release.
+
+### Saved-offset catch-up with one page ahead
+
+`AuditStore.catch_up` starts at the consumer's saved SQLite cursor. While one worker applies a page and commits its outcomes, the SDK fetches the next page. The default page size is 32 and the maximum is 64, subject to the broker's 2 MiB limit.
+
+```python
+from relayna_spooltail import AuditOutcome, AuditStore
+
+def process(page):
+    return [
+        AuditOutcome(r.offset, "index", "applied", "worker", r.event_id)
+        for r in page.records
+    ]
+
+saved = await AuditStore.catch_up(
+    "audit.sqlite", "status", "indexer",
+    read_page=client.read_after_batch, process=process, limit=32,
+)
+```
+
+The call stops on an empty page. Set `max_records` to bound a run under continuous publishing. It returns the persisted offset, or `None` if the consumer has never committed. The synchronous `process(page)` runs on the writer thread and may be called again after interruption. Use `apply_state(page, execute)` for application SQL that must commit atomically with the outcomes and cursor. A failed commit discards the prefetched page. Cancellation waits for an already-running transaction to settle. On restart the SDK reads the durable cursor again.
+
+### Reading Protobuf events
+
+On a compatible broker, `read_after_batch` returns records with directly accessible `record.task_id` and `record.event_id`. Accessing `record.event` decodes the remaining fields once and returns the same mutable dictionary on subsequent accesses. Numeric precision, lists, and nulls are preserved. Older brokers automatically use the original JSON-based replay RPC. Both protocols read the existing journal format.
+
+For applications that materialize deeply nested events, the optional `relayna-spooltail-native` companion decodes Protobuf attributes in C++. Install the matching native source distribution from the SDK release alongside the regular SDK, or build it from the repository root with `python -m pip install .`. Building the companion requires a C++17 toolchain, CMake, `protoc` and matching libprotobuf development libraries. Its wheel links to the system libprotobuf. The SDK automatically uses the extension when importable and otherwise decodes in Python.
+
+### Numeric projections
+
+For a consumer that only needs one numeric field, `read_numeric_batch` returns event IDs, task IDs, offsets and row counts, followed by one contiguous little-endian float64 column. The array and value selectors are literal object keys.
+
+```python
+from functools import partial
+
+read_rates = partial(client.read_numeric_batch, array_field="samples", value_field="rate")
+page = await read_rates("status", after=saved, limit=64)
+per_event = page.sums()          # Python tuple, including 0.0 for an empty array
+values = page.as_numpy()        # read-only flat NumPy view
+per_event_array = page.numpy_sums()
+```
+
+Install the SDK's `numpy` extra or NumPy separately to use the array methods. `sums()` uses the standard library. Pass `read_page=read_rates` to `AuditStore.catch_up` to use the same read-ahead and checkpoint machinery. This RPC requires an upgraded broker. All selected samples must contain a float64-representable number. A page may end before an incompatible record, and a subsequent read at that boundary reports its offset. A numeric consumer can then use ordinary event replay to inspect the record. Floating-point reduction order can differ between NumPy and Python.

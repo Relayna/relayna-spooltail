@@ -15,6 +15,8 @@ use tonic::{
     },
 };
 
+mod replay;
+
 mod wire {
     tonic::include_proto!("spooltail.v1");
 }
@@ -30,6 +32,24 @@ use wire::{
 };
 
 struct Api(Broker);
+
+impl Api {
+    async fn replay_records(
+        &self,
+        q: TopicReplayRequest,
+    ) -> Result<(i64, Vec<store::Record>), Status> {
+        self.0
+            .run(move |s| {
+                s.read_after_batch(
+                    &q.topic,
+                    q.after,
+                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+                )
+            })
+            .await
+            .map_err(status)
+    }
+}
 
 fn status(error: anyhow::Error) -> Status {
     match error.downcast_ref::<Problem>() {
@@ -276,19 +296,32 @@ impl Spooltail for Api {
         &self,
         request: Request<TopicReplayRequest>,
     ) -> Result<Response<StreamBatch>, Status> {
-        let q = request.into_inner();
-        let (after, records) = self
-            .0
-            .run(move |s| {
-                s.read_after_batch(
-                    &q.topic,
-                    q.after,
-                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
-                )
-            })
-            .await
-            .map_err(status)?;
+        let (after, records) = self.replay_records(request.into_inner()).await?;
         encode_batch(after, records)
+    }
+
+    async fn read_replay_page(
+        &self,
+        request: Request<TopicReplayRequest>,
+    ) -> Result<Response<wire::ReplayPage>, Status> {
+        let (after, records) = self.replay_records(request.into_inner()).await?;
+        Ok(Response::new(
+            replay::events(after, records).map_err(status)?,
+        ))
+    }
+
+    async fn read_numeric_page(
+        &self,
+        request: Request<wire::NumericRequest>,
+    ) -> Result<Response<wire::NumericPage>, Status> {
+        let q = request.into_inner();
+        let replay = q
+            .replay
+            .ok_or_else(|| Status::invalid_argument("missing replay request"))?;
+        let (after, records) = self.replay_records(replay).await?;
+        Ok(Response::new(
+            replay::numbers(after, records, &q.array_field, &q.value_field).map_err(status)?,
+        ))
     }
 
     async fn list_partitions(&self, _: Request<Empty>) -> Result<Response<Partitions>, Status> {
