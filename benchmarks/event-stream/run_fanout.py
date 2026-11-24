@@ -27,6 +27,9 @@ def main():
         "--sdk", type=Path, required=True, help="Relayna SDK v1.14.0 checkout"
     )
     parser.add_argument("--publisher", choices=["python", "go"], default="python")
+    parser.add_argument(
+        "--live-rate", type=int, default=40, help="target events/s for live-N cases"
+    )
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument(
         "--live-events", type=int, default=48, help="paced updates per live-N case"
@@ -52,6 +55,8 @@ def main():
         parser.error("use at least one trial and a new output path")
     if not 2 <= args.live_events <= 2048:
         parser.error("--live-events must be between 2 and 2048")
+    if args.live_rate < 1:
+        parser.error("--live-rate must be positive")
     sdk = args.sdk.resolve()
     project = "spoolfan" + uuid.uuid4().hex[:10]
     env = dict(
@@ -75,6 +80,8 @@ def main():
         "PYTHONPATH=/bench",
         "-e",
         f"BENCH_LIVE_EVENTS={args.live_events}",
+        "-e",
+        f"BENCH_LIVE_RATE={args.live_rate}",
         "--entrypoint",
         "python",
     ]
@@ -84,6 +91,7 @@ def main():
         "publisher": args.publisher,
         "cases": args.cases,
         "live_events": args.live_events,
+        "live_rate": args.live_rate,
         "spooltail_commit": output("git", "-C", HERE, "rev-parse", "HEAD"),
         "sdk_commit": output("git", "-C", sdk, "rev-parse", "HEAD"),
         "docker": output(

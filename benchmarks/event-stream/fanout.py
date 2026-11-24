@@ -19,11 +19,11 @@ CASES = {
             readers,
             256,
             int(os.environ.get("BENCH_LIVE_EVENTS", "48")),
-            40,
+            int(os.environ.get("BENCH_LIVE_RATE", "40")),
             0,
             0,
         )
-        for readers in (1, 2, 4, 8, 16, 32, 64, 128, 256)
+        for readers in range(1, 257)
     },
     "large-32": (32, 32768, 96, 50, 0, 0),
     "slow-32": (32, 32768, 96, 50, 4, 0),
