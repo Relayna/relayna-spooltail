@@ -7,16 +7,39 @@ fn record(id: &str) -> Value {
 }
 
 #[tokio::test]
+async fn cancelled_history_keeps_its_slot_until_the_blocking_read_finishes() -> Result<()> {
+    let dir = tempdir()?;
+    let broker = Broker::new(Store::open(dir.path())?);
+    let reader = broker.clone();
+    let (started, running) = tokio::sync::oneshot::channel();
+    let (release, released) = tokio::sync::oneshot::channel();
+    let request = tokio::spawn(async move {
+        reader
+            .history_page(move |_| {
+                started.send(()).unwrap();
+                released.blocking_recv()?;
+                Ok(Vec::new())
+            })
+            .await
+    });
+    running.await?;
+    request.abort();
+    assert!(request.await.unwrap_err().is_cancelled());
+    assert_eq!(broker.history_reader.available_permits(), 0);
+    release.send(()).unwrap();
+    broker.history_page(|s| s.page("status", "T7", 0)).await?;
+    assert_eq!(broker.history_reader.available_permits(), 1);
+    Ok(())
+}
+
+#[tokio::test]
 async fn append_during_replay_is_delivered_after_the_page() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
     for id in ["E41", "E42"] {
         store.append("status", record(id))?;
     }
-    let b = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let b = Broker::new(store);
     let mut sub = feed(b.clone(), "status".into(), "T7".into(), Some("E41".into()));
     assert_eq!(sub.next().await.unwrap().kind, "ready");
     assert_eq!(sub.next().await.unwrap().id.as_deref(), Some("E42"));
@@ -86,10 +109,7 @@ async fn partition_can_write_ahead_of_global_visibility() -> Result<()> {
     let Prepared::Write(body) = store.prepare_append(&mut earlier, 0)? else {
         panic!("expected a new record");
     };
-    let broker = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let broker = Broker::new(store);
     let publish_order = |task: &str| {
         tokio::spawn(publish(
             broker.clone(),
@@ -731,10 +751,7 @@ async fn expansion_during_publish_keeps_placement_and_other_journals_can_write()
     assert_eq!(store.task_partition(&fresh)?, 1);
     let next_offset = store.append("status", json!({"task_id":fresh,"event_id":"second"}))?;
     assert_eq!(store.read(next_offset)?.partition, 1);
-    let broker = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let broker = Broker::new(store);
     let (locked, ready) = tokio::sync::oneshot::channel();
     let (unlock, released) = tokio::sync::oneshot::channel();
     let holder = tokio::task::spawn_blocking(move || {

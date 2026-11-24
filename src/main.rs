@@ -45,9 +45,33 @@ type Notices = HashMap<(String, String), Weak<watch::Sender<()>>>;
 struct Broker {
     store: Arc<Mutex<Store>>,
     watchers: Arc<Mutex<Notices>>,
+    history_reader: Arc<tokio::sync::Semaphore>,
 }
 
 impl Broker {
+    fn new(store: Store) -> Self {
+        Self {
+            store: Arc::new(Mutex::new(store)),
+            watchers: Default::default(),
+            history_reader: Arc::new(tokio::sync::Semaphore::new(1)),
+        }
+    }
+
+    // Store::page already serializes on the store mutex. Queue competing pages
+    // asynchronously so they do not occupy blocking threads needed by appends.
+    async fn history_page(
+        &self,
+        fetch: impl FnOnce(&mut Store) -> Result<Vec<store::Record>> + Send + 'static,
+    ) -> Result<Vec<store::Record>> {
+        let permit = self.history_reader.clone().acquire_owned().await?;
+        self.run(move |s| {
+            // A disconnected caller can leave an already running read behind.
+            let _permit = permit;
+            fetch(s)
+        })
+        .await
+    }
+
     async fn run<T: Send + 'static>(
         &self,
         f: impl FnOnce(&mut Store) -> Result<T> + Send + 'static,
@@ -301,8 +325,12 @@ async fn history(
     Query(q): Query<Resume>,
 ) -> Reply {
     Ok(Json(json!(
-        b.run(move |s| s.page(&topic, &task, s.resolve(&topic, &task, q.after.as_deref())?))
-            .await?
+        b.history_page(move |s| s.page(
+            &topic,
+            &task,
+            s.resolve(&topic, &task, q.after.as_deref())?
+        ))
+        .await?
     )))
 }
 
@@ -335,7 +363,7 @@ fn feed(b: Broker, topic: String, task: String, after: Option<String>) -> Feed {
         yield Delivery { kind: "ready", data: json!({}), id: None };
         loop {
             let scope = (topic.clone(), task.clone());
-            let result = b.run(move |s| s.page(&scope.0, &scope.1, position)).await;
+            let result = b.history_page(move |s| s.page(&scope.0, &scope.1, position)).await;
             let page = match result {
                 Ok(page) => page,
                 Err(error) => { yield Delivery::failure(error); return; }
@@ -637,10 +665,7 @@ async fn main() -> Result<()> {
     let pack_min_age = packing::configure(&mut store)?;
     let retire = retire::configure(&mut store)?;
     let recovered = store.recovered_frames;
-    let broker = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let broker = Broker::new(store);
     if !retention_topics.is_empty() {
         tokio::spawn(retention::run(broker.clone(), retention_topics));
     }
