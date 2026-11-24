@@ -34,6 +34,19 @@ With one reader, eliminating duplicate work buys little. The default single-part
 
 A separate 160-update HTTPX trace measured 3.76 ms p95 from application dispatch to the first socket send, 2.67 ms p95 inside the journal sync and 0.97 ms p95 from sync completion to receipt. The end-to-end p95 was 8.68 ms. These are independent percentiles. This diagnostic shared one asyncio loop between producer and reader. The comparative runs use separate reader processes. [Monotonic timestamp samples](runs/httpx-trace.json)
 
+## Python SDKs
+
+Using Spooltail’s existing Python `SpooltailClient.publish` and `SpooltailClient.subscribe` together over plaintext gRPC, the median last-reader p95 was lower at all four original subscriber counts. Both SDKs delivered decoded dictionaries. The control published through the Relayna AMQP client and received SSE from the SDK API. Three paired trials used 128 updates at 40/s. The small-count lead was narrow and varied by trial.
+
+| Subscribers | Spooltail Python SDK last-reader p95 (ms) | Relayna RabbitMQ + Redis last-reader p95 (ms) | Matched readers faster | Paired trial wins |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 7.85 | 8.57 | 1/1 | 2/3 |
+| 16 | 8.88 | 9.11 | 8/16 | 2/3 |
+| 64 | 8.37 | 9.66 | 18/64 | 3/3 |
+| 256 | 8.64 | 20.32 | 245/256 | 3/3 |
+
+Reuse a `SpooltailClient` channel per event loop. One producer issued one durable publish at a time, and up to four reader processes each shared one channel across their gRPC subscriptions. Browser subscribers can use the SSE endpoint measured above. [Python SDK](../../python/README.md) · [Python SDK raw results](runs/python-sdk.json)
+
 ## Original Python HTTP/SSE workload
 
 Three paired trials per case, 48 small updates per live trial, same Python HTTPX publisher and SSE subscribers used in the original benchmark. Each version had its own paired RabbitMQ + Redis run. Times are the median trial p95 from dispatch to the **last** subscriber, in milliseconds.
@@ -74,7 +87,11 @@ python3 benchmarks/event-stream/run_fanout.py --sdk /path/to/relayna \
   --cases live-1 live-2 live-4 live-8 live-16 live-32 live-64 live-128 live-256 \
   --output /tmp/spooltail-go.json
 
-python3 benchmarks/event-stream/summarize.py /tmp/spooltail-python.json /tmp/spooltail-go.json
+python3 benchmarks/event-stream/run_fanout.py --sdk /path/to/relayna \
+  --python-sdk --trials 3 --live-events 128 --cases live-1 live-16 live-64 live-256 \
+  --output /tmp/spooltail-sdk.json
+
+python3 benchmarks/event-stream/summarize.py /tmp/spooltail-python.json /tmp/spooltail-go.json /tmp/spooltail-sdk.json
 ```
 
 Each output path must be new. The runner creates an isolated Compose project and removes its containers and volumes on exit. For the parent comparison, copy the event-stream harness into a checkout of `aa495d1` and run the same command there. To repeat the power cuts on Apple Silicon with Lima, pass a Linux ARM64 release binary to `python3 benchmarks/event-stream/power_cut.py --broker /path/to/spooltail`. It creates disposable VMs and a dedicated volume. [Historical indexed-history experiment](indexed-history.md)

@@ -1,0 +1,8 @@
+services:
+  spool:
+    environment:
+      SPOOLTAIL_GRPC_LISTEN: 0.0.0.0:7475
+      SPOOLTAIL_GRPC_TLS: "off"
+  driver:
+    build:
+      target: fanout-sdk-driver

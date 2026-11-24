@@ -6,7 +6,7 @@ import math
 import os
 import socket
 import sys
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, aclosing
 from pathlib import Path
 from time import monotonic_ns
 
@@ -102,20 +102,38 @@ async def watchers(case, task, url, shard, shards):
             assert (await asyncio.to_thread(sys.stdin.readline)).strip() == "resume"
             resume.set()
 
-    async def watch(i, http):
+    sdk = os.environ.get("BENCH_PYTHON_SDK") == "1"
+
+    async def watch(i, http, rpc):
         times = []
         next_seq = 0
 
-        async def consume(last_id=None):
-            nonlocal next_seq
+        async def messages(last_id):
+            if rpc is not None:
+                async with aclosing(
+                    rpc.subscribe("status", task, after=last_id)
+                ) as stream:
+                    async for msg in stream:
+                        if msg.kind == "status":
+                            yield msg.event_id, msg.data
+                return
             headers = {"Last-Event-ID": last_id} if last_id else {}
             async with http.stream("GET", url, headers=headers) as response:
                 async for event_id, data in statuses(response):
+                    # The SDK comparison times decoded application dictionaries on both arms.
+                    yield event_id, json.loads(data) if sdk else data
+
+        async def consume(last_id=None):
+            nonlocal next_seq
+            async with aclosing(messages(last_id)) as stream:
+                async for event_id, data in stream:
                     receipt = monotonic_ns()
+                    if not sdk:
+                        data = json.loads(data)
                     assert (
                         next_seq <= total and event_id == expected[next_seq]["event_id"]
                     ), (i, event_id, next_seq)
-                    assert json.loads(data) == expected[next_seq], (
+                    assert data == expected[next_seq], (
                         i,
                         event_id,
                         "payload",
@@ -144,10 +162,19 @@ async def watchers(case, task, url, shard, shards):
         assert next_seq == total + 1, (i, next_seq, total)
         return {"reader": i, "slow": i < slow, "received": times}
 
-    async with client(len(indices)) as fast, client(len(indices), slow=True) as delayed:
+    async with AsyncExitStack() as scope:
+        fast = await scope.enter_async_context(client(len(indices)))
+        delayed = await scope.enter_async_context(client(len(indices), slow=not sdk))
+        rpc = None
+        if sdk and url.startswith("http://spool:"):
+            from relayna_spooltail import SpooltailClient
+
+            rpc = await scope.enter_async_context(
+                SpooltailClient("spool:7475", tls=False)
+            )
         gate = asyncio.create_task(open_gate())
         streams = await asyncio.gather(
-            *(watch(i, delayed if i < slow else fast) for i in indices)
+            *(watch(i, delayed if i < slow else fast, rpc) for i in indices)
         )
         await gate
     emit(streams=streams)
@@ -219,6 +246,13 @@ async def trial(case, arm, task):
     )
     async with AsyncExitStack() as scope:
         http = await scope.enter_async_context(client(4))
+        rpc = None
+        if spool and os.environ.get("BENCH_PYTHON_SDK") == "1":
+            from relayna_spooltail import SpooltailClient
+
+            rpc = await scope.enter_async_context(
+                SpooltailClient("spool:7475", tls=False)
+            )
         if not spool:
             rabbit = client_for("fanout")
             await rabbit.initialize()
@@ -227,7 +261,9 @@ async def trial(case, arm, task):
             store = RedisStatusStore(redis, prefix="random-reads")
 
         async def publish(n):
-            if spool:
+            if rpc is not None:
+                assert await rpc.publish("status", expected[n]) > 0
+            elif spool:
                 resp = await http.post(
                     "http://spool:7474/topics/status/records", json=expected[n]
                 )

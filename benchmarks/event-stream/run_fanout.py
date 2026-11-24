@@ -30,6 +30,11 @@ def main():
     parser.add_argument(
         "--live-rate", type=int, default=40, help="target events/s for live-N cases"
     )
+    parser.add_argument(
+        "--python-sdk",
+        action="store_true",
+        help="use SpooltailClient for publish and subscribe, and the Relayna AMQP/SSE SDK control",
+    )
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument(
         "--live-events", type=int, default=48, help="paced updates per live-N case"
@@ -57,6 +62,8 @@ def main():
         parser.error("--live-events must be between 2 and 2048")
     if args.live_rate < 1:
         parser.error("--live-rate must be positive")
+    if args.python_sdk and args.publisher != "python":
+        parser.error("--python-sdk requires the Python publisher")
     sdk = args.sdk.resolve()
     project = "spoolfan" + uuid.uuid4().hex[:10]
     env = dict(
@@ -73,11 +80,15 @@ def main():
         "-f",
         str(HERE.parent / "compose.yaml"),
     ]
+    if args.python_sdk:
+        compose.extend(["-f", str(HERE / "sdk.compose.yaml")])
     mount = [
         "-v",
         f"{HERE}:/experiment:ro",
         "-e",
         "PYTHONPATH=/bench",
+        "-e",
+        f"BENCH_PYTHON_SDK={int(args.python_sdk)}",
         "-e",
         f"BENCH_LIVE_EVENTS={args.live_events}",
         "-e",
@@ -89,6 +100,7 @@ def main():
         "started_utc": datetime.now(UTC).isoformat(),
         "trials": args.trials,
         "publisher": args.publisher,
+        "python_sdk": args.python_sdk,
         "cases": args.cases,
         "live_events": args.live_events,
         "live_rate": args.live_rate,
