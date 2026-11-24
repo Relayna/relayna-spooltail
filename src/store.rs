@@ -1031,9 +1031,24 @@ impl Store {
         if after < floor - 1 {
             return Err(self.gap(topic, task, floor)?.into());
         }
-        let mut stmt=self.db.prepare_cached("SELECT offset FROM records WHERE topic=? AND task=? AND offset>? ORDER BY offset LIMIT ?")?;
-        let rows = stmt.query_map(params![topic, task, after, PAGE_SIZE], |r| r.get(0))?;
-        rows.map(|r| self.read(r?)).collect()
+        let mut stmt = self.db.prepare_cached(
+            "SELECT offset,partition,segment,pos,len FROM records
+             WHERE topic=? AND task=? AND offset>? ORDER BY offset LIMIT ?",
+        )?;
+        let mut rows = stmt.query(params![topic, task, after, PAGE_SIZE])?;
+        let mut locations = Vec::new();
+        while let Some(row) = rows.next()? {
+            locations.push(RecordLocation {
+                offset: row.get(0)?,
+                partition: row.get(1)?,
+                address: Address {
+                    segment: u64::try_from(row.get::<_, i64>(2)?)?,
+                    pos: u64::try_from(row.get::<_, i64>(3)?)?,
+                    len: usize::try_from(row.get::<_, i64>(4)?)?,
+                },
+            });
+        }
+        self.read_indexed_page(locations)
     }
 
     pub fn latest(&self, topic: &str, task: &str) -> Result<Record> {

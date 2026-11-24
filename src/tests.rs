@@ -305,6 +305,73 @@ fn rolling_segments_preserves_indexed_reads_and_topic_isolation() -> Result<()> 
 }
 
 #[test]
+fn task_history_pages_sparse_records_across_a_partition_move() -> Result<()> {
+    for mode in ["shared", "partitioned"] {
+        let dir = tempdir()?;
+        let mut store = Store::open_mode(dir.path(), Some(mode))?;
+        let mut expected = Vec::new();
+        for n in 0..67 {
+            if n == 32 {
+                store.ensure_partition(1)?;
+                store.move_task("T7", 0, 1)?;
+            }
+            let event = record(&format!("E{n}"));
+            let offset = store.append("status", event.clone())?;
+            expected.push((offset, u32::from(n >= 32), event.clone()));
+            store.append("other-topic", event.clone())?;
+            let mut other_task = event;
+            other_task["task_id"] = json!("other-task");
+            store.append("status", other_task)?;
+        }
+        drop(store);
+        let store = Store::open(dir.path())?;
+        for (cursor, expected_page) in [(None, &expected[..64]), (Some("E63"), &expected[64..])] {
+            let after = store.resolve("status", "T7", cursor)?;
+            let before = store.payload_reads.get();
+            let page = store.page("status", "T7", after)?;
+            let actual: Vec<_> = page
+                .into_iter()
+                .map(|r| (r.offset, r.partition, r.event))
+                .collect();
+            assert_eq!(actual, expected_page);
+            assert_eq!(store.payload_reads.get() - before, actual.len() as u64);
+        }
+        let end = store.resolve("status", "T7", Some("E66"))?;
+        assert!(store.page("status", "T7", end)?.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
+fn task_history_reports_a_gap_if_retention_advances_between_pages() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("expired"))?;
+    let after = store.resolve("status", "T7", Some("expired"))?;
+    store.append("status", record("also-expired"))?;
+    let retained = store.append("status", record("retained"))?;
+    store.expire_before("status", retained)?;
+    let err = store.page("status", "T7", after).unwrap_err();
+    assert!(
+        matches!(err.downcast_ref::<Problem>(), Some(Problem::Gap { earliest }) if earliest.as_deref() == Some("retained"))
+    );
+    let start = store.resolve("status", "T7", None)?;
+    let page = store.page("status", "T7", start)?;
+    assert_eq!(
+        page.iter().map(|r| r.offset).collect::<Vec<_>>(),
+        [retained]
+    );
+
+    store.expire_before("status", retained + 1)?;
+    let err = store.page("status", "T7", after).unwrap_err();
+    assert!(matches!(
+        err.downcast_ref::<Problem>(),
+        Some(Problem::Gap { earliest: None })
+    ));
+    Ok(())
+}
+
+#[test]
 fn stream_batch_reads_sparse_records_across_partitions_and_segment_rollover() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
