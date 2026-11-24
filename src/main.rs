@@ -318,46 +318,46 @@ fn feed(b: Broker, topic: String, task: String, after: Option<String>) -> Feed {
         let scope = (topic.clone(), task.clone());
         let start = b.run(move |s| {
             let position = s.resolve(&scope.0, &scope.1, after.as_deref())?;
-            Ok((position, s.live.subscribe(&scope.0, &scope.1)))
+            let replay = s.has_task_records_after(&scope.0, &scope.1, position)?;
+            Ok((position, replay, s.live.subscribe(&scope.0, &scope.1)))
         }).await;
-        let (mut position, (channel, mut receiver)) = match start {
+        let (mut position, mut replay, (channel, mut receiver)) = match start {
             Ok(start) => start,
             Err(error) => { yield failure(error); return; }
         };
         yield Delivery::new("ready", &json!({}));
         loop {
-            let scope = (topic.clone(), task.clone());
-            let page = match b.history_page(move |s| s.page(&scope.0, &scope.1, position)).await {
-                Ok(page) => page,
-                Err(error) => { yield failure(error); return; }
-            };
-            // A short page includes every committed record up to the query snapshot.
-            let caught_up = page.len() < store::PAGE_SIZE as usize;
-            for record in page {
-                position = record.offset;
-                let delivery = Delivery::new("status", &record.event);
-                let terminal = delivery.terminal;
-                yield delivery;
-                if terminal { return; }
-            }
-            if caught_up {
-                loop {
-                    match receiver.recv().await {
-                        Ok((offset, _)) if offset <= position => continue,
-                        Ok((offset, delivery)) if channel.can_deliver_after(position) => {
-                            position = offset;
-                            let terminal = delivery.terminal;
-                            yield delivery;
-                            if terminal { return; }
-                        }
-                        Ok(_) | Err(RecvError::Lagged(_)) => {
-                            // Register for new commits before reading the missing interval.
-                            receiver = receiver.resubscribe();
-                            break;
-                        }
-                        Err(RecvError::Closed) => return,
-                    }
+            if replay {
+                let scope = (topic.clone(), task.clone());
+                let page = match b.history_page(move |s| s.page(&scope.0, &scope.1, position)).await {
+                    Ok(page) => page,
+                    Err(error) => { yield failure(error); return; }
+                };
+                // A short page covers all commits through the query snapshot.
+                replay = page.len() == store::PAGE_SIZE as usize;
+                for record in page {
+                    position = record.offset;
+                    let delivery = Delivery::new("status", &record.event);
+                    let terminal = delivery.terminal;
+                    yield delivery;
+                    if terminal { return; }
                 }
+                if replay { continue; }
+            }
+            match receiver.recv().await {
+                Ok((offset, _)) if offset <= position => continue,
+                Ok((offset, delivery)) if channel.can_deliver_after(position) => {
+                    position = offset;
+                    let terminal = delivery.terminal;
+                    yield delivery;
+                    if terminal { return; }
+                }
+                Ok(_) | Err(RecvError::Lagged(_)) => {
+                    // Register for new commits before reading the missing interval.
+                    receiver = receiver.resubscribe();
+                    replay = true;
+                }
+                Err(RecvError::Closed) => return,
             }
         }
     })
