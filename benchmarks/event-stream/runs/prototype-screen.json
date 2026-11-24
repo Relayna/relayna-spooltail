@@ -1,0 +1,702 @@
+{
+  "grpc-pilot": {
+    "prototype": "Python unary gRPC producer with SSE readers",
+    "baseline_broker": "43017fb966a9cf6197dc98f4e7d69709e06c46a5",
+    "events_per_reader": 160,
+    "results": [
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 160,
+        "last_reader_p95_ms": 8.65
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 160,
+        "last_reader_p95_ms": 8.35
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 2560,
+        "last_reader_p95_ms": 8.205
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 2560,
+        "last_reader_p95_ms": 8.306
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 10240,
+        "last_reader_p95_ms": 9.159
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 10240,
+        "last_reader_p95_ms": 9.403
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 40960,
+        "last_reader_p95_ms": 20.122
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 40960,
+        "last_reader_p95_ms": 7.734
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 2560,
+        "last_reader_p95_ms": 8.022
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 2560,
+        "last_reader_p95_ms": 8.526
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 10240,
+        "last_reader_p95_ms": 8.922
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 10240,
+        "last_reader_p95_ms": 9.198
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 40960,
+        "last_reader_p95_ms": 7.359
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 40960,
+        "last_reader_p95_ms": 21.613
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 160,
+        "last_reader_p95_ms": 7.075
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 160,
+        "last_reader_p95_ms": 6.601
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 10240,
+        "last_reader_p95_ms": 9.845
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 10240,
+        "last_reader_p95_ms": 8.883
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 40960,
+        "last_reader_p95_ms": 21.977
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 40960,
+        "last_reader_p95_ms": 7.268
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 160,
+        "last_reader_p95_ms": 7.092
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 160,
+        "last_reader_p95_ms": 7.529
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 2560,
+        "last_reader_p95_ms": 8.695
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 2560,
+        "last_reader_p95_ms": 10.495
+      }
+    ]
+  },
+  "stream": {
+    "prototype": "Python bidirectional gRPC producer with a durable receipt per event and SSE readers",
+    "baseline_broker": "43017fb966a9cf6197dc98f4e7d69709e06c46a5",
+    "events_per_reader": 128,
+    "results": [
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 128,
+        "last_reader_p95_ms": 6.586
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 128,
+        "last_reader_p95_ms": 7.65
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.397
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.065
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 8192,
+        "last_reader_p95_ms": 10.755
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 8192,
+        "last_reader_p95_ms": 8.964
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 32768,
+        "last_reader_p95_ms": 21.091
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 32768,
+        "last_reader_p95_ms": 8.07
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 2048,
+        "last_reader_p95_ms": 10.027
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.844
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.361
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.045
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 32768,
+        "last_reader_p95_ms": 7.711
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 32768,
+        "last_reader_p95_ms": 20.669
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 128,
+        "last_reader_p95_ms": 6.982
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 128,
+        "last_reader_p95_ms": 5.881
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 8192,
+        "last_reader_p95_ms": 13.313
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.185
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 32768,
+        "last_reader_p95_ms": 24.435
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 32768,
+        "last_reader_p95_ms": 7.937
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 128,
+        "last_reader_p95_ms": 6.753
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 128,
+        "last_reader_p95_ms": 7.302
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.996
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.333
+      }
+    ]
+  },
+  "socket": {
+    "prototype": "Python WebSocket producer with a durable receipt per event and SSE readers",
+    "baseline_broker": "43017fb966a9cf6197dc98f4e7d69709e06c46a5",
+    "events_per_reader": 128,
+    "results": [
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 128,
+        "last_reader_p95_ms": 6.414
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 128,
+        "last_reader_p95_ms": 8.322
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.622
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 2048,
+        "last_reader_p95_ms": 9.512
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 8192,
+        "last_reader_p95_ms": 10.589
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 8192,
+        "last_reader_p95_ms": 8.924
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 32768,
+        "last_reader_p95_ms": 19.367
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 32768,
+        "last_reader_p95_ms": 8.542
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.535
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.414
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.1
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 8192,
+        "last_reader_p95_ms": 10.148
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 32768,
+        "last_reader_p95_ms": 8.526
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 32768,
+        "last_reader_p95_ms": 19.913
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 128,
+        "last_reader_p95_ms": 8.162
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 128,
+        "last_reader_p95_ms": 5.808
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 8192,
+        "last_reader_p95_ms": 11.429
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.535
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 32768,
+        "last_reader_p95_ms": 19.982
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 32768,
+        "last_reader_p95_ms": 8.322
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 128,
+        "last_reader_p95_ms": 6.375
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 128,
+        "last_reader_p95_ms": 7.476
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.441
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 2048,
+        "last_reader_p95_ms": 7.762
+      }
+    ]
+  },
+  "inline": {
+    "prototype": "HTTPX producer with an inline blocking append, TCP_NODELAY and cached SSE bytes",
+    "baseline_broker": "43017fb966a9cf6197dc98f4e7d69709e06c46a5",
+    "events_per_reader": 128,
+    "results": [
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 128,
+        "last_reader_p95_ms": 9.365
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 128,
+        "last_reader_p95_ms": 7.187
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.485
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 2048,
+        "last_reader_p95_ms": 9.042
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.343
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.267
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 1,
+        "verified": 32768,
+        "last_reader_p95_ms": 19.702
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 1,
+        "verified": 32768,
+        "last_reader_p95_ms": 17.448
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 2048,
+        "last_reader_p95_ms": 9.646
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.14
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.013
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 8192,
+        "last_reader_p95_ms": 9.498
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 32768,
+        "last_reader_p95_ms": 8.364
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 32768,
+        "last_reader_p95_ms": 18.942
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 2,
+        "verified": 128,
+        "last_reader_p95_ms": 7.508
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 2,
+        "verified": 128,
+        "last_reader_p95_ms": 8.318
+      },
+      {
+        "case": "live-64",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 8192,
+        "last_reader_p95_ms": 10.236
+      },
+      {
+        "case": "live-64",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 8192,
+        "last_reader_p95_ms": 8.832
+      },
+      {
+        "case": "live-256",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 32768,
+        "last_reader_p95_ms": 18.937
+      },
+      {
+        "case": "live-256",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 32768,
+        "last_reader_p95_ms": 9.346
+      },
+      {
+        "case": "live-1",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 128,
+        "last_reader_p95_ms": 8.902
+      },
+      {
+        "case": "live-1",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 128,
+        "last_reader_p95_ms": 7.028
+      },
+      {
+        "case": "live-16",
+        "arm": "rabbit-redis",
+        "trial": 3,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.699
+      },
+      {
+        "case": "live-16",
+        "arm": "spooltail",
+        "trial": 3,
+        "verified": 2048,
+        "last_reader_p95_ms": 8.898
+      }
+    ]
+  }
+}
