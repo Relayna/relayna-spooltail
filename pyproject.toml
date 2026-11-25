@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "relayna-spooltail-native"
-version = "0.0.1"
+version = "0.0.5"
 requires-python = ">=3.11"
 description = "Native Protobuf attribute decoder for the Relayna Spooltail Python SDK"
 

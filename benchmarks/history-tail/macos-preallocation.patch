@@ -1,0 +1,256 @@
+diff --git a/src/journal.rs b/src/journal.rs
+index cc5ffd8..62dfffe 100644
+--- a/src/journal.rs
++++ b/src/journal.rs
+@@ -39,6 +39,8 @@ pub struct Journal {
+     index: Option<IndexWriter>,
+     pending: Vec<PendingAppend>,
+     failed_sync: bool,
++    #[cfg(target_os = "macos")]
++    extent_checked_until: u64,
+ }
+
+ struct PendingAppend {
+@@ -112,6 +114,8 @@ impl Journal {
+             index: None,
+             pending: Vec::new(),
+             failed_sync: false,
++            #[cfg(target_os = "macos")]
++            extent_checked_until: 0,
+         })
+     }
+
+@@ -304,6 +308,8 @@ impl Journal {
+                 index: None,
+                 pending: Vec::new(),
+                 failed_sync: false,
++                #[cfg(target_os = "macos")]
++                extent_checked_until: 0,
+             },
+             recovered_frames,
+         ))
+@@ -392,6 +398,43 @@ impl Journal {
+         Ok(address)
+     }
+
++    #[cfg(target_os = "macos")]
++    pub fn reserve_append_extent(&mut self, len: usize) {
++        use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
++
++        const EXTENT: u64 = 1024 * 1024;
++        // Every sealed segment is larger than this, even if the next frame is maximal.
++        const CEILING: u64 = SEGMENT_BYTES - (MAX_STORED_FRAME as u64 + 8);
++        let end = self.end + len as u64 + 8;
++        if end <= self.extent_checked_until || end > CEILING {
++            return;
++        }
++        let target = end.next_multiple_of(EXTENT).min(CEILING);
++        self.extent_checked_until = target;
++        let Ok(meta) = self.file.metadata() else {
++            return;
++        };
++        // On APFS, physical blocks can survive close and reopen beyond the logical EOF.
++        let allocated = meta.blocks().saturating_mul(512).max(meta.len());
++        let additional = target.saturating_sub(allocated).min(EXTENT);
++        if additional == 0
++            || crate::space::available(&self.dir).unwrap_or(0) < 2 * SEGMENT_BYTES + additional
++        {
++            return;
++        }
++        let mut extent = libc::fstore_t {
++            fst_flags: libc::F_ALLOCATEALL,
++            fst_posmode: libc::F_PEOFPOSMODE,
++            fst_offset: 0,
++            fst_length: additional as i64,
++            fst_bytesalloc: 0,
++        };
++        // Best effort. A failed hint leaves the actual write and sync responsible
++        // for reporting ENOSPC and other storage failures to the caller.
++        // SAFETY: fcntl receives a live descriptor and a writable Darwin fstore_t.
++        unsafe { libc::fcntl(self.file.as_raw_fd(), libc::F_PREALLOCATE, &mut extent) };
++    }
++
+     fn would_rotate(&self, body: &[u8]) -> bool {
+         self.end + 8 + body.len() as u64 > SEGMENT_BYTES
+     }
+@@ -401,6 +444,10 @@ impl Journal {
+             self.file = create_segment(&self.dir, self.segment + 1)?;
+             self.segment += 1;
+             self.end = 0;
++            #[cfg(target_os = "macos")]
++            {
++                self.extent_checked_until = 0;
++            }
+         }
+         let address = Address {
+             segment: self.segment,
+diff --git a/src/main.rs b/src/main.rs
+index 3b03770..f5a842a 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -278,6 +278,10 @@ async fn publish(
+                     break finish_publish(&b, &frame, partition, write)?;
+                 }
+                 Some(Prepared::Write(body)) => {
++                    #[cfg(target_os = "macos")]
++                    if ticket.reserve_extent {
++                        journal.reserve_append_extent(body.len());
++                    }
+                     let write = journal.append(&frame, partition, &body);
+                     break finish_publish(&b, &frame, partition, write)?;
+                 }
+diff --git a/src/space.rs b/src/space.rs
+index 36c8871..3312d45 100644
+--- a/src/space.rs
++++ b/src/space.rs
+@@ -30,7 +30,7 @@ impl Space {
+ }
+
+ #[cfg(unix)]
+-fn available(path: &Path) -> Result<u64> {
++pub(crate) fn available(path: &Path) -> Result<u64> {
+     use std::{ffi::CString, mem::MaybeUninit, os::unix::ffi::OsStrExt};
+     let path = CString::new(path.as_os_str().as_bytes())?;
+     let mut stats = MaybeUninit::<libc::statvfs>::uninit();
+@@ -43,7 +43,7 @@ fn available(path: &Path) -> Result<u64> {
+ }
+
+ #[cfg(not(unix))]
+-fn available(_: &Path) -> Result<u64> {
++pub(crate) fn available(_: &Path) -> Result<u64> {
+     anyhow::bail!("volume space measurement requires Unix")
+ }
+
+diff --git a/src/store.rs b/src/store.rs
+index c472711..f2675e6 100644
+--- a/src/store.rs
++++ b/src/store.rs
+@@ -189,6 +189,8 @@ pub struct WriteTicket {
+     pub placement: Placement,
+     pub journal: Arc<Mutex<Journal>>,
+     pub grouped: bool,
++    #[cfg(target_os = "macos")]
++    pub reserve_extent: bool,
+     demand: Option<Arc<AtomicUsize>>,
+ }
+
+@@ -771,6 +773,10 @@ impl Store {
+             placement,
+             journal: entry.journal.clone(),
+             grouped: self.groups_journal_sync(),
++            #[cfg(target_os = "macos")]
++            reserve_extent: self.journals.len() == 1
++                && self.space.reserve == 0
++                && self.split.is_none(),
+             demand,
+         })
+     }
+diff --git a/src/tests.rs b/src/tests.rs
+index eb9753a..6dfd3fc 100644
+--- a/src/tests.rs
++++ b/src/tests.rs
+@@ -6,6 +6,36 @@ fn record(id: &str) -> Value {
+     json!({"task_id":"T7","event_id":id,"status":"running","meta":{"level":1}})
+ }
+
++#[cfg(target_os = "macos")]
++#[tokio::test]
++async fn journal_reservation_is_bounded_across_reopen() -> Result<()> {
++    use std::os::unix::fs::MetadataExt;
++
++    let dir = tempdir()?;
++    let path = journal::segment_path(dir.path(), 0);
++    for i in 1..=4 {
++        let broker = Broker::new(Store::open(dir.path())?);
++        let id = format!("event-{i}");
++        let position = publish(broker, "status".into(), record(&id), None, None).await?;
++        assert_eq!(position.offset, i);
++        let meta = std::fs::metadata(&path)?;
++        assert!(meta.len() < 4096);
++        assert!(meta.blocks() * 512 <= 1024 * 1024 + meta.blksize());
++    }
++    let mut store = Store::open(dir.path())?;
++    let page = store.page("status", "T7", 0)?;
++    assert_eq!(page.len(), 4);
++    for (n, row) in page.iter().enumerate() {
++        assert_eq!(row.event, record(&format!("event-{}", n + 1)));
++    }
++    store.space.reserve = 1024;
++    assert!(!store.writer_ticket("T7", None)?.reserve_extent);
++    store.space.reserve = 0;
++    store.ensure_partition(1)?;
++    assert!(!store.writer_ticket("T7", None)?.reserve_extent);
++    Ok(())
++}
++
+ #[tokio::test]
+ async fn cancelled_history_keeps_its_slot_until_the_blocking_read_finishes() -> Result<()> {
+     let dir = tempdir()?;
+diff --git a/tests/packed_journal_disk_full.py b/tests/packed_journal_disk_full.py
+index 25dfc1a..4d2257a 100644
+--- a/tests/packed_journal_disk_full.py
++++ b/tests/packed_journal_disk_full.py
+@@ -172,6 +172,38 @@ async def append_fails(mount, template, mode, expected, *, torn=False):
+
+
+
++def leave_free_space(filler, mount, free_bytes):
++    stat = os.statvfs(mount)
++    to_write = stat.f_bavail * stat.f_frsize - free_bytes
++    assert to_write > 0
++    chunk = os.urandom(1024**2)
++    with filler.open("xb", buffering=0) as file:
++        while to_write:
++            to_write -= file.write(chunk[:to_write])
++        os.fsync(file.fileno())
++
++
++async def low_space_journal_growth(mount):
++    volume = mount / "small-writes"
++    filler = mount / "pressure"
++    event = {"task_id": "low-space", "event_id": "one"}
++    async with broker(volume, "shared") as (client, _):
++        leave_free_space(filler, mount, 8 * 1024**2)
++        try:
++            assert (await client.stats()).free_bytes < 16 * 1024**2
++            offset = await client.publish("foreground", event)
++            assert offset == 1
++            raw = (volume / FIRST_RAW).stat()
++            assert 0 < raw.st_size < 4096
++            assert raw.st_blocks * 512 < 1024**2
++        finally:
++            filler.unlink()
++    async with broker(volume, "shared") as (client, _):
++        assert (await client.latest("foreground", "low-space")).event == event
++    shutil.rmtree(volume)
++    print("PASS macOS small append used ordinary growth under disk pressure", flush=True)
++
++
+ async def protection(mount, template, mode, expected):
+     volume = mount / "protection"
+     shutil.copytree(template, volume)
+@@ -179,14 +211,7 @@ async def protection(mount, template, mode, expected):
+         lease = await client.claim("work", "pressure", lease_ms=600_000)
+         assert lease is not None
+     reserve = volume / "reserve"
+-    stat = os.statvfs(mount)
+-    to_write = stat.f_bavail * stat.f_frsize - 16 * 1024**2
+-    assert to_write > 0
+-    chunk = os.urandom(1024**2)
+-    with reserve.open("xb", buffering=0) as file:
+-        while to_write:
+-            to_write -= file.write(chunk[:to_write])
+-        os.fsync(file.fileno())
++    leave_free_space(reserve, mount, 16 * 1024**2)
+     disk_reserve = 32 * 1024**2
+     async with broker(volume, mode, packing=True, disk_reserve=disk_reserve) as (client, _):
+         async with asyncio.timeout(10):
+@@ -216,6 +241,8 @@ async def protection(mount, template, mode, expected):
+     print(f"PASS {mode} disk guard rejected new work and resumed publishing and packing", flush=True)
+
+ async def main(mount, control):
++    if platform.system() == "Darwin":
++        await low_space_journal_growth(mount)
+     for mode in ("shared", "partitioned"):
+         template = mount / "template"
+         expected = await seed(template, mode)

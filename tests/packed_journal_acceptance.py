@@ -139,6 +139,11 @@ async def verify_history(client, status, replay):
     assert inputs == status and through == status[-1][0]
     assert await client.history("status", "T1") == []
 
+    # This task's remaining records span the sealed segment and the active raw tail.
+    middle = len(replay) // 2
+    history = await client.history("replay", "T1", after=replay[middle - 1][1]["event_id"])
+    assert [(row.offset, row.event) for row in history] == replay[middle:]
+
     after = replay[0][0]
     replayed = []
     while len(replayed) < len(replay) - 1:

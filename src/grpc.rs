@@ -120,7 +120,7 @@ impl Spooltail for Api {
         let q = request.into_inner();
         let records = self
             .0
-            .run(move |s| {
+            .history_page(move |s| {
                 let position = s.resolve(&q.topic, &q.task_id, q.after.as_deref())?;
                 s.page(&q.topic, &q.task_id, position)
             })
@@ -400,11 +400,10 @@ impl Spooltail for Api {
     ) -> Result<Response<Self::SubscribeStream>, Status> {
         let q = request.into_inner();
         let events = feed(self.0.clone(), q.topic, q.task_id, q.after).map(|item| {
-            let data_json = serde_json::to_vec(&item.data).map_err(|error| status(error.into()))?;
             Ok(Delivery {
                 kind: item.kind.into(),
-                event_id: item.id,
-                data_json,
+                event_id: item.id.clone(),
+                data_json: item.data.get().as_bytes().to_vec(),
             })
         });
         Ok(Response::new(Box::pin(events)))

@@ -6,6 +6,7 @@ For random lookups by task ID, see the [latest-status and recent-history benchma
 The [multiple-generator benchmark](load-generators.md) measures latest-status throughput as client processes and concurrent readers increase.
 The [resource benchmark](read-resources.md) measures server and caller CPU and memory at idle, 100 reads/s and 1,000 reads/s.
 The [transport benchmark](protocols/README.md) compares HTTP/1.1, HTTP/2, gRPC, and Unix sockets against the same Spooltail broker logic.
+The [same-task SSE benchmark](event-stream/README.md) compares Spooltail with RabbitMQ + Redis for live fan-out, slow subscribers, and simultaneous reconnects.
 
 ## Measured results
 

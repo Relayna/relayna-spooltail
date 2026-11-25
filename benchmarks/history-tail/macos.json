@@ -1,0 +1,302 @@
+{
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "writer_payload_bytes": 256,
+  "binary_sha256": {
+    "current": "8d229d6e07bb38620b5b3c8d59f6cc20091d3b12e089d1ff224f32770e24441c",
+    "bounded": "b210be467997b9676e6c20b73e5022d600ba9180915aefafc3905799aa859593",
+    "parent": "396d211787ef11ff56a8099fdb3a103d31e70d14d2b45cb207e1365cefee040f"
+  },
+  "trials": [
+    {
+      "round": 1,
+      "binary": "current",
+      "history_p50": 1.9735629903152585,
+      "history_p99": 6.7724579712376,
+      "publish_p50": 6.304812559392303,
+      "publish_p99": 12.217374984174967
+    },
+    {
+      "round": 1,
+      "binary": "bounded",
+      "history_p50": 2.1336874924600124,
+      "history_p99": 6.433915928937495,
+      "publish_p50": 6.822458002716303,
+      "publish_p99": 12.590625090524554
+    },
+    {
+      "round": 1,
+      "binary": "parent",
+      "history_p50": 4.6122290077619255,
+      "history_p99": 7.261874969117343,
+      "publish_p50": 5.615479021798819,
+      "publish_p99": 11.249874951317906
+    },
+    {
+      "round": 2,
+      "binary": "parent",
+      "history_p50": 4.446186998393387,
+      "history_p99": 7.147833006456494,
+      "publish_p50": 5.476291989907622,
+      "publish_p99": 12.192291091196239
+    },
+    {
+      "round": 2,
+      "binary": "bounded",
+      "history_p50": 2.2190000163391232,
+      "history_p99": 6.087249959819019,
+      "publish_p50": 6.837603985331953,
+      "publish_p99": 12.06883299164474
+    },
+    {
+      "round": 2,
+      "binary": "current",
+      "history_p50": 2.109770488459617,
+      "history_p99": 4.930791910737753,
+      "publish_p50": 6.318395491689444,
+      "publish_p99": 10.428874986246228
+    },
+    {
+      "round": 3,
+      "binary": "bounded",
+      "history_p50": 2.1812705090269446,
+      "history_p99": 5.686499993316829,
+      "publish_p50": 6.61191699327901,
+      "publish_p99": 10.476000024937093
+    },
+    {
+      "round": 3,
+      "binary": "parent",
+      "history_p50": 4.500729497522116,
+      "history_p99": 7.2518340311944485,
+      "publish_p50": 5.6088955025188625,
+      "publish_p99": 11.337292031385005
+    },
+    {
+      "round": 3,
+      "binary": "current",
+      "history_p50": 2.05650000134483,
+      "history_p99": 5.058082984760404,
+      "publish_p50": 6.529271020554006,
+      "publish_p99": 11.05008297599852
+    },
+    {
+      "round": 4,
+      "binary": "current",
+      "history_p50": 2.196312474552542,
+      "history_p99": 5.3862499771639705,
+      "publish_p50": 6.749708554707468,
+      "publish_p99": 13.646750012412667
+    },
+    {
+      "round": 4,
+      "binary": "parent",
+      "history_p50": 4.559875000268221,
+      "history_p99": 7.301458972506225,
+      "publish_p50": 5.412374506704509,
+      "publish_p99": 12.11954199243337
+    },
+    {
+      "round": 4,
+      "binary": "bounded",
+      "history_p50": 2.2157710045576096,
+      "history_p99": 5.867292056791484,
+      "publish_p50": 6.669687980320305,
+      "publish_p99": 11.769167031161487
+    },
+    {
+      "round": 5,
+      "binary": "parent",
+      "history_p50": 4.534145991783589,
+      "history_p99": 8.362416992895305,
+      "publish_p50": 5.7024789857678115,
+      "publish_p99": 14.018625020980835
+    },
+    {
+      "round": 5,
+      "binary": "current",
+      "history_p50": 2.231874503195286,
+      "history_p99": 6.210958934389055,
+      "publish_p50": 6.818146037403494,
+      "publish_p99": 11.992041021585464
+    },
+    {
+      "round": 5,
+      "binary": "bounded",
+      "history_p50": 2.0207499619573355,
+      "history_p99": 5.9807500801980495,
+      "publish_p50": 6.646250025369227,
+      "publish_p99": 10.9609579667449
+    },
+    {
+      "round": 6,
+      "binary": "bounded",
+      "history_p50": 1.811000518500805,
+      "history_p99": 6.192958913743496,
+      "publish_p50": 6.532603991217911,
+      "publish_p99": 12.906917021609843
+    },
+    {
+      "round": 6,
+      "binary": "current",
+      "history_p50": 1.89512490760535,
+      "history_p99": 5.013833986595273,
+      "publish_p50": 6.5672085038386285,
+      "publish_p99": 12.282249983400106
+    },
+    {
+      "round": 6,
+      "binary": "parent",
+      "history_p50": 4.548979515675455,
+      "history_p99": 7.24654202349484,
+      "publish_p50": 6.1135205323807895,
+      "publish_p99": 11.57912495546043
+    },
+    {
+      "round": 7,
+      "binary": "current",
+      "history_p50": 2.165146463084966,
+      "history_p99": 5.598416086286306,
+      "publish_p50": 7.01170798856765,
+      "publish_p99": 11.40925008803606
+    },
+    {
+      "round": 7,
+      "binary": "bounded",
+      "history_p50": 1.9684790750034153,
+      "history_p99": 6.1912089586257935,
+      "publish_p50": 6.455333495978266,
+      "publish_p99": 10.693624964915216
+    },
+    {
+      "round": 7,
+      "binary": "parent",
+      "history_p50": 4.337333492003381,
+      "history_p99": 7.103999960236251,
+      "publish_p50": 5.68789552198723,
+      "publish_p99": 11.046624975278974
+    },
+    {
+      "round": 8,
+      "binary": "parent",
+      "history_p50": 4.44427045295015,
+      "history_p99": 7.214833050966263,
+      "publish_p50": 5.4901454714126885,
+      "publish_p99": 11.678250040858984
+    },
+    {
+      "round": 8,
+      "binary": "bounded",
+      "history_p50": 2.242749964352697,
+      "history_p99": 6.346249952912331,
+      "publish_p50": 6.647458532825112,
+      "publish_p99": 11.763083981350064
+    },
+    {
+      "round": 8,
+      "binary": "current",
+      "history_p50": 2.020104497205466,
+      "history_p99": 6.8185830023139715,
+      "publish_p50": 6.448437459766865,
+      "publish_p99": 12.546374928206205
+    },
+    {
+      "round": 9,
+      "binary": "bounded",
+      "history_p50": 2.239333465695381,
+      "history_p99": 6.87154196202755,
+      "publish_p50": 6.751250009983778,
+      "publish_p99": 11.74379198346287
+    },
+    {
+      "round": 9,
+      "binary": "parent",
+      "history_p50": 4.502958967350423,
+      "history_p99": 7.108792080543935,
+      "publish_p50": 5.6379789602942765,
+      "publish_p99": 11.25895802397281
+    },
+    {
+      "round": 9,
+      "binary": "current",
+      "history_p50": 1.7644999315962195,
+      "history_p99": 5.833499948494136,
+      "publish_p50": 6.463708006776869,
+      "publish_p99": 11.862916988320649
+    },
+    {
+      "round": 10,
+      "binary": "current",
+      "history_p50": 2.163187484256923,
+      "history_p99": 5.7706659426912665,
+      "publish_p50": 6.790229002945125,
+      "publish_p99": 12.039292021654546
+    },
+    {
+      "round": 10,
+      "binary": "parent",
+      "history_p50": 4.61270846426487,
+      "history_p99": 9.326083003543317,
+      "publish_p50": 5.727499956265092,
+      "publish_p99": 11.51558302808553
+    },
+    {
+      "round": 10,
+      "binary": "bounded",
+      "history_p50": 2.122917037922889,
+      "history_p99": 5.549624911509454,
+      "publish_p50": 6.684291467536241,
+      "publish_p99": 10.633624973706901
+    },
+    {
+      "round": 11,
+      "binary": "parent",
+      "history_p50": 4.411187546793371,
+      "history_p99": 7.0926250191405416,
+      "publish_p50": 5.668812489602715,
+      "publish_p99": 11.786999995820224
+    },
+    {
+      "round": 11,
+      "binary": "current",
+      "history_p50": 2.2926044766791165,
+      "history_p99": 5.22741605527699,
+      "publish_p50": 6.864542025141418,
+      "publish_p99": 11.165249976329505
+    },
+    {
+      "round": 11,
+      "binary": "bounded",
+      "history_p50": 1.8059375579468906,
+      "history_p99": 7.075916975736618,
+      "publish_p50": 6.4264165121130645,
+      "publish_p99": 12.666541966609657
+    },
+    {
+      "round": 12,
+      "binary": "bounded",
+      "history_p50": 2.135083021130413,
+      "history_p99": 6.5309160854667425,
+      "publish_p50": 6.643791450187564,
+      "publish_p99": 11.287749977782369
+    },
+    {
+      "round": 12,
+      "binary": "current",
+      "history_p50": 1.9960625213570893,
+      "history_p99": 6.581999943591654,
+      "publish_p50": 6.431208050344139,
+      "publish_p99": 10.917000006884336
+    },
+    {
+      "round": 12,
+      "binary": "parent",
+      "history_p50": 4.497417015954852,
+      "history_p99": 7.768874987959862,
+      "publish_p50": 5.621145537588745,
+      "publish_p99": 10.91187505517155
+    }
+  ],
+  "readers": 4,
+  "latency_units": "ms",
+  "publishes_per_trial": 240
+}
