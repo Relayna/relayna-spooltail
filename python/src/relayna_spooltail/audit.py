@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import heapq
 import inspect
 import json
 import sqlite3
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import astuple, dataclass
 from os import PathLike
 from types import TracebackType
-from typing import Any, Protocol, Self
+from typing import Any, Protocol, Self, TypeVar
 from uuid import uuid4
 
 from .client import ConflictError, CursorGapError, Record, ReplayBatch, SpooltailClient
+from .replay import NumericBatch
+
+Batch = TypeVar("Batch", ReplayBatch, NumericBatch)
+BatchResult_co = TypeVar("BatchResult_co", bound=ReplayBatch | NumericBatch, covariant=True)
+
+
+class _PageReader(Protocol[BatchResult_co]):
+    def __call__(
+        self, topic: str, /, *, after: int | None, limit: int
+    ) -> Awaitable[BatchResult_co]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +107,7 @@ def _authorize_state_sql(
 
 
 def _input_entry(record: Record) -> AuditEntry:
-    return AuditEntry("input", record.offset, record.event["event_id"], event=record.event)
+    return AuditEntry("input", record.offset, record.event_id, event=record.event)
 
 
 class AuditStore:
@@ -155,6 +167,90 @@ class AuditStore:
     def close(self) -> None:
         self._db.close()
 
+    @classmethod
+    async def catch_up(
+        cls,
+        path: str | PathLike[str],
+        topic: str,
+        consumer: str,
+        *,
+        read_page: _PageReader[Batch],
+        process: Callable[[Batch], Sequence[AuditOutcome]],
+        limit: int = 32,
+        max_records: int | None = None,
+        apply_state: Callable[[Batch, StateStatement], None] | None = None,
+    ) -> int | None:
+        """Replay until an empty page or max_records. Return the durable checkpoint.
+
+        Fetch one bounded page ahead. One worker owns the SQLite connection and runs
+        process and apply_state in order. Only apply_state runs inside the transaction.
+        A cancelled call waits for an in-flight write before closing the connection.
+        """
+        if not 1 <= limit <= 64 or (max_records is not None and max_records < 0):
+            raise ValueError("limit must be 1..64 and max_records must be nonnegative")
+        if not consumer:
+            raise ValueError("a consumer is required")
+        loop = asyncio.get_running_loop()
+        store = None
+
+        def open_store():
+            nonlocal store
+            store = cls(path)
+            return store.checkpoint(topic, consumer)
+
+        def commit(page: Batch):
+            assert store is not None
+            state = (
+                None
+                if apply_state is None
+                else lambda execute: apply_state(page, execute)
+            )
+            store.commit_batch(consumer, page, process(page), apply_state=state)
+
+        def close_store():
+            if store is not None:
+                store.close()
+
+        async def fetch(after: int | None, count: int) -> Batch:
+            page = await read_page(topic, after=after, limit=count)
+            if (
+                page.topic != topic
+                or (after is not None and page.after != after)
+                or len(page.records) > count
+            ):
+                raise ValueError("reader returned an inconsistent replay page")
+            return page
+
+        remaining = max_records
+        ahead = None
+        with ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="spooltail-audit"
+        ) as writer:
+            try:
+                saved = await loop.run_in_executor(writer, open_store)
+
+                def next_page(after):
+                    count = limit if remaining is None else min(limit, remaining)
+                    return asyncio.create_task(fetch(after, count)) if count else None
+
+                ahead = next_page(saved)
+                while ahead is not None:
+                    page = await ahead
+                    if not page.records:
+                        break
+                    through = page.records[-1].offset
+                    if remaining is not None:
+                        remaining -= len(page.records)
+                    ahead = next_page(through)
+                    await loop.run_in_executor(writer, commit, page)
+                    saved = through
+                return saved
+            finally:
+                if ahead is not None:
+                    ahead.cancel()
+                    await asyncio.gather(ahead, return_exceptions=True)
+                await loop.run_in_executor(writer, close_store)
+
     def _checkpoint(self, topic: str, consumer: str) -> tuple[int, str] | None:
         return self._db.execute(
             "SELECT offset, receipt FROM spooltail_audit_checkpoint WHERE topic=? AND consumer=?",
@@ -192,7 +288,7 @@ class AuditStore:
     def commit_batch(
         self,
         consumer: str,
-        batch: ReplayBatch,
+        batch: ReplayBatch | NumericBatch,
         outcomes: Sequence[AuditOutcome],
         *,
         apply_state: StateChanges | None = None,
@@ -216,12 +312,12 @@ class AuditStore:
                 raise ValueError("outcome must reference a record in the batch")
             if not outcome.operation or not outcome.outcome or not outcome.actor:
                 raise ValueError("operation, outcome, and actor are required")
-            rows.append((batch.topic, record.event["task_id"], consumer, outcome.source_offset,
-                         record.event["event_id"], outcome.operation, outcome.outcome,
+            rows.append((batch.topic, record.task_id, consumer, outcome.source_offset,
+                         record.event_id, outcome.operation, outcome.outcome,
                          outcome.actor, outcome.reason))
         through = offsets[-1]
         receipt = hashlib.sha256(json.dumps(
-            [batch.after, [(r.offset, r.partition, r.event["task_id"], r.event["event_id"])
+            [batch.after, [(r.offset, r.partition, r.task_id, r.event_id)
                            for r in batch.records], [astuple(o) for o in outcomes]],
             separators=(",", ":"),
         ).encode()).hexdigest()

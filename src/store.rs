@@ -202,6 +202,9 @@ impl Drop for WriteTicket {
 
 pub struct Store {
     pub(crate) db: Connection,
+    pub(crate) live: crate::live::LiveTasks,
+    // Only for plain address rows that can be rebuilt in order from one synced journal.
+    single_journal_index: Option<Connection>,
     dir: PathBuf,
     pub(crate) packed: Manifest,
     pub(crate) space: Space,
@@ -401,9 +404,23 @@ impl Store {
             None
         };
         packing::recover(dir, &partitions, &packed)?;
+        let single_journal_index = if !want_split && partitions.as_slice() == [0] {
+            let index = Connection::open(dir.join("index.sqlite"))?;
+            let mode: String = index.query_row("PRAGMA journal_mode", [], |r| r.get(0))?;
+            if mode == "wal" {
+                index.pragma_update(None, "synchronous", "NORMAL")?;
+                Some(index)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Ok(Self {
             db,
             dir: dir.to_owned(),
+            live: Default::default(),
+            single_journal_index,
             packed,
             space: Space::default(),
             audit_only,
@@ -487,6 +504,9 @@ impl Store {
         File::open(&self.dir)?.sync_all()?;
         self.db
             .execute("INSERT INTO partitions VALUES(?)", [partition])?;
+        // Registering the second partition with FULL sync also persists all preceding
+        // address rows. From here offsets may interleave across physical journals.
+        self.single_journal_index = None;
         self.journals.insert(partition, Partition::new(journal));
         Ok(())
     }
@@ -856,14 +876,22 @@ impl Store {
                     "partition record is out of publication order"
                 );
             }
-            let tx = self.db.transaction()?;
+            // The journal has already synced. For a single journal its order alone
+            // reproduces the assigned offsets. Lease completion and multi-journal
+            // publication still commit on the FULL-synchronous coordinator.
+            let db = match (&mut self.single_journal_index, &frame.completion) {
+                (Some(index), None) => index,
+                _ => &mut self.db,
+            };
+            let tx = db.transaction()?;
             let offset = index(&tx, frame, partition, address)?;
             tx.commit()?;
             Ok(Position { partition, offset })
         });
+        let task = frame.key()?.0;
         let cleanup = self
             .db
-            .execute("DELETE FROM appending WHERE task=?", [frame.key()?.0]);
+            .execute("DELETE FROM appending WHERE task=?", [task]);
         if result.is_err() || cleanup.is_err() {
             // Recover every uncertain suffix before allowing another mutation.
             self.failed_write = true;
@@ -873,6 +901,9 @@ impl Store {
         if let Some(split) = &mut self.split {
             split.visible_next += 1;
         }
+        // Publish in commit order while the store is locked, including when the caller disconnected.
+        self.live
+            .publish(&frame.topic, task, position.offset, &frame.event);
         Ok(position)
     }
 
@@ -997,6 +1028,7 @@ impl Store {
             return Err(Problem::Invalid("floor outside topic bounds".into()).into());
         }
         self.db.execute("INSERT INTO floors VALUES(?,?) ON CONFLICT(topic) DO UPDATE SET first_offset=MAX(first_offset,excluded.first_offset)",params![topic,offset])?;
+        self.live.advance_floor(topic, offset);
         Ok(())
     }
 
@@ -1026,14 +1058,38 @@ impl Store {
         }
     }
 
+    pub fn has_task_records_after(&self, topic: &str, task: &str, offset: i64) -> Result<bool> {
+        Ok(self
+            .db
+            .prepare_cached(
+                "SELECT EXISTS(SELECT 1 FROM records WHERE topic=? AND task=? AND offset>?)",
+            )?
+            .query_row(params![topic, task, offset], |row| row.get(0))?)
+    }
+
     pub fn page(&self, topic: &str, task: &str, after: i64) -> Result<Vec<Record>> {
         let floor = self.floor(topic)?;
         if after < floor - 1 {
             return Err(self.gap(topic, task, floor)?.into());
         }
-        let mut stmt=self.db.prepare_cached("SELECT offset FROM records WHERE topic=? AND task=? AND offset>? ORDER BY offset LIMIT ?")?;
-        let rows = stmt.query_map(params![topic, task, after, PAGE_SIZE], |r| r.get(0))?;
-        rows.map(|r| self.read(r?)).collect()
+        let mut stmt = self.db.prepare_cached(
+            "SELECT offset,partition,segment,pos,len FROM records
+             WHERE topic=? AND task=? AND offset>? ORDER BY offset LIMIT ?",
+        )?;
+        let mut rows = stmt.query(params![topic, task, after, PAGE_SIZE])?;
+        let mut locations = Vec::new();
+        while let Some(row) = rows.next()? {
+            locations.push(RecordLocation {
+                offset: row.get(0)?,
+                partition: row.get(1)?,
+                address: Address {
+                    segment: u64::try_from(row.get::<_, i64>(2)?)?,
+                    pos: u64::try_from(row.get::<_, i64>(3)?)?,
+                    len: usize::try_from(row.get::<_, i64>(4)?)?,
+                },
+            });
+        }
+        self.read_indexed_page(locations)
     }
 
     pub fn latest(&self, topic: &str, task: &str) -> Result<Record> {
