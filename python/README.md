@@ -92,7 +92,74 @@ async def project_status(client):
 
 For application state in the same file, initialize your application tables before processing. Pass a synchronous `apply_state(execute)` callback to `commit_batch` and use its executor for application queries and writes. The SDK commits those changes, the outcomes, and the cursor together. Pass an empty outcomes list to advance over records that produce no audit entries. Retrying the same committed batch returns `False` and skips the callback. External effects need their own idempotency handling.
 
-The timeline orders entries by source offset, with inputs before outcomes at the same offset. The producer provides the event ID, and the consumer supplies the outcome actor. Follow `page.cursor` with the same task and store to keep the first page's input and outcome bounds. A fresh read sees later arrivals. If retention removes the input cursor between pages, the SDK raises `CursorGapError`. A fresh read marks local outcomes whose original input is outside retained history.
+The timeline orders entries by source offset, with inputs before outcomes at the same offset. The producer provides the event ID, and the consumer supplies the outcome actor. The timeline uses the broker's `AuditHistory` RPC to read originals from hot history and the Zstd archive, when a [topic retention policy](../README.md#configure-audit-input-retention) is configured. Deploy a broker that supports this RPC when upgrading the SDK.
+
+Follow `page.cursor` with the same task and store to keep the first page's input and outcome bounds. A fresh read sees later arrivals. The cursor stays valid while its event moves into the archive. If retention removes the input cursor between pages, the SDK raises `CursorGapError`. A fresh read marks local outcomes whose original input is outside retained history.
+
+## Choosing a replay reader
+
+Choose based on what the consumer needs to **finish processing one event**. The native decoder builds Python objects on the consumer. A numeric projection selects values on the broker before it sends the page.
+
+| What your handler needs | What to use | Example |
+| --- | --- | --- |
+| Only IDs, offsets, or partitions | Use `read_after_batch` and access `record.event_id`, `record.task_id`, `record.offset`, or `record.partition` directly. | An audit consumer records which event it processed. |
+| Complete events, occasionally or with a simple shape | Start with the portable SDK. Access `record.event` when the handler needs its contents. | A router inspects the full event only for selected tasks. |
+| Complete nested dictionaries and lists for most events | Use `read_after_batch`. Add the **optional native decoder** when profiling shows that building those objects takes significant consumer time. | A validator walks every nested sample, including flags, tags, and large integer IDs. |
+| One numeric field across an array, plus each event’s identity | Use **`read_numeric_batch`**. Start with `sums()` for per-event totals. Add NumPy for large columns or downstream array operations. | A meter reader totals `samples[].rate` for each event. |
+
+For example, a consumer that sums **only approved samples** needs both `rate` and `approved`. Use full records for that calculation. A rate-only projection would discard the flag needed to produce the correct result. Either reader works with the same SQLite checkpoint and one-page read-ahead.
+
+### When to install the native decoder
+
+Use a broker that supports `ReadReplayPage`. Reading `record.event_id` and `record.task_id` leaves the event dictionary unbuilt. The first access to `record.event` materializes it, and subsequent accesses return the same mutable dictionary. Installing the companion accelerates decoding of Protobuf attributes at that first access. Legacy brokers and the JSON fallback for unusually deep or dense attributes use the Python JSON decoder.
+
+To decide whether the extra build dependency pays off, time your actual handler with a representative backlog, including its SQLite commits. Compare the portable SDK and the native companion with the same events and page size. An ID-only handler can use the portable SDK throughout.
+
+Install the matching `relayna-spooltail-native` source distribution from the SDK release alongside the regular SDK, or build the companion from the repository root with `python -m pip install .`. Building requires a C++17 toolchain, CMake, `protoc` and matching libprotobuf development libraries. The wheel links to the system libprotobuf. The SDK selects the extension automatically when it can import it. To verify that your application interpreter can load it, run the following command.
+
+```sh
+python -c "import spooltail_replay_native; print(spooltail_replay_native.__file__)"
+```
+
+### When to use a numeric projection
+
+Use a broker that supports `ReadNumericPage` when one numeric column and the event identifiers supply everything the handler needs. For an event with `"samples": [{"rate": 1.25}, {"rate": 2.0}]`, select the array key `samples` and the element key `rate`. These are literal keys. The broker returns the values as packed float64 data, with a count, offset, partition, task ID, and event ID for each record.
+
+```python
+from functools import partial
+
+read_rates = partial(client.read_numeric_batch, array_field="samples", value_field="rate")
+page = await read_rates("status", after=saved, limit=64)
+for row, total in zip(page.records, page.sums(), strict=True):
+    print(row.event_id, row.count, total)  # Two samples above give a total of 3.25.
+```
+
+**Dependencies.** Numeric projection and `page.sums()` work with the portable SDK alone. Install the SDK’s `numpy` extra or NumPy separately when you need `page.as_numpy()` (a flat, read-only array view) or `page.numpy_sums()` (one sum per event). Both sum methods give zero for an empty array. Floating-point summation order can differ.
+
+**Data requirements.** Each event must have the selected array. Each element must contain a number exactly representable as float64. For example, the integer `9007199254740993` cannot be projected exactly. Use full records for exact integer IDs, mixed event shapes, or calculations that depend on other fields. A projection can return the valid prefix of a page. A read starting at the incompatible record reports its offset. To inspect it, call `read_after_batch` with the last successfully processed offset as `after`.
+
+Pass `read_page=read_rates` to `AuditStore.catch_up` to use this projection with durable checkpoints.
+
+### Saved-offset catch-up with one page ahead
+
+`AuditStore.catch_up` starts at the consumer's saved SQLite cursor. While one worker applies a page and commits its outcomes, the SDK fetches the next page. The default page size is 32 and the maximum is 64, subject to the broker's 2 MiB limit.
+
+```python
+from relayna_spooltail import AuditOutcome, AuditStore
+
+def process(page):
+    return [
+        AuditOutcome(r.offset, "index", "applied", "worker", r.event_id)
+        for r in page.records
+    ]
+
+saved = await AuditStore.catch_up(
+    "audit.sqlite", "status", "indexer",
+    read_page=client.read_after_batch, process=process, limit=32,
+)
+```
+
+The call stops on an empty page. Set `max_records` to bound a run under continuous publishing. It returns the persisted offset, or `None` if the consumer has never committed. The synchronous `process(page)` runs on the writer thread and may be called again after interruption. Use `apply_state(page, execute)` for application SQL that must commit atomically with the outcomes and cursor. A failed commit discards the prefetched page. Cancellation waits for an already-running transaction to settle. On restart the SDK reads the durable cursor again.
 
 ## Partitions
 
@@ -119,7 +186,7 @@ The generator reads the broker's Protobuf schema. The build writes the source di
 Set `project.version` in `python/pyproject.toml` to the next three-part [semantic version](https://semver.org/), regenerate `python/uv.lock` with `uv lock --project python`, and merge the version change. On an up-to-date `main`, create and push an annotated `vMAJOR.MINOR.PATCH` tag matching that version.
 
 ```sh
-sdk_version=0.0.2
+sdk_version=0.0.5
 git tag -a "v${sdk_version}" -m "Spooltail v${sdk_version}"
 git push origin "refs/tags/v${sdk_version}"
 ```

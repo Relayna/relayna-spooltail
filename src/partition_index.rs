@@ -273,7 +273,12 @@ pub fn restore_projection(
         )?;
     }
     db.execute_batch(
-        "CREATE UNIQUE INDEX temp.by_event ON records(topic,task,event_id);
+        "INSERT INTO temp.records
+         SELECT r.offset,r.topic,r.task,r.event_id,r.segment,r.pos,r.len,r.partition,
+                COALESCE(t.partition,r.partition)
+         FROM main.retired_records r LEFT JOIN main.task_routes t ON t.task=r.task
+         WHERE NOT EXISTS(SELECT 1 FROM temp.records WHERE offset=r.offset);
+         CREATE UNIQUE INDEX temp.by_event ON records(topic,task,event_id);
          CREATE INDEX temp.by_task ON records(topic,task,offset);
          CREATE INDEX temp.by_topic ON records(topic,offset);
          CREATE INDEX temp.by_partition_topic ON records(partition,topic,offset);
