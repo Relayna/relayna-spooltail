@@ -384,6 +384,7 @@ impl Store {
             params![candidate.topic, next],
         )?;
         tx.commit()?;
+        self.live.advance_floor(&candidate.topic, next);
         Ok(())
     }
 

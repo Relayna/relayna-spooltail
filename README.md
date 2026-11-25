@@ -78,7 +78,7 @@ History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A
 
 ## Python client
 
-Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/sarattha/relayna-spooltail/releases). The [Python SDK quickstart](python/README.md) shows how to install it into a Relayna environment and use the native client to publish and complete work.
+Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/sarattha/relayna-spooltail/releases). The [Python SDK quickstart](python/README.md) shows how to install it into a Relayna environment and use the native client to publish and complete work. For saved-offset consumers, see [when to use the native decoder or a numeric projection](python/README.md#choosing-a-replay-reader).
 
 ## Broker operations
 
