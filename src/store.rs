@@ -3,8 +3,10 @@ use crate::{
         self, ACCEPTED_AT_FIELD_BYTES, Address, Journal, MAX_FRAME, OFFSET_FIELD_BYTES,
         partition_dir,
     },
+    packing::{self, Manifest},
     partition_index::{self, SplitIndex},
-    retention,
+    retention, retire,
+    space::Space,
     subscriptions::{WorkLease, now},
 };
 use anyhow::{Context, Result, ensure};
@@ -14,7 +16,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, hash_map::Entry},
     fs::{self, File, OpenOptions},
-    io::{BufReader, Seek, SeekFrom},
+    io::{Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -35,6 +37,8 @@ pub enum Problem {
     Conflict(String),
     #[error("cursor unavailable")]
     Gap { earliest: Option<String> },
+    #[error("insufficient disk headroom, retry after freeing space")]
+    Capacity,
     #[error("resource not found")]
     Missing,
 }
@@ -52,7 +56,7 @@ pub fn identifier(s: &str) -> Result<()> {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Frame {
     pub(crate) topic: String,
-    event: Value,
+    pub(crate) event: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) completion: Option<WorkLease>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -198,7 +202,13 @@ impl Drop for WriteTicket {
 
 pub struct Store {
     pub(crate) db: Connection,
+    pub(crate) live: crate::live::LiveTasks,
+    // Only for plain address rows that can be rebuilt in order from one synced journal.
+    single_journal_index: Option<Connection>,
     dir: PathBuf,
+    pub(crate) packed: Manifest,
+    pub(crate) space: Space,
+    pub(crate) audit_only: BTreeSet<String>,
     journals: BTreeMap<u32, Partition>,
     service_partitions: BTreeMap<String, Vec<u32>>,
     pub dynamic_placement: bool,
@@ -262,7 +272,7 @@ fn migrate(db: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS partition_cursors (
             topic TEXT NOT NULL, name TEXT NOT NULL, partition INTEGER NOT NULL, offset INTEGER NOT NULL,
             PRIMARY KEY(topic,name,partition));
-         CREATE TEMP TABLE appending (task TEXT PRIMARY KEY, partition INTEGER NOT NULL, work_offset INTEGER UNIQUE);",
+         CREATE TEMP TABLE appending (task TEXT PRIMARY KEY, partition INTEGER NOT NULL, work_offset INTEGER UNIQUE, reserved_bytes INTEGER NOT NULL);",
     )?;
     let mut columns = db.prepare("SELECT name FROM pragma_table_info('task_routes')")?;
     let existing = columns
@@ -354,6 +364,8 @@ impl Store {
         }
         migrate(&db)?;
         retention::init(&db)?;
+        let packed = packing::init(&db)?;
+        let audit_only = retire::init(&db)?;
         let partitions = db
             .prepare("SELECT id FROM partitions ORDER BY id")?
             .query_map([], |row| row.get::<_, u32>(0))?
@@ -363,7 +375,8 @@ impl Store {
         if !enabled {
             // Finish any pre-upgrade suffix using the legacy offset allocator.
             for &id in &partitions {
-                let (journal, recovered) = Journal::open(&partition_dir(dir, id), &mut db, id)?;
+                let (journal, recovered) =
+                    Journal::open(&partition_dir(dir, id), &mut db, id, &packed)?;
                 journals.insert(id, Partition::new(journal));
                 recovered_frames += recovered;
             }
@@ -377,6 +390,7 @@ impl Store {
                     partition_index::open(dir, id)?,
                     id,
                     partition_index::legacy_checkpoint(&db, id)?,
+                    &packed,
                 )?;
                 journals.insert(id, Partition::new(journal));
                 recovered_frames += recovered;
@@ -389,9 +403,27 @@ impl Store {
         } else {
             None
         };
+        packing::recover(dir, &partitions, &packed)?;
+        let single_journal_index = if !want_split && partitions.as_slice() == [0] {
+            let index = Connection::open(dir.join("index.sqlite"))?;
+            let mode: String = index.query_row("PRAGMA journal_mode", [], |r| r.get(0))?;
+            if mode == "wal" {
+                index.pragma_update(None, "synchronous", "NORMAL")?;
+                Some(index)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Ok(Self {
             db,
             dir: dir.to_owned(),
+            live: Default::default(),
+            single_journal_index,
+            packed,
+            space: Space::default(),
+            audit_only,
             _lock: lock,
             journals,
             service_partitions: BTreeMap::new(),
@@ -419,6 +451,10 @@ impl Store {
             self.ensure_writable()?;
         }
         Ok(())
+    }
+
+    pub(crate) fn data_dir(&self) -> &Path {
+        &self.dir
     }
 
     pub fn partition_ids(&self) -> Vec<u32> {
@@ -468,6 +504,9 @@ impl Store {
         File::open(&self.dir)?.sync_all()?;
         self.db
             .execute("INSERT INTO partitions VALUES(?)", [partition])?;
+        // Registering the second partition with FULL sync also persists all preceding
+        // address rows. From here offsets may interleave across physical journals.
+        self.single_journal_index = None;
         self.journals.insert(partition, Partition::new(journal));
         Ok(())
     }
@@ -756,19 +795,22 @@ impl Store {
         })
     }
 
+    pub fn existing_event(&self, frame: &Frame) -> Result<Option<i64>> {
+        let (task, id) = frame.key()?;
+        Ok(self
+            .db
+            .prepare_cached("SELECT offset FROM records WHERE topic=? AND task=? AND event_id=?")?
+            .query_row(params![frame.topic, task, id], |row| row.get(0))
+            .optional()?)
+    }
+
     pub fn prepare_append(&mut self, frame: &mut Frame, partition: u32) -> Result<Prepared> {
         self.ensure_writable()?;
-        let (task, id) = frame.key()?;
-        let task = task.to_owned();
-        let old: Option<i64> = self
-            .db
-            .query_row(
-                "SELECT offset FROM records WHERE topic=? AND task=? AND event_id=?",
-                params![frame.topic, task, id],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if let Some(offset) = old {
+        let task = frame.key()?.0.to_owned();
+        if let Some(offset) = self.existing_event(frame)? {
+            if let Some(position) = self.retired_duplicate(offset, frame)? {
+                return Ok(Prepared::Duplicate(position));
+            }
             let (partition, saved) = self.read_frame(offset)?;
             if saved.event != frame.event {
                 return Err(Problem::Conflict(
@@ -801,9 +843,10 @@ impl Store {
         if let Some(lease) = &frame.completion {
             lease.validate_completion(&self.db, &task)?;
         }
+        let reserved = self.admit_disk_write(body.len() as u64 + 8, work_offset.is_some())?;
         self.db.execute(
-            "INSERT INTO appending VALUES(?,?,?)",
-            params![task, partition, work_offset],
+            "INSERT INTO appending VALUES(?,?,?,?)",
+            params![task, partition, work_offset, i64::try_from(reserved)?],
         )?;
         if let Some(split) = &mut self.split {
             split.reserve_next();
@@ -833,14 +876,22 @@ impl Store {
                     "partition record is out of publication order"
                 );
             }
-            let tx = self.db.transaction()?;
+            // The journal has already synced. For a single journal its order alone
+            // reproduces the assigned offsets. Lease completion and multi-journal
+            // publication still commit on the FULL-synchronous coordinator.
+            let db = match (&mut self.single_journal_index, &frame.completion) {
+                (Some(index), None) => index,
+                _ => &mut self.db,
+            };
+            let tx = db.transaction()?;
             let offset = index(&tx, frame, partition, address)?;
             tx.commit()?;
             Ok(Position { partition, offset })
         });
+        let task = frame.key()?.0;
         let cleanup = self
             .db
-            .execute("DELETE FROM appending WHERE task=?", [frame.key()?.0]);
+            .execute("DELETE FROM appending WHERE task=?", [task]);
         if result.is_err() || cleanup.is_err() {
             // Recover every uncertain suffix before allowing another mutation.
             self.failed_write = true;
@@ -850,6 +901,9 @@ impl Store {
         if let Some(split) = &mut self.split {
             split.visible_next += 1;
         }
+        // Publish in commit order while the store is locked, including when the caller disconnected.
+        self.live
+            .publish(&frame.topic, task, position.offset, &frame.event);
         Ok(position)
     }
 
@@ -910,8 +964,9 @@ impl Store {
                     let file = journal::open_segment(
                         &partition_dir(&self.dir, partition),
                         address.segment,
+                        self.packed.get(&(partition, address.segment)).copied(),
                     )?;
-                    entry.insert((BufReader::new(file), 0))
+                    entry.insert((file, 0))
                 }
             };
             if *position != address.pos {
@@ -938,7 +993,11 @@ impl Store {
             pos: u64::try_from(pos)?,
             len: usize::try_from(len)?,
         };
-        let frame = journal::read(&partition_dir(&self.dir, partition), address)?;
+        let frame = journal::read(
+            &partition_dir(&self.dir, partition),
+            address,
+            self.packed.get(&(partition, address.segment)).copied(),
+        )?;
         self.payload_reads.set(self.payload_reads.get() + 1);
         Ok((partition, frame))
     }
@@ -969,6 +1028,7 @@ impl Store {
             return Err(Problem::Invalid("floor outside topic bounds".into()).into());
         }
         self.db.execute("INSERT INTO floors VALUES(?,?) ON CONFLICT(topic) DO UPDATE SET first_offset=MAX(first_offset,excluded.first_offset)",params![topic,offset])?;
+        self.live.advance_floor(topic, offset);
         Ok(())
     }
 
@@ -998,14 +1058,38 @@ impl Store {
         }
     }
 
+    pub fn has_task_records_after(&self, topic: &str, task: &str, offset: i64) -> Result<bool> {
+        Ok(self
+            .db
+            .prepare_cached(
+                "SELECT EXISTS(SELECT 1 FROM records WHERE topic=? AND task=? AND offset>?)",
+            )?
+            .query_row(params![topic, task, offset], |row| row.get(0))?)
+    }
+
     pub fn page(&self, topic: &str, task: &str, after: i64) -> Result<Vec<Record>> {
         let floor = self.floor(topic)?;
         if after < floor - 1 {
             return Err(self.gap(topic, task, floor)?.into());
         }
-        let mut stmt=self.db.prepare_cached("SELECT offset FROM records WHERE topic=? AND task=? AND offset>? ORDER BY offset LIMIT ?")?;
-        let rows = stmt.query_map(params![topic, task, after, PAGE_SIZE], |r| r.get(0))?;
-        rows.map(|r| self.read(r?)).collect()
+        let mut stmt = self.db.prepare_cached(
+            "SELECT offset,partition,segment,pos,len FROM records
+             WHERE topic=? AND task=? AND offset>? ORDER BY offset LIMIT ?",
+        )?;
+        let mut rows = stmt.query(params![topic, task, after, PAGE_SIZE])?;
+        let mut locations = Vec::new();
+        while let Some(row) = rows.next()? {
+            locations.push(RecordLocation {
+                offset: row.get(0)?,
+                partition: row.get(1)?,
+                address: Address {
+                    segment: u64::try_from(row.get::<_, i64>(2)?)?,
+                    pos: u64::try_from(row.get::<_, i64>(3)?)?,
+                    len: usize::try_from(row.get::<_, i64>(4)?)?,
+                },
+            });
+        }
+        self.read_indexed_page(locations)
     }
 
     pub fn latest(&self, topic: &str, task: &str) -> Result<Record> {

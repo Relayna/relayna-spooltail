@@ -78,7 +78,7 @@ History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A
 
 ## Python client
 
-Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/sarattha/relayna-spooltail/releases). The [Python SDK quickstart](python/README.md) shows how to install it into a Relayna environment and use the native client to publish and complete work.
+Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/sarattha/relayna-spooltail/releases). The [Python SDK quickstart](python/README.md) shows how to install it into a Relayna environment and use the native client to publish and complete work. For saved-offset consumers, see [when to use the native decoder or a numeric projection](python/README.md#choosing-a-replay-reader).
 
 ## Broker operations
 
@@ -94,7 +94,7 @@ Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/
 | `POST /topics/{topic}/work/{group}/claim` | Send `{"lease_ms":30000}`. Returns `{record,generation,lease_until_ms}` or JSON `null`. |
 | `POST /topics/{topic}/work/{group}/settle` | Send the claimed `offset`, `generation`, and an `action` of `ack`, `renew`, `retry`, or `dead-letter`. Set `delay_ms` for renewal or delayed retry. Stale settlements return HTTP 409. |
 | `POST /topics/{topic}/work/{group}/complete` | Acknowledge the claim and append its terminal event to `status_topic` atomically. Returns the status record’s `offset`. |
-| `GET /stats` | Process-local counts of recovered frames and indexed record payload reads. |
+| `GET /stats` | Process counters and journal storage statistics. |
 
 Without a cursor, history starts at the first retained event for the task. Streaming clients receive a `gap` with `earliest_event_id` if an ID is unknown or outside retention. An empty retained history gives a null earliest ID. For the offline retention experiment, stop the broker and run `SPOOLTAIL_DATA=./data ./target/release/spooltail expire-before status 42`. This sets a logical floor for readers. Lease state and physical bytes are retained.
 
@@ -121,7 +121,31 @@ Background sweeps process consecutive prefixes in topic order. They compress inp
 
 `AuditHistory` spans both tiers. `History`, `Latest`, subscriptions, and consumer replay use the hot window. A consumer that falls behind hot retention receives a gap. Archive expiry applies to original inputs. The consumer manages its outcome database separately.
 
-Retention is logical. Expired archive rows are removed and their SQLite pages can be reused. Original journal segment files and lease state remain on disk. Back up the broker volume and the consumer's outcome SQLite separately to preserve a full audit timeline.
+Audit expiry removes archive rows and makes their SQLite pages reusable. The packed journal retirement policy below can also reclaim payload files. Back up the broker volume and the consumer's outcome SQLite separately to preserve a full audit timeline.
+
+### Reclaim space from sealed journals
+
+Enable background packing with `SPOOLTAIL_PACK_SEALED=1`. By default a sealed segment becomes eligible one hour after its last write. Set `SPOOLTAIL_PACK_MIN_AGE_SECS` to adjust that delay. The broker works through older segments first and starts at most one pack per second. The active journal in each partition stays raw.
+
+Spooltail packs complete journal frames in seekable Zstd blocks at level 1. It keeps a raw segment when packing would increase its size. For each replacement it syncs the packed file and directory, commits the manifest in SQLite, then removes the raw file. A restart can clean up an interrupted switch. The packer needs free disk space for one temporary replacement.
+
+Packed frames retain their original offsets and completion receipts. Replay, work claims, publish retries, index recovery, and audit reads can all use them. Auditing a packed input shares its journal payload. When all references to an old archive BLOB move to packed frames, SQLite can reuse the freed pages.
+
+Disabling packing stops new replacements. Existing packed volumes require a broker that supports this format. Archive expiry removes inputs from audit history. Packed frames can still serve work claims and publish retries.
+
+### Limit disk pressure
+
+Set `SPOOLTAIL_DISK_RESERVE_BYTES` to protect free space for work already in flight. The default of `0` disables admission checks. Below the configured headroom, Spooltail rejects new appends and work claims with HTTP 503 or gRPC `RESOURCE_EXHAUSTED` before writing a journal frame. Exact publish retries can still return their saved receipt. Settlement and completion can use the reserve. Completion still requires enough room for its frame and index updates.
+
+The packer checks and reserves room for a replacement before starting. Packing and archive BLOB writes retry when enough space is available. Admission accounts for broker writes in flight and uses the volume's current free space. Other writers and filesystem allocation overhead can still cause I/O failures.
+
+The HTTP and gRPC stats report free bytes, the configured reserve, raw and packed journal file bytes, and the number of packing checks paused by low space. `archive_pending_records` counts unarchived records on configured topics, including records still inside their hot window. `retired_segments` counts durable segment retirement markers.
+
+### Retire expired audit-only payloads
+
+Set `SPOOLTAIL_RETIRE_AUDIT_TOPICS='["status"]'` to declare that a topic is used for replay and audit. The broker persists this declaration and rejects claims on the topic. Each named topic needs a retention policy and must have no existing work leases. Enable journal packing to make sealed raw segments eligible for retirement.
+
+A packed file can be removed once every frame in it belongs to an audit-only topic, is past total retention, and has left both hot replay and the audit index. A paused policy or a record from a work topic pins the file. Spooltail commits segment markers, original offsets, completion receipts, and SHA-256 event fingerprints before unlinking the file. These receipts persist for the life of the volume so exact retries retain their original offsets and conflicting retries fail. Payload bytes can be reclaimed while deduplication and index metadata continue to grow.
 
 ### Add partitions and move tasks
 
@@ -224,5 +248,26 @@ uv run --project python --locked --no-editable python tests/python_sdk_acceptanc
 ```
 
 Regenerating the Python gRPC bindings should leave `git status` empty for the `_wire` directory. The acceptance drivers create temporary data directories and start real broker processes on loopback. The gRPC and Python SDK drivers use OpenSSL to create a test identity. The SDK driver checks task completion, replay gaps, and SSE resume after restart. Use `--events 1000` for a quick HTTP acceptance run.
+
+### Packed journal recovery
+
+These suites use a dedicated broker build with fault hooks.
+
+```sh
+cargo build --release --locked --features pack-fault-injection
+uv run --project python --locked python tests/packed_journal_acceptance.py
+uv run --project python --locked python tests/packed_journal_disk_full.py
+uv run --project python --locked python tests/packed_journal_retirement.py
+```
+
+CI runs these suites. The disk-full suite creates and fills its own filesystem image. Linux requires `mkfs.ext4`, loop mounting, and root or passwordless sudo for the mount. On macOS the suite uses an APFS disk image. It checks admission, failed pack writes, SQLite manifest commits, and foreground publishes. The ext4 cases also verify truncation of a partially written journal frame. The retirement suite checks interrupted deletion and receipt recovery after removing a partition index.
+
+For the full-VM power-cut suite, build the same fault-injection binary for Linux ARM64. Run the driver on an Apple Silicon Mac with Lima and uv installed.
+
+```sh
+uv run --project python --locked python tests/packed_journal_power_cut.py --broker /path/to/linux-arm64/spooltail
+```
+
+The driver creates a disposable Ubuntu VM with no host directories mounted. It force-stops the VM at each of the five pack switch points in both index modes, checks the boot ID after restart, and verifies which journal copy the broker recovers. This exercises abrupt guest power loss on ext4.
 
 Read the [architecture draft](docs/design.md) for the durability model and the [prototype expectations](docs/expectations.md) for acceptance criteria, benchmarks, and open decisions.

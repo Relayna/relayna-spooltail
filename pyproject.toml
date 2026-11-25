@@ -1,0 +1,16 @@
+# Optional native companion. The portable Python SDK is packaged from python/.
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "relayna-spooltail-native"
+version = "0.0.5"
+requires-python = ">=3.11"
+description = "Native Protobuf attribute decoder for the Relayna Spooltail Python SDK"
+
+[tool.scikit-build]
+cmake.source-dir = "python/native"
+wheel.packages = []
+sdist.exclude = ["**"]
+sdist.include = ["pyproject.toml", "python/native/CMakeLists.txt", "python/native/decoder.cc", "proto/spooltail/v1/spooltail.proto"]

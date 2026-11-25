@@ -104,7 +104,15 @@ pub(crate) struct RetentionPolicy {
     activated_ms: i64,
 }
 
+impl RetentionPolicy {
+    pub fn has_expired(&self, accepted_at_ms: Option<i64>, timestamp: i64) -> bool {
+        accepted_at_ms.unwrap_or(self.activated_ms) <= timestamp.saturating_sub(self.retain_ms)
+    }
+}
+
 struct ArchiveInput {
+    segment: u64,
+    already_packed: bool,
     accepted_at_ms: i64,
     len: usize,
     record: Record,
@@ -124,7 +132,11 @@ struct ArchiveBlock {
 
 impl ArchiveBlock {
     fn encode(inputs: &[ArchiveInput]) -> Result<Self> {
-        let records: Vec<_> = inputs.iter().map(|input| &input.record).collect();
+        let records: Vec<_> = inputs
+            .iter()
+            .filter(|input| !input.already_packed)
+            .map(|input| &input.record)
+            .collect();
         let raw = serde_json::to_vec(&records)?;
         ensure!(
             raw.len() <= MAX_ARCHIVE_RAW_BYTES,
@@ -183,7 +195,12 @@ async fn sweep(broker: &Broker, topic: &str) -> Result<bool> {
         .await?;
     if let Some(candidate) = candidate {
         let (candidate, block) = tokio::task::spawn_blocking(move || {
-            let block = ArchiveBlock::encode(&candidate.inputs)?;
+            let block = candidate
+                .inputs
+                .iter()
+                .any(|input| !input.already_packed)
+                .then(|| ArchiveBlock::encode(&candidate.inputs))
+                .transpose()?;
             Ok::<_, anyhow::Error>((candidate, block))
         })
         .await??;
@@ -276,6 +293,10 @@ impl Store {
                 return false;
             }
             inputs.push(ArchiveInput {
+                segment: location.address.segment,
+                already_packed: self
+                    .packed
+                    .contains_key(&(location.partition, location.address.segment)),
                 accepted_at_ms,
                 len: location.address.len,
                 record: frame.into_record(location.offset, location.partition),
@@ -289,7 +310,11 @@ impl Store {
         }))
     }
 
-    fn publish_archive(&mut self, candidate: ArchiveCandidate, block: ArchiveBlock) -> Result<()> {
+    fn publish_archive(
+        &mut self,
+        candidate: ArchiveCandidate,
+        block: Option<ArchiveBlock>,
+    ) -> Result<()> {
         ensure!(
             self.floor(&candidate.topic)? == candidate.floor,
             "archive floor changed"
@@ -302,12 +327,30 @@ impl Store {
             .offset
             .checked_add(1)
             .context("archive offset overflow")?;
+        let needs_blob = candidate.inputs.iter().any(|input| {
+            !self
+                .packed
+                .contains_key(&(input.record.partition, input.segment))
+        });
+        if needs_blob {
+            let bytes = block
+                .as_ref()
+                .context("missing compressed archive block")?
+                .compressed
+                .len();
+            self.admit_disk_write(bytes as u64, false)?;
+        }
         let tx = self.db.transaction()?;
-        tx.execute(
-            "INSERT INTO archive_blocks(raw_len,checksum,compressed) VALUES (?,?,?)",
-            params![block.raw_len, block.checksum, block.compressed],
-        )?;
-        let block_id = tx.last_insert_rowid();
+        let block_id = if needs_blob {
+            let block = block.context("missing compressed archive block")?;
+            tx.execute(
+                "INSERT INTO archive_blocks(raw_len,checksum,compressed) VALUES (?,?,?)",
+                params![block.raw_len, block.checksum, block.compressed],
+            )?;
+            tx.last_insert_rowid()
+        } else {
+            0
+        };
         {
             let mut stmt =
                 tx.prepare_cached("INSERT INTO archive_records VALUES (?,?,?,?,?,?,?)")?;
@@ -325,7 +368,14 @@ impl Store {
                     event_id,
                     input.accepted_at_ms,
                     i64::try_from(input.len)?,
-                    block_id
+                    if self
+                        .packed
+                        .contains_key(&(input.record.partition, input.segment))
+                    {
+                        0
+                    } else {
+                        block_id
+                    }
                 ])?;
             }
         }
@@ -334,6 +384,7 @@ impl Store {
             params![candidate.topic, next],
         )?;
         tx.commit()?;
+        self.live.advance_floor(&candidate.topic, next);
         Ok(())
     }
 
@@ -427,8 +478,9 @@ impl Store {
         }
         let mut stmt = self.db.prepare_cached(
             "SELECT offset,len,block_id,partition,segment,pos FROM (
-                SELECT offset,len,block_id,NULL AS partition,NULL AS segment,NULL AS pos
-                FROM archive_records WHERE topic=?1 AND task=?2 AND offset<?3 AND offset>?4 AND offset<=?5
+                SELECT a.offset,a.len,NULLIF(a.block_id,0) AS block_id,r.partition,r.segment,r.pos
+                FROM archive_records AS a LEFT JOIN records AS r ON a.block_id=0 AND r.offset=a.offset
+                WHERE a.topic=?1 AND a.task=?2 AND a.offset<?3 AND a.offset>?4 AND a.offset<=?5
                 UNION ALL
                 SELECT offset,len,NULL,partition,segment,pos
                 FROM records WHERE topic=?1 AND task=?2 AND offset>=?3 AND offset>?4 AND offset<=?5
@@ -471,6 +523,7 @@ impl Store {
             }
         }
         records.extend(self.read_indexed_page(hot)?);
+        records.sort_unstable_by_key(|record| record.offset);
         Ok((through, records))
     }
 
@@ -601,7 +654,7 @@ mod tests {
                 "CREATE TEMP TRIGGER reject_floor BEFORE INSERT ON floors
                  BEGIN SELECT RAISE(ABORT, 'floor failure'); END;",
             )?;
-            assert!(store.publish_archive(candidate, block).is_err());
+            assert!(store.publish_archive(candidate, Some(block)).is_err());
             assert_eq!(store.floor("status")?, first);
             assert_eq!(
                 store
@@ -618,7 +671,7 @@ mod tests {
                 .archive_candidate("status", timestamp + 1_000)?
                 .unwrap();
             let block = ArchiveBlock::encode(&candidate.inputs)?;
-            store.publish_archive(candidate, block)?;
+            store.publish_archive(candidate, Some(block))?;
             assert_eq!(store.floor("status")?, third + 1);
             assert!(store.resolve("status", "T1", Some("E1")).is_err());
             assert_eq!(store.latest("other", "T1")?.offset, other);
@@ -666,7 +719,7 @@ mod tests {
         store.append("status", event("E1"))?;
         let candidate = store.archive_candidate("status", now()? + 1_000)?.unwrap();
         let block = ArchiveBlock::encode(&candidate.inputs)?;
-        store.publish_archive(candidate, block)?;
+        store.publish_archive(candidate, Some(block))?;
         store.db.execute(
             "UPDATE archive_blocks SET checksum=CASE checksum WHEN 0 THEN 1 ELSE 0 END",
             [],
