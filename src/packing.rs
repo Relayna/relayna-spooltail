@@ -58,11 +58,7 @@ pub fn configure(store: &mut Store) -> Result<Option<Duration>> {
         Err(std::env::VarError::NotPresent) => 3600,
         Err(error) => return Err(error).context("read SPOOLTAIL_PACK_MIN_AGE_SECS"),
     };
-    store.db.execute_batch(if store.split.is_some() {
-        "CREATE INDEX temp.by_segment ON records(partition,segment,offset)"
-    } else {
-        "CREATE INDEX IF NOT EXISTS by_segment ON records(partition,segment,offset)"
-    })?;
+    store.ensure_segment_index()?;
     store
         .db
         .execute_batch("CREATE TEMP TABLE packed_archive_gc (id INTEGER PRIMARY KEY)")?;
@@ -333,6 +329,15 @@ fn unlink_raw(dir: &Path, segment: u64) -> Result<()> {
 pub fn recover(root: &Path, partitions: &[u32], entries: &Manifest) -> Result<()> {
     for (&(partition, segment), &len) in entries {
         let dir = partition_dir(root, partition);
+        if len == 0 {
+            if (packed_path(&dir, segment).try_exists()?
+                || segment_path(&dir, segment).try_exists()?)
+                && let Err(error) = crate::retire::remove_retired(&dir, segment)
+            {
+                eprintln!("could not remove retired segment {partition}:{segment}: {error:#}");
+            }
+            continue;
+        }
         let mut reader = PackedReader::open(&dir, segment, len)?;
         if segment_path(&dir, segment).try_exists()? {
             // Interrupted cleanup left both copies. Verify the packed payload before removing raw.
@@ -391,7 +396,7 @@ fn remove_unpublished(dir: &Path, partition: u32, entries: &Manifest) -> Result<
 }
 
 #[cfg(feature = "pack-fault-injection")]
-fn stop_at(stage: &str) {
+pub(crate) fn stop_at(stage: &str) {
     if std::env::var("SPOOLTAIL_PACK_STOP_AT").as_deref() == Ok(stage) {
         eprintln!("PACK_STOP {stage}");
         if let Some(path) = std::env::var_os("SPOOLTAIL_PACK_TEST_RESUME") {
@@ -407,7 +412,7 @@ fn stop_at(stage: &str) {
 }
 
 #[cfg(not(feature = "pack-fault-injection"))]
-fn stop_at(_: &str) {}
+pub(crate) fn stop_at(_: &str) {}
 
 pub async fn run(broker: Broker, min_age: Duration) {
     let mut scan = Scan::default();
@@ -522,6 +527,15 @@ impl Scan {
 }
 
 impl Store {
+    pub fn ensure_segment_index(&self) -> Result<()> {
+        self.db.execute_batch(if self.split.is_some() {
+            "CREATE INDEX IF NOT EXISTS temp.by_segment ON records(partition,segment,offset)"
+        } else {
+            "CREATE INDEX IF NOT EXISTS by_segment ON records(partition,segment,offset)"
+        })?;
+        Ok(())
+    }
+
     fn publish_packed(&mut self, partition: u32, segment: u64, raw_len: u64) -> Result<()> {
         let tx = self.db.transaction()?;
         tx.execute(

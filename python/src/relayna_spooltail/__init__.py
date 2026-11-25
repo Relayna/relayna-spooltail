@@ -1,6 +1,13 @@
 """Async service client for the Relayna Spooltail broker."""
 
-from .audit import AuditCursor, AuditEntry, AuditOutcome, AuditPage, AuditStore, AuditTimeline
+from .audit import (
+    AuditCursor,
+    AuditEntry,
+    AuditOutcome,
+    AuditPage,
+    AuditStore,
+    AuditTimeline,
+)
 from .client import (
     BrokerStats,
     ConflictError,
@@ -16,6 +23,7 @@ from .client import (
     StreamBatch,
     SubscriptionError,
 )
+from .replay import NumericBatch, NumericRow
 
 __all__ = [
     "AuditCursor",
@@ -29,6 +37,8 @@ __all__ = [
     "CursorGapError",
     "Delivery",
     "Lease",
+    "NumericBatch",
+    "NumericRow",
     "Record",
     "ReplayBatch",
     "SettlementAction",

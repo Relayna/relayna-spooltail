@@ -104,6 +104,12 @@ pub(crate) struct RetentionPolicy {
     activated_ms: i64,
 }
 
+impl RetentionPolicy {
+    pub fn has_expired(&self, accepted_at_ms: Option<i64>, timestamp: i64) -> bool {
+        accepted_at_ms.unwrap_or(self.activated_ms) <= timestamp.saturating_sub(self.retain_ms)
+    }
+}
+
 struct ArchiveInput {
     segment: u64,
     already_packed: bool,
@@ -378,6 +384,7 @@ impl Store {
             params![candidate.topic, next],
         )?;
         tx.commit()?;
+        self.live.advance_floor(&candidate.topic, next);
         Ok(())
     }
 

@@ -14,6 +14,8 @@ service Spooltail {
   rpc Commit(CommitRequest) returns (Empty);
   rpc NextBatch(StreamBatchRequest) returns (StreamBatch);
   rpc CommitBatch(StreamBatchCommit) returns (Empty);
+  rpc ReadReplayPage(TopicReplayRequest) returns (ReplayPage);
+  rpc ReadNumericPage(NumericRequest) returns (NumericPage);
   rpc ReadAfterBatch(TopicReplayRequest) returns (StreamBatch);
   rpc Subscribe(Task) returns (stream Delivery);
   rpc Stats(Empty) returns (StatsResponse);
@@ -157,6 +159,7 @@ message StatsResponse {
   uint64 raw_journal_bytes = 5;
   uint64 packed_journal_bytes = 6;
   uint64 archive_pending_records = 7;
+  uint64 retired_segments = 8;
   uint64 packing_space_pauses = 9;
 }
 message TaskId { string task_id = 1; }
@@ -166,4 +169,54 @@ message MoveTaskRequest {
   string task_id = 1;
   optional uint32 from_partition = 2;
   optional uint32 to_partition = 3;
+}
+
+// The identity and optional string payload can be read without decoding user fields.
+message ReplayEvent {
+  int64 offset = 1;
+  uint32 partition = 2;
+  string task_id = 3;
+  string event_id = 4;
+  optional string payload = 5;
+  oneof attributes {
+    // A serialized ReplayObject. Keeping the bytes opaque permits lazy and native decoding.
+    bytes object_proto = 6;
+    // Lossless escape for deeply nested or unusually dense JSON objects.
+    bytes object_json = 7;
+  }
+}
+message ReplayPage { int64 after = 1; repeated ReplayEvent records = 2; }
+message ReplayObject { repeated ReplayField fields = 1; }
+message ReplayField { string key = 1; ReplayValue value = 2; }
+message ReplayArray { repeated ReplayValue items = 1; }
+message ReplayValue {
+  oneof kind {
+    bool null_value = 1;
+    bool boolean = 2;
+    sint64 integer = 3;
+    uint64 positive = 4;
+    double real = 5;
+    string text = 6;
+    ReplayArray array = 7;
+    ReplayObject object = 8;
+  }
+}
+message NumericRequest {
+  TopicReplayRequest replay = 1;
+  // Exact object keys. Each element of array_field must have a numeric value_field.
+  string array_field = 2;
+  string value_field = 3;
+}
+message NumericRow {
+  int64 offset = 1;
+  uint32 partition = 2;
+  string task_id = 3;
+  string event_id = 4;
+  uint32 count = 5;
+}
+message NumericPage {
+  int64 after = 1;
+  repeated NumericRow rows = 2;
+  // Concatenated IEEE 754 little-endian doubles in row order.
+  bytes values_f64_le = 3;
 }

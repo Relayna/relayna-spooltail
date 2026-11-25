@@ -87,6 +87,15 @@ jobs:
       - name: Run Python SDK acceptance tests
         run: uv run --project python --locked --no-editable python tests/python_sdk_acceptance.py
 
+      - name: Test replay with the portable SDK
+        run: uv run --project python --locked --no-editable python tests/replay_sdk_acceptance.py
+
+      - name: Test replay with the optional native decoder and NumPy
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler
+          uv run --project python --locked --no-editable --extra numpy --with . python tests/replay_sdk_acceptance.py --native
+
       - name: Run packed journal crash recovery tests
         run: |
           cargo build --release --locked --features pack-fault-injection
@@ -94,3 +103,6 @@ jobs:
 
       - name: Run packed journal disk-full recovery tests on ext4
         run: uv run --project python --locked --no-editable python tests/packed_journal_disk_full.py
+
+      - name: Run packed journal retirement recovery tests
+        run: uv run --project python --locked --no-editable python tests/packed_journal_retirement.py

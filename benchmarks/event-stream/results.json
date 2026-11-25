@@ -1,0 +1,2362 @@
+{
+  "started_utc": "2026-11-24T13:05:34.761478+00:00",
+  "trials": 3,
+  "cases": [
+    "live-1",
+    "live-16",
+    "live-64",
+    "live-256",
+    "large-32",
+    "slow-32",
+    "resume-64",
+    "resume-256",
+    "resume-256-publishing"
+  ],
+  "spooltail_commit": "1f6054caf955f16e0908ab65d6b779e4d2252ec8",
+  "sdk_commit": "de4c60f052a9af7cd5d5543430c6f4e8b47cd327",
+  "docker": "29.9.3 linux/aarch64 10 CPUs",
+  "runner_sha256": {
+    "run_fanout.py": "8202e7058b5a3ebcfc89a24126da10f25e7376e823429bd3c958e84b0c45b694",
+    "fanout.py": "b2c23a535426ece0e9bf99dd8ba490a00fef1143c6d12c85074fa9146cf0624a"
+  },
+  "runs": [
+    {
+      "case": "live-1",
+      "arm": "spooltail",
+      "readers": 1,
+      "events_per_reader": 48,
+      "verified": 48,
+      "publish_ms": {
+        "p50": 5.346,
+        "p95": 8.856,
+        "p99": 9.365,
+        "p100": 9.365
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.852,
+        "p95": 10.711,
+        "p99": 11.33,
+        "p100": 11.33
+      },
+      "dispatch_rate_per_s": 39.89,
+      "fast_delivery_ms": {
+        "p50": 4.905,
+        "p95": 8.469,
+        "p99": 9.099,
+        "p100": 9.099
+      },
+      "last_reader_per_event_ms": {
+        "p50": 4.905,
+        "p95": 8.469,
+        "p99": 9.099,
+        "p100": 9.099
+      },
+      "journal_reads": 48,
+      "server_cpu_s": {
+        "spool": 0.0745
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-1",
+      "arm": "rabbit-redis",
+      "readers": 1,
+      "events_per_reader": 48,
+      "verified": 48,
+      "publish_ms": {
+        "p50": 1.397,
+        "p95": 2.048,
+        "p99": 2.232,
+        "p100": 2.232
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.256,
+        "p95": 9.635,
+        "p99": 10.297,
+        "p100": 10.297
+      },
+      "dispatch_rate_per_s": 39.72,
+      "fast_delivery_ms": {
+        "p50": 5.378,
+        "p95": 7.116,
+        "p99": 7.204,
+        "p100": 7.204
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.378,
+        "p95": 7.116,
+        "p99": 7.204,
+        "p100": 7.204
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0604,
+        "redis": 0.0397,
+        "sdk-api": 0.0303,
+        "hub": 0.0867
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-16",
+      "arm": "rabbit-redis",
+      "readers": 16,
+      "events_per_reader": 48,
+      "verified": 768,
+      "publish_ms": {
+        "p50": 1.064,
+        "p95": 1.655,
+        "p99": 2.332,
+        "p100": 2.332
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.027,
+        "p95": 9.271,
+        "p99": 10.837,
+        "p100": 10.837
+      },
+      "dispatch_rate_per_s": 39.93,
+      "fast_delivery_ms": {
+        "p50": 4.947,
+        "p95": 7.373,
+        "p99": 8.88,
+        "p100": 9.38
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.34,
+        "p95": 7.744,
+        "p99": 9.38,
+        "p100": 9.38
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0579,
+        "redis": 0.0403,
+        "sdk-api": 0.0933,
+        "hub": 0.0731
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-16",
+      "arm": "spooltail",
+      "readers": 16,
+      "events_per_reader": 48,
+      "verified": 768,
+      "publish_ms": {
+        "p50": 3.817,
+        "p95": 6.351,
+        "p99": 14.117,
+        "p100": 14.117
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.721,
+        "p95": 8.993,
+        "p99": 10.264,
+        "p100": 10.264
+      },
+      "dispatch_rate_per_s": 39.89,
+      "fast_delivery_ms": {
+        "p50": 4.289,
+        "p95": 6.989,
+        "p99": 14.609,
+        "p100": 16.02
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.369,
+        "p95": 8.08,
+        "p99": 16.02,
+        "p100": 16.02
+      },
+      "journal_reads": 768,
+      "server_cpu_s": {
+        "spool": 0.3034
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-64",
+      "arm": "spooltail",
+      "readers": 64,
+      "events_per_reader": 48,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.315,
+        "p95": 4.404,
+        "p99": 4.773,
+        "p100": 4.773
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.902,
+        "p95": 8.08,
+        "p99": 8.389,
+        "p100": 8.389
+      },
+      "dispatch_rate_per_s": 39.86,
+      "fast_delivery_ms": {
+        "p50": 5.06,
+        "p95": 8.238,
+        "p99": 9.184,
+        "p100": 11.03
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.833,
+        "p95": 10.04,
+        "p99": 11.03,
+        "p100": 11.03
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 0.7246
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-64",
+      "arm": "rabbit-redis",
+      "readers": 64,
+      "events_per_reader": 48,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.848,
+        "p95": 1.081,
+        "p99": 4.383,
+        "p100": 4.383
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.769,
+        "p95": 8.865,
+        "p99": 10.919,
+        "p100": 10.919
+      },
+      "dispatch_rate_per_s": 39.9,
+      "fast_delivery_ms": {
+        "p50": 6.042,
+        "p95": 8.517,
+        "p99": 13.844,
+        "p100": 16.284
+      },
+      "last_reader_per_event_ms": {
+        "p50": 7.732,
+        "p95": 9.784,
+        "p99": 16.284,
+        "p100": 16.284
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0434,
+        "redis": 0.0485,
+        "sdk-api": 0.2332,
+        "hub": 0.0611
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-256",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 48,
+      "verified": 12288,
+      "publish_ms": {
+        "p50": 0.821,
+        "p95": 1.038,
+        "p99": 2.194,
+        "p100": 2.194
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.412,
+        "p95": 3.573,
+        "p99": 3.924,
+        "p100": 3.924
+      },
+      "dispatch_rate_per_s": 39.95,
+      "fast_delivery_ms": {
+        "p50": 11.877,
+        "p95": 18.19,
+        "p99": 29.412,
+        "p100": 54.349
+      },
+      "last_reader_per_event_ms": {
+        "p50": 18.115,
+        "p95": 20.55,
+        "p99": 54.349,
+        "p100": 54.349
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0428,
+        "redis": 0.0947,
+        "sdk-api": 0.8032,
+        "hub": 0.0589
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-256",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 48,
+      "verified": 12288,
+      "publish_ms": {
+        "p50": 20.0,
+        "p95": 28.139,
+        "p99": 32.633,
+        "p100": 32.633
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.932,
+        "p95": 8.674,
+        "p99": 8.844,
+        "p100": 8.844
+      },
+      "dispatch_rate_per_s": 39.7,
+      "fast_delivery_ms": {
+        "p50": 27.038,
+        "p95": 44.894,
+        "p99": 56.256,
+        "p100": 79.814
+      },
+      "last_reader_per_event_ms": {
+        "p50": 58.772,
+        "p95": 76.44,
+        "p99": 79.814,
+        "p100": 79.814
+      },
+      "journal_reads": 12288,
+      "server_cpu_s": {
+        "spool": 2.3592
+      },
+      "trial": 1
+    },
+    {
+      "case": "large-32",
+      "arm": "spooltail",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.275,
+        "p95": 4.572,
+        "p99": 7.232,
+        "p100": 7.232
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.137,
+        "p95": 6.473,
+        "p99": 7.274,
+        "p100": 7.274
+      },
+      "dispatch_rate_per_s": 49.91,
+      "fast_delivery_ms": {
+        "p50": 4.857,
+        "p95": 7.171,
+        "p99": 8.423,
+        "p100": 11.552
+      },
+      "last_reader_per_event_ms": {
+        "p50": 7.124,
+        "p95": 8.4,
+        "p99": 11.552,
+        "p100": 11.552
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 1.0596
+      },
+      "trial": 1
+    },
+    {
+      "case": "large-32",
+      "arm": "rabbit-redis",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.832,
+        "p95": 0.958,
+        "p99": 1.977,
+        "p100": 1.977
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 3.387,
+        "p95": 8.677,
+        "p99": 11.053,
+        "p100": 11.053
+      },
+      "dispatch_rate_per_s": 49.98,
+      "fast_delivery_ms": {
+        "p50": 9.878,
+        "p95": 14.71,
+        "p99": 16.253,
+        "p100": 20.959
+      },
+      "last_reader_per_event_ms": {
+        "p50": 14.778,
+        "p95": 16.849,
+        "p99": 20.959,
+        "p100": 20.959
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0806,
+        "redis": 0.0845,
+        "sdk-api": 1.0978,
+        "hub": 0.1164
+      },
+      "trial": 1
+    },
+    {
+      "case": "slow-32",
+      "arm": "rabbit-redis",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.834,
+        "p95": 1.077,
+        "p99": 1.313,
+        "p100": 1.313
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 3.7,
+        "p95": 8.98,
+        "p99": 9.537,
+        "p100": 9.537
+      },
+      "dispatch_rate_per_s": 49.9,
+      "fast_delivery_ms": {
+        "p50": 9.252,
+        "p95": 13.779,
+        "p99": 15.364,
+        "p100": 17.497
+      },
+      "last_reader_per_event_ms": {
+        "p50": 1558.68,
+        "p95": 3202.387,
+        "p99": 3331.36,
+        "p100": 3331.36
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0938,
+        "redis": 0.129,
+        "sdk-api": 1.2982,
+        "hub": 0.1172
+      },
+      "slow_delivery_ms": {
+        "p50": 1536.175,
+        "p95": 3070.876,
+        "p99": 3267.283,
+        "p100": 3331.36
+      },
+      "trial": 1
+    },
+    {
+      "case": "slow-32",
+      "arm": "spooltail",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.278,
+        "p95": 4.556,
+        "p99": 6.988,
+        "p100": 6.988
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 3.922,
+        "p95": 6.993,
+        "p99": 7.728,
+        "p100": 7.728
+      },
+      "dispatch_rate_per_s": 49.84,
+      "fast_delivery_ms": {
+        "p50": 4.726,
+        "p95": 6.941,
+        "p99": 7.856,
+        "p100": 10.395
+      },
+      "last_reader_per_event_ms": {
+        "p50": 1588.283,
+        "p95": 3182.534,
+        "p99": 3313.691,
+        "p100": 3313.691
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 1.0484
+      },
+      "slow_delivery_ms": {
+        "p50": 1562.585,
+        "p95": 3102.668,
+        "p99": 3282.662,
+        "p100": 3313.691
+      },
+      "trial": 1
+    },
+    {
+      "case": "resume-64",
+      "arm": "spooltail",
+      "readers": 64,
+      "events_per_reader": 36,
+      "verified": 2304,
+      "publish_ms": {
+        "p50": 3.303,
+        "p95": 3.995,
+        "p99": 3.995,
+        "p100": 3.995
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.576,
+        "p95": 8.601,
+        "p99": 8.601,
+        "p100": 8.601
+      },
+      "dispatch_rate_per_s": 39.81,
+      "fast_delivery_ms": {
+        "p50": 4.849,
+        "p95": 8.002,
+        "p99": 9.104,
+        "p100": 10.529
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.719,
+        "p95": 10.529,
+        "p99": 10.529,
+        "p100": 10.529
+      },
+      "journal_reads": 2304,
+      "server_cpu_s": {
+        "spool": 0.2154
+      },
+      "first_missed_ms": {
+        "p50": 15.508,
+        "p95": 20.761,
+        "p99": 21.871,
+        "p100": 21.871
+      },
+      "caught_up_ms": {
+        "p50": 15.785,
+        "p95": 21.026,
+        "p99": 22.125,
+        "p100": 22.125
+      },
+      "trial": 1
+    },
+    {
+      "case": "resume-64",
+      "arm": "rabbit-redis",
+      "readers": 64,
+      "events_per_reader": 36,
+      "verified": 2304,
+      "publish_ms": {
+        "p50": 0.994,
+        "p95": 1.117,
+        "p99": 1.117,
+        "p100": 1.117
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.954,
+        "p95": 11.088,
+        "p99": 11.088,
+        "p100": 11.088
+      },
+      "dispatch_rate_per_s": 38.75,
+      "fast_delivery_ms": {
+        "p50": 6.316,
+        "p95": 9.677,
+        "p99": 15.221,
+        "p100": 16.587
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.039,
+        "p95": 16.587,
+        "p99": 16.587,
+        "p100": 16.587
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0206,
+        "redis": 0.0334,
+        "sdk-api": 0.1828,
+        "hub": 0.0245
+      },
+      "first_missed_ms": {
+        "p50": 63.505,
+        "p95": 91.218,
+        "p99": 92.773,
+        "p100": 92.773
+      },
+      "caught_up_ms": {
+        "p50": 101.903,
+        "p95": 109.702,
+        "p99": 110.249,
+        "p100": 110.249
+      },
+      "trial": 1
+    },
+    {
+      "case": "resume-256",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 0.776,
+        "p95": 0.799,
+        "p99": 0.799,
+        "p100": 0.799
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.436,
+        "p95": 3.73,
+        "p99": 3.73,
+        "p100": 3.73
+      },
+      "dispatch_rate_per_s": 39.8,
+      "fast_delivery_ms": {
+        "p50": 11.337,
+        "p95": 21.267,
+        "p99": 45.019,
+        "p100": 52.054
+      },
+      "last_reader_per_event_ms": {
+        "p50": 17.189,
+        "p95": 52.054,
+        "p99": 52.054,
+        "p100": 52.054
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0179,
+        "redis": 0.065,
+        "sdk-api": 0.5914,
+        "hub": 0.0214
+      },
+      "first_missed_ms": {
+        "p50": 228.457,
+        "p95": 248.147,
+        "p99": 249.736,
+        "p100": 330.375
+      },
+      "caught_up_ms": {
+        "p50": 362.749,
+        "p95": 365.943,
+        "p99": 366.255,
+        "p100": 369.66
+      },
+      "trial": 1
+    },
+    {
+      "case": "resume-256",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 8.044,
+        "p95": 17.396,
+        "p99": 17.396,
+        "p100": 17.396
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.58,
+        "p95": 2.054,
+        "p99": 2.054,
+        "p100": 2.054
+      },
+      "dispatch_rate_per_s": 39.71,
+      "fast_delivery_ms": {
+        "p50": 16.36,
+        "p95": 34.998,
+        "p99": 49.336,
+        "p100": 70.226
+      },
+      "last_reader_per_event_ms": {
+        "p50": 44.721,
+        "p95": 70.226,
+        "p99": 70.226,
+        "p100": 70.226
+      },
+      "journal_reads": 9216,
+      "server_cpu_s": {
+        "spool": 0.6984
+      },
+      "first_missed_ms": {
+        "p50": 54.329,
+        "p95": 70.74,
+        "p99": 73.683,
+        "p100": 74.429
+      },
+      "caught_up_ms": {
+        "p50": 54.861,
+        "p95": 71.008,
+        "p99": 73.966,
+        "p100": 74.707
+      },
+      "trial": 1
+    },
+    {
+      "case": "resume-256-publishing",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 16.75,
+        "p95": 41.956,
+        "p99": 41.956,
+        "p100": 41.956
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.883,
+        "p95": 17.728,
+        "p99": 17.728,
+        "p100": 17.728
+      },
+      "dispatch_rate_per_s": 39.88,
+      "fast_delivery_ms": {
+        "p50": 29.579,
+        "p95": 62.037,
+        "p99": 84.55,
+        "p100": 113.844
+      },
+      "last_reader_per_event_ms": {
+        "p50": 76.395,
+        "p95": 113.844,
+        "p99": 113.844,
+        "p100": 113.844
+      },
+      "journal_reads": 9216,
+      "server_cpu_s": {
+        "spool": 0.5531
+      },
+      "first_missed_ms": {
+        "p50": 58.14,
+        "p95": 91.369,
+        "p99": 106.293,
+        "p100": 111.866
+      },
+      "caught_up_ms": {
+        "p50": 58.402,
+        "p95": 91.697,
+        "p99": 107.194,
+        "p100": 112.21
+      },
+      "trial": 1
+    },
+    {
+      "case": "resume-256-publishing",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 0.964,
+        "p95": 4.447,
+        "p99": 4.447,
+        "p100": 4.447
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.005,
+        "p95": 4.362,
+        "p99": 4.362,
+        "p100": 4.362
+      },
+      "dispatch_rate_per_s": 39.72,
+      "fast_delivery_ms": {
+        "p50": 326.451,
+        "p95": 439.55,
+        "p99": 527.288,
+        "p100": 552.131
+      },
+      "last_reader_per_event_ms": {
+        "p50": 404.817,
+        "p95": 552.131,
+        "p99": 552.131,
+        "p100": 552.131
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0202,
+        "redis": 0.0524,
+        "sdk-api": 0.5803,
+        "hub": 0.0221
+      },
+      "first_missed_ms": {
+        "p50": 272.113,
+        "p95": 365.959,
+        "p99": 368.605,
+        "p100": 369.046
+      },
+      "caught_up_ms": {
+        "p50": 432.726,
+        "p95": 549.008,
+        "p99": 551.91,
+        "p100": 552.038
+      },
+      "trial": 1
+    },
+    {
+      "case": "live-16",
+      "arm": "spooltail",
+      "readers": 16,
+      "events_per_reader": 48,
+      "verified": 768,
+      "publish_ms": {
+        "p50": 3.861,
+        "p95": 5.809,
+        "p99": 6.426,
+        "p100": 6.426
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 6.468,
+        "p95": 9.036,
+        "p99": 10.151,
+        "p100": 10.151
+      },
+      "dispatch_rate_per_s": 39.67,
+      "fast_delivery_ms": {
+        "p50": 4.579,
+        "p95": 6.85,
+        "p99": 7.886,
+        "p100": 8.852
+      },
+      "last_reader_per_event_ms": {
+        "p50": 6.017,
+        "p95": 8.071,
+        "p99": 8.852,
+        "p100": 8.852
+      },
+      "journal_reads": 768,
+      "server_cpu_s": {
+        "spool": 0.3462
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-16",
+      "arm": "rabbit-redis",
+      "readers": 16,
+      "events_per_reader": 48,
+      "verified": 768,
+      "publish_ms": {
+        "p50": 1.079,
+        "p95": 1.802,
+        "p99": 2.196,
+        "p100": 2.196
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 7.576,
+        "p95": 10.737,
+        "p99": 11.036,
+        "p100": 11.036
+      },
+      "dispatch_rate_per_s": 39.85,
+      "fast_delivery_ms": {
+        "p50": 5.409,
+        "p95": 8.64,
+        "p99": 12.717,
+        "p100": 13.671
+      },
+      "last_reader_per_event_ms": {
+        "p50": 6.026,
+        "p95": 9.496,
+        "p99": 13.671,
+        "p100": 13.671
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0627,
+        "redis": 0.0433,
+        "sdk-api": 0.104,
+        "hub": 0.0809
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-64",
+      "arm": "rabbit-redis",
+      "readers": 64,
+      "events_per_reader": 48,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.878,
+        "p95": 1.074,
+        "p99": 1.145,
+        "p100": 1.145
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.406,
+        "p95": 10.287,
+        "p99": 10.732,
+        "p100": 10.732
+      },
+      "dispatch_rate_per_s": 39.71,
+      "fast_delivery_ms": {
+        "p50": 6.257,
+        "p95": 8.222,
+        "p99": 12.039,
+        "p100": 17.519
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.024,
+        "p95": 9.207,
+        "p99": 17.519,
+        "p100": 17.519
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0507,
+        "redis": 0.053,
+        "sdk-api": 0.2519,
+        "hub": 0.0633
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-64",
+      "arm": "spooltail",
+      "readers": 64,
+      "events_per_reader": 48,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.181,
+        "p95": 4.613,
+        "p99": 5.177,
+        "p100": 5.177
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.055,
+        "p95": 8.105,
+        "p99": 8.15,
+        "p100": 8.15
+      },
+      "dispatch_rate_per_s": 39.8,
+      "fast_delivery_ms": {
+        "p50": 5.073,
+        "p95": 8.375,
+        "p99": 9.718,
+        "p100": 12.769
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.868,
+        "p95": 10.507,
+        "p99": 12.769,
+        "p100": 12.769
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 0.7356
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-256",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 48,
+      "verified": 12288,
+      "publish_ms": {
+        "p50": 17.68,
+        "p95": 33.883,
+        "p99": 35.437,
+        "p100": 35.437
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.086,
+        "p95": 17.084,
+        "p99": 21.276,
+        "p100": 21.276
+      },
+      "dispatch_rate_per_s": 39.9,
+      "fast_delivery_ms": {
+        "p50": 26.382,
+        "p95": 47.39,
+        "p99": 57.419,
+        "p100": 94.927
+      },
+      "last_reader_per_event_ms": {
+        "p50": 61.789,
+        "p95": 87.784,
+        "p99": 94.927,
+        "p100": 94.927
+      },
+      "journal_reads": 12288,
+      "server_cpu_s": {
+        "spool": 2.3584
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-256",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 48,
+      "verified": 12288,
+      "publish_ms": {
+        "p50": 0.797,
+        "p95": 1.026,
+        "p99": 1.141,
+        "p100": 1.141
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.913,
+        "p95": 6.172,
+        "p99": 9.256,
+        "p100": 9.256
+      },
+      "dispatch_rate_per_s": 39.94,
+      "fast_delivery_ms": {
+        "p50": 12.157,
+        "p95": 18.825,
+        "p99": 26.112,
+        "p100": 55.445
+      },
+      "last_reader_per_event_ms": {
+        "p50": 18.989,
+        "p95": 20.754,
+        "p99": 55.445,
+        "p100": 55.445
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0477,
+        "redis": 0.1015,
+        "sdk-api": 0.8193,
+        "hub": 0.0593
+      },
+      "trial": 2
+    },
+    {
+      "case": "large-32",
+      "arm": "rabbit-redis",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.853,
+        "p95": 1.129,
+        "p99": 3.358,
+        "p100": 3.358
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 3.381,
+        "p95": 10.218,
+        "p99": 11.116,
+        "p100": 11.116
+      },
+      "dispatch_rate_per_s": 49.91,
+      "fast_delivery_ms": {
+        "p50": 9.975,
+        "p95": 14.833,
+        "p99": 16.267,
+        "p100": 20.807
+      },
+      "last_reader_per_event_ms": {
+        "p50": 14.909,
+        "p95": 16.879,
+        "p99": 20.807,
+        "p100": 20.807
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0857,
+        "redis": 0.0887,
+        "sdk-api": 1.11,
+        "hub": 0.1189
+      },
+      "trial": 2
+    },
+    {
+      "case": "large-32",
+      "arm": "spooltail",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.311,
+        "p95": 4.753,
+        "p99": 23.715,
+        "p100": 23.715
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.138,
+        "p95": 6.33,
+        "p99": 6.864,
+        "p100": 6.864
+      },
+      "dispatch_rate_per_s": 49.91,
+      "fast_delivery_ms": {
+        "p50": 4.938,
+        "p95": 7.314,
+        "p99": 23.442,
+        "p100": 27.985
+      },
+      "last_reader_per_event_ms": {
+        "p50": 7.143,
+        "p95": 8.684,
+        "p99": 27.985,
+        "p100": 27.985
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 1.0656
+      },
+      "trial": 2
+    },
+    {
+      "case": "slow-32",
+      "arm": "spooltail",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.313,
+        "p95": 4.566,
+        "p99": 5.081,
+        "p100": 5.081
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.146,
+        "p95": 7.31,
+        "p99": 7.568,
+        "p100": 7.568
+      },
+      "dispatch_rate_per_s": 49.82,
+      "fast_delivery_ms": {
+        "p50": 4.769,
+        "p95": 6.883,
+        "p99": 7.784,
+        "p100": 11.232
+      },
+      "last_reader_per_event_ms": {
+        "p50": 1551.942,
+        "p95": 3146.556,
+        "p99": 3272.794,
+        "p100": 3272.794
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 1.068
+      },
+      "slow_delivery_ms": {
+        "p50": 1551.942,
+        "p95": 3064.762,
+        "p99": 3209.493,
+        "p100": 3272.794
+      },
+      "trial": 2
+    },
+    {
+      "case": "slow-32",
+      "arm": "rabbit-redis",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.874,
+        "p95": 1.108,
+        "p99": 1.42,
+        "p100": 1.42
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.67,
+        "p95": 9.08,
+        "p99": 9.516,
+        "p100": 9.516
+      },
+      "dispatch_rate_per_s": 49.89,
+      "fast_delivery_ms": {
+        "p50": 9.549,
+        "p95": 14.302,
+        "p99": 16.261,
+        "p100": 18.03
+      },
+      "last_reader_per_event_ms": {
+        "p50": 1544.263,
+        "p95": 3135.026,
+        "p99": 3266.254,
+        "p100": 3266.254
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.1161,
+        "redis": 0.1238,
+        "sdk-api": 1.3082,
+        "hub": 0.1217
+      },
+      "slow_delivery_ms": {
+        "p50": 1531.127,
+        "p95": 3038.603,
+        "p99": 3203.764,
+        "p100": 3266.254
+      },
+      "trial": 2
+    },
+    {
+      "case": "resume-64",
+      "arm": "rabbit-redis",
+      "readers": 64,
+      "events_per_reader": 36,
+      "verified": 2304,
+      "publish_ms": {
+        "p50": 0.879,
+        "p95": 0.972,
+        "p99": 0.972,
+        "p100": 0.972
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.212,
+        "p95": 8.465,
+        "p99": 8.465,
+        "p100": 8.465
+      },
+      "dispatch_rate_per_s": 38.81,
+      "fast_delivery_ms": {
+        "p50": 6.017,
+        "p95": 10.035,
+        "p99": 15.297,
+        "p100": 16.293
+      },
+      "last_reader_per_event_ms": {
+        "p50": 7.425,
+        "p95": 16.293,
+        "p99": 16.293,
+        "p100": 16.293
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0173,
+        "redis": 0.0318,
+        "sdk-api": 0.1858,
+        "hub": 0.0221
+      },
+      "first_missed_ms": {
+        "p50": 69.973,
+        "p95": 97.202,
+        "p99": 97.33,
+        "p100": 97.33
+      },
+      "caught_up_ms": {
+        "p50": 105.018,
+        "p95": 111.158,
+        "p99": 111.389,
+        "p100": 111.389
+      },
+      "trial": 2
+    },
+    {
+      "case": "resume-64",
+      "arm": "spooltail",
+      "readers": 64,
+      "events_per_reader": 36,
+      "verified": 2304,
+      "publish_ms": {
+        "p50": 3.055,
+        "p95": 5.071,
+        "p99": 5.071,
+        "p100": 5.071
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.449,
+        "p95": 8.304,
+        "p99": 8.304,
+        "p100": 8.304
+      },
+      "dispatch_rate_per_s": 39.45,
+      "fast_delivery_ms": {
+        "p50": 4.872,
+        "p95": 8.056,
+        "p99": 9.215,
+        "p100": 10.638
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.703,
+        "p95": 10.638,
+        "p99": 10.638,
+        "p100": 10.638
+      },
+      "journal_reads": 2304,
+      "server_cpu_s": {
+        "spool": 0.2128
+      },
+      "first_missed_ms": {
+        "p50": 15.527,
+        "p95": 20.512,
+        "p99": 21.175,
+        "p100": 21.175
+      },
+      "caught_up_ms": {
+        "p50": 15.797,
+        "p95": 20.759,
+        "p99": 21.495,
+        "p100": 21.495
+      },
+      "trial": 2
+    },
+    {
+      "case": "resume-256",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 10.273,
+        "p95": 20.696,
+        "p99": 20.696,
+        "p100": 20.696
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.759,
+        "p95": 1.768,
+        "p99": 1.768,
+        "p100": 1.768
+      },
+      "dispatch_rate_per_s": 39.94,
+      "fast_delivery_ms": {
+        "p50": 17.203,
+        "p95": 35.723,
+        "p99": 43.233,
+        "p100": 75.883
+      },
+      "last_reader_per_event_ms": {
+        "p50": 46.467,
+        "p95": 75.883,
+        "p99": 75.883,
+        "p100": 75.883
+      },
+      "journal_reads": 9216,
+      "server_cpu_s": {
+        "spool": 0.7214
+      },
+      "first_missed_ms": {
+        "p50": 56.007,
+        "p95": 72.563,
+        "p99": 75.031,
+        "p100": 75.816
+      },
+      "caught_up_ms": {
+        "p50": 56.27,
+        "p95": 72.827,
+        "p99": 75.42,
+        "p100": 76.138
+      },
+      "trial": 2
+    },
+    {
+      "case": "resume-256",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 0.818,
+        "p95": 0.893,
+        "p99": 0.893,
+        "p100": 0.893
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.782,
+        "p95": 10.265,
+        "p99": 10.265,
+        "p100": 10.265
+      },
+      "dispatch_rate_per_s": 39.87,
+      "fast_delivery_ms": {
+        "p50": 10.93,
+        "p95": 22.932,
+        "p99": 48.908,
+        "p100": 61.404
+      },
+      "last_reader_per_event_ms": {
+        "p50": 17.41,
+        "p95": 61.404,
+        "p99": 61.404,
+        "p100": 61.404
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0214,
+        "redis": 0.0696,
+        "sdk-api": 0.6368,
+        "hub": 0.0217
+      },
+      "first_missed_ms": {
+        "p50": 262.905,
+        "p95": 284.097,
+        "p99": 297.73,
+        "p100": 298.053
+      },
+      "caught_up_ms": {
+        "p50": 402.973,
+        "p95": 405.64,
+        "p99": 409.37,
+        "p100": 409.427
+      },
+      "trial": 2
+    },
+    {
+      "case": "resume-256-publishing",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 0.905,
+        "p95": 3.471,
+        "p99": 3.471,
+        "p100": 3.471
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.999,
+        "p95": 3.885,
+        "p99": 3.885,
+        "p100": 3.885
+      },
+      "dispatch_rate_per_s": 39.75,
+      "fast_delivery_ms": {
+        "p50": 317.601,
+        "p95": 424.382,
+        "p99": 446.026,
+        "p100": 546.023
+      },
+      "last_reader_per_event_ms": {
+        "p50": 392.922,
+        "p95": 546.023,
+        "p99": 546.023,
+        "p100": 546.023
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0184,
+        "redis": 0.0546,
+        "sdk-api": 0.5621,
+        "hub": 0.0229
+      },
+      "first_missed_ms": {
+        "p50": 253.202,
+        "p95": 283.528,
+        "p99": 357.078,
+        "p100": 363.348
+      },
+      "caught_up_ms": {
+        "p50": 418.679,
+        "p95": 427.539,
+        "p99": 543.54,
+        "p100": 545.958
+      },
+      "trial": 2
+    },
+    {
+      "case": "resume-256-publishing",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 24.311,
+        "p95": 30.765,
+        "p99": 30.765,
+        "p100": 30.765
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.525,
+        "p95": 12.219,
+        "p99": 12.219,
+        "p100": 12.219
+      },
+      "dispatch_rate_per_s": 38.39,
+      "fast_delivery_ms": {
+        "p50": 31.616,
+        "p95": 58.855,
+        "p99": 72.267,
+        "p100": 101.676
+      },
+      "last_reader_per_event_ms": {
+        "p50": 68.11,
+        "p95": 101.676,
+        "p99": 101.676,
+        "p100": 101.676
+      },
+      "journal_reads": 9216,
+      "server_cpu_s": {
+        "spool": 0.6041
+      },
+      "first_missed_ms": {
+        "p50": 57.268,
+        "p95": 79.366,
+        "p99": 92.686,
+        "p100": 101.398
+      },
+      "caught_up_ms": {
+        "p50": 57.553,
+        "p95": 79.776,
+        "p99": 93.027,
+        "p100": 101.714
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-1",
+      "arm": "rabbit-redis",
+      "readers": 1,
+      "events_per_reader": 48,
+      "verified": 48,
+      "publish_ms": {
+        "p50": 1.64,
+        "p95": 2.219,
+        "p99": 2.799,
+        "p100": 2.799
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.837,
+        "p95": 9.638,
+        "p99": 10.024,
+        "p100": 10.024
+      },
+      "dispatch_rate_per_s": 39.82,
+      "fast_delivery_ms": {
+        "p50": 5.468,
+        "p95": 6.91,
+        "p99": 7.565,
+        "p100": 7.565
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.468,
+        "p95": 6.91,
+        "p99": 7.565,
+        "p100": 7.565
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0743,
+        "redis": 0.0413,
+        "sdk-api": 0.0309,
+        "hub": 0.0926
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-1",
+      "arm": "spooltail",
+      "readers": 1,
+      "events_per_reader": 48,
+      "verified": 48,
+      "publish_ms": {
+        "p50": 5.93,
+        "p95": 8.611,
+        "p99": 10.249,
+        "p100": 10.249
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.966,
+        "p95": 10.509,
+        "p99": 11.355,
+        "p100": 11.355
+      },
+      "dispatch_rate_per_s": 39.74,
+      "fast_delivery_ms": {
+        "p50": 5.551,
+        "p95": 8.764,
+        "p99": 9.582,
+        "p100": 9.582
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.551,
+        "p95": 8.764,
+        "p99": 9.582,
+        "p100": 9.582
+      },
+      "journal_reads": 48,
+      "server_cpu_s": {
+        "spool": 0.0899
+      },
+      "trial": 2
+    },
+    {
+      "case": "live-64",
+      "arm": "spooltail",
+      "readers": 64,
+      "events_per_reader": 48,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 2.953,
+        "p95": 3.97,
+        "p99": 4.052,
+        "p100": 4.052
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.372,
+        "p95": 7.929,
+        "p99": 8.466,
+        "p100": 8.466
+      },
+      "dispatch_rate_per_s": 39.74,
+      "fast_delivery_ms": {
+        "p50": 4.613,
+        "p95": 7.797,
+        "p99": 9.064,
+        "p100": 13.351
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.488,
+        "p95": 9.799,
+        "p99": 13.351,
+        "p100": 13.351
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 0.7469
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-64",
+      "arm": "rabbit-redis",
+      "readers": 64,
+      "events_per_reader": 48,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.911,
+        "p95": 1.072,
+        "p99": 1.11,
+        "p100": 1.11
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 7.089,
+        "p95": 10.053,
+        "p99": 10.815,
+        "p100": 10.815
+      },
+      "dispatch_rate_per_s": 39.71,
+      "fast_delivery_ms": {
+        "p50": 6.0,
+        "p95": 7.871,
+        "p99": 11.84,
+        "p100": 17.023
+      },
+      "last_reader_per_event_ms": {
+        "p50": 7.855,
+        "p95": 8.564,
+        "p99": 17.023,
+        "p100": 17.023
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0508,
+        "redis": 0.0518,
+        "sdk-api": 0.2489,
+        "hub": 0.0643
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-256",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 48,
+      "verified": 12288,
+      "publish_ms": {
+        "p50": 0.887,
+        "p95": 1.133,
+        "p99": 1.153,
+        "p100": 1.153
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 2.038,
+        "p95": 9.201,
+        "p99": 10.881,
+        "p100": 10.881
+      },
+      "dispatch_rate_per_s": 39.91,
+      "fast_delivery_ms": {
+        "p50": 12.341,
+        "p95": 19.079,
+        "p99": 28.748,
+        "p100": 54.232
+      },
+      "last_reader_per_event_ms": {
+        "p50": 19.122,
+        "p95": 21.332,
+        "p99": 54.232,
+        "p100": 54.232
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.048,
+        "redis": 0.1076,
+        "sdk-api": 0.8307,
+        "hub": 0.0608
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-256",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 48,
+      "verified": 12288,
+      "publish_ms": {
+        "p50": 17.753,
+        "p95": 34.458,
+        "p99": 42.07,
+        "p100": 42.07
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.399,
+        "p95": 26.005,
+        "p99": 29.845,
+        "p100": 29.845
+      },
+      "dispatch_rate_per_s": 39.99,
+      "fast_delivery_ms": {
+        "p50": 28.383,
+        "p95": 49.572,
+        "p99": 61.777,
+        "p100": 91.572
+      },
+      "last_reader_per_event_ms": {
+        "p50": 65.138,
+        "p95": 82.391,
+        "p99": 91.572,
+        "p100": 91.572
+      },
+      "journal_reads": 12288,
+      "server_cpu_s": {
+        "spool": 2.3283
+      },
+      "trial": 3
+    },
+    {
+      "case": "large-32",
+      "arm": "spooltail",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 2.997,
+        "p95": 3.567,
+        "p99": 3.961,
+        "p100": 3.961
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.185,
+        "p95": 6.809,
+        "p99": 7.632,
+        "p100": 7.632
+      },
+      "dispatch_rate_per_s": 49.94,
+      "fast_delivery_ms": {
+        "p50": 4.484,
+        "p95": 6.681,
+        "p99": 7.308,
+        "p100": 11.066
+      },
+      "last_reader_per_event_ms": {
+        "p50": 6.908,
+        "p95": 7.504,
+        "p99": 11.066,
+        "p100": 11.066
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 1.0866
+      },
+      "trial": 3
+    },
+    {
+      "case": "large-32",
+      "arm": "rabbit-redis",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.847,
+        "p95": 0.962,
+        "p99": 1.208,
+        "p100": 1.208
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 2.113,
+        "p95": 5.221,
+        "p99": 10.623,
+        "p100": 10.623
+      },
+      "dispatch_rate_per_s": 49.96,
+      "fast_delivery_ms": {
+        "p50": 9.409,
+        "p95": 14.219,
+        "p99": 15.04,
+        "p100": 21.624
+      },
+      "last_reader_per_event_ms": {
+        "p50": 14.48,
+        "p95": 15.17,
+        "p99": 21.624,
+        "p100": 21.624
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0757,
+        "redis": 0.0876,
+        "sdk-api": 1.1062,
+        "hub": 0.1169
+      },
+      "trial": 3
+    },
+    {
+      "case": "slow-32",
+      "arm": "rabbit-redis",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 0.92,
+        "p95": 1.368,
+        "p99": 3.48,
+        "p100": 3.48
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 3.594,
+        "p95": 9.845,
+        "p99": 10.651,
+        "p100": 10.651
+      },
+      "dispatch_rate_per_s": 49.95,
+      "fast_delivery_ms": {
+        "p50": 9.135,
+        "p95": 13.843,
+        "p99": 15.873,
+        "p100": 19.205
+      },
+      "last_reader_per_event_ms": {
+        "p50": 1566.296,
+        "p95": 3174.429,
+        "p99": 3316.228,
+        "p100": 3316.228
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.1236,
+        "redis": 0.1338,
+        "sdk-api": 1.294,
+        "hub": 0.1255
+      },
+      "slow_delivery_ms": {
+        "p50": 1537.697,
+        "p95": 3082.933,
+        "p99": 3280.365,
+        "p100": 3316.228
+      },
+      "trial": 3
+    },
+    {
+      "case": "slow-32",
+      "arm": "spooltail",
+      "readers": 32,
+      "events_per_reader": 96,
+      "verified": 3072,
+      "publish_ms": {
+        "p50": 3.009,
+        "p95": 3.77,
+        "p99": 21.657,
+        "p100": 21.657
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 3.666,
+        "p95": 7.193,
+        "p99": 7.784,
+        "p100": 7.784
+      },
+      "dispatch_rate_per_s": 49.98,
+      "fast_delivery_ms": {
+        "p50": 4.436,
+        "p95": 6.662,
+        "p99": 21.6,
+        "p100": 25.052
+      },
+      "last_reader_per_event_ms": {
+        "p50": 1598.873,
+        "p95": 3178.21,
+        "p99": 3319.066,
+        "p100": 3319.066
+      },
+      "journal_reads": 3072,
+      "server_cpu_s": {
+        "spool": 1.0822
+      },
+      "slow_delivery_ms": {
+        "p50": 1577.77,
+        "p95": 3101.384,
+        "p99": 3279.678,
+        "p100": 3319.066
+      },
+      "trial": 3
+    },
+    {
+      "case": "resume-64",
+      "arm": "spooltail",
+      "readers": 64,
+      "events_per_reader": 36,
+      "verified": 2304,
+      "publish_ms": {
+        "p50": 3.0,
+        "p95": 3.191,
+        "p99": 3.191,
+        "p100": 3.191
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.36,
+        "p95": 8.697,
+        "p99": 8.697,
+        "p100": 8.697
+      },
+      "dispatch_rate_per_s": 38.93,
+      "fast_delivery_ms": {
+        "p50": 4.578,
+        "p95": 7.442,
+        "p99": 8.542,
+        "p100": 8.973
+      },
+      "last_reader_per_event_ms": {
+        "p50": 8.529,
+        "p95": 8.973,
+        "p99": 8.973,
+        "p100": 8.973
+      },
+      "journal_reads": 2304,
+      "server_cpu_s": {
+        "spool": 0.2181
+      },
+      "first_missed_ms": {
+        "p50": 16.239,
+        "p95": 21.233,
+        "p99": 22.438,
+        "p100": 22.438
+      },
+      "caught_up_ms": {
+        "p50": 16.498,
+        "p95": 21.495,
+        "p99": 22.724,
+        "p100": 22.724
+      },
+      "trial": 3
+    },
+    {
+      "case": "resume-64",
+      "arm": "rabbit-redis",
+      "readers": 64,
+      "events_per_reader": 36,
+      "verified": 2304,
+      "publish_ms": {
+        "p50": 0.837,
+        "p95": 1.27,
+        "p99": 1.27,
+        "p100": 1.27
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.437,
+        "p95": 10.607,
+        "p99": 10.607,
+        "p100": 10.607
+      },
+      "dispatch_rate_per_s": 38.88,
+      "fast_delivery_ms": {
+        "p50": 5.461,
+        "p95": 9.925,
+        "p99": 15.22,
+        "p100": 16.817
+      },
+      "last_reader_per_event_ms": {
+        "p50": 7.068,
+        "p95": 16.817,
+        "p99": 16.817,
+        "p100": 16.817
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0184,
+        "redis": 0.0315,
+        "sdk-api": 0.1827,
+        "hub": 0.023
+      },
+      "first_missed_ms": {
+        "p50": 63.899,
+        "p95": 87.473,
+        "p99": 89.061,
+        "p100": 89.061
+      },
+      "caught_up_ms": {
+        "p50": 97.91,
+        "p95": 105.612,
+        "p99": 106.241,
+        "p100": 106.241
+      },
+      "trial": 3
+    },
+    {
+      "case": "resume-256",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 0.798,
+        "p95": 0.888,
+        "p99": 0.888,
+        "p100": 0.888
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 2.736,
+        "p95": 7.067,
+        "p99": 7.067,
+        "p100": 7.067
+      },
+      "dispatch_rate_per_s": 39.92,
+      "fast_delivery_ms": {
+        "p50": 10.974,
+        "p95": 21.337,
+        "p99": 40.999,
+        "p100": 56.903
+      },
+      "last_reader_per_event_ms": {
+        "p50": 16.885,
+        "p95": 56.903,
+        "p99": 56.903,
+        "p100": 56.903
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0208,
+        "redis": 0.0679,
+        "sdk-api": 0.6001,
+        "hub": 0.0217
+      },
+      "first_missed_ms": {
+        "p50": 243.176,
+        "p95": 261.255,
+        "p99": 262.743,
+        "p100": 263.035
+      },
+      "caught_up_ms": {
+        "p50": 371.395,
+        "p95": 374.326,
+        "p99": 374.699,
+        "p100": 374.814
+      },
+      "trial": 3
+    },
+    {
+      "case": "resume-256",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 10.474,
+        "p95": 20.418,
+        "p99": 20.418,
+        "p100": 20.418
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.647,
+        "p95": 1.657,
+        "p99": 1.657,
+        "p100": 1.657
+      },
+      "dispatch_rate_per_s": 39.97,
+      "fast_delivery_ms": {
+        "p50": 17.221,
+        "p95": 35.882,
+        "p99": 47.914,
+        "p100": 81.617
+      },
+      "last_reader_per_event_ms": {
+        "p50": 40.2,
+        "p95": 81.617,
+        "p99": 81.617,
+        "p100": 81.617
+      },
+      "journal_reads": 9216,
+      "server_cpu_s": {
+        "spool": 0.7118
+      },
+      "first_missed_ms": {
+        "p50": 53.359,
+        "p95": 70.317,
+        "p99": 73.539,
+        "p100": 73.912
+      },
+      "caught_up_ms": {
+        "p50": 53.628,
+        "p95": 70.628,
+        "p99": 73.793,
+        "p100": 74.172
+      },
+      "trial": 3
+    },
+    {
+      "case": "resume-256-publishing",
+      "arm": "spooltail",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 17.804,
+        "p95": 35.308,
+        "p99": 35.308,
+        "p100": 35.308
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 1.005,
+        "p95": 13.345,
+        "p99": 13.345,
+        "p100": 13.345
+      },
+      "dispatch_rate_per_s": 38.15,
+      "fast_delivery_ms": {
+        "p50": 32.957,
+        "p95": 59.583,
+        "p99": 75.599,
+        "p100": 109.796
+      },
+      "last_reader_per_event_ms": {
+        "p50": 77.103,
+        "p95": 109.796,
+        "p99": 109.796,
+        "p100": 109.796
+      },
+      "journal_reads": 9216,
+      "server_cpu_s": {
+        "spool": 0.5987
+      },
+      "first_missed_ms": {
+        "p50": 57.047,
+        "p95": 80.595,
+        "p99": 96.162,
+        "p100": 109.462
+      },
+      "caught_up_ms": {
+        "p50": 57.311,
+        "p95": 80.94,
+        "p99": 96.489,
+        "p100": 109.777
+      },
+      "trial": 3
+    },
+    {
+      "case": "resume-256-publishing",
+      "arm": "rabbit-redis",
+      "readers": 256,
+      "events_per_reader": 36,
+      "verified": 9216,
+      "publish_ms": {
+        "p50": 1.028,
+        "p95": 4.099,
+        "p99": 4.099,
+        "p100": 4.099
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 0.845,
+        "p95": 3.926,
+        "p99": 3.926,
+        "p100": 3.926
+      },
+      "dispatch_rate_per_s": 39.91,
+      "fast_delivery_ms": {
+        "p50": 295.662,
+        "p95": 406.429,
+        "p99": 409.21,
+        "p100": 530.771
+      },
+      "last_reader_per_event_ms": {
+        "p50": 379.967,
+        "p95": 530.771,
+        "p99": 530.771,
+        "p100": 530.771
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0189,
+        "redis": 0.0529,
+        "sdk-api": 0.5449,
+        "hub": 0.0228
+      },
+      "first_missed_ms": {
+        "p50": 247.192,
+        "p95": 270.704,
+        "p99": 347.019,
+        "p100": 357.984
+      },
+      "caught_up_ms": {
+        "p50": 401.331,
+        "p95": 404.562,
+        "p99": 527.407,
+        "p100": 530.683
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-1",
+      "arm": "spooltail",
+      "readers": 1,
+      "events_per_reader": 48,
+      "verified": 48,
+      "publish_ms": {
+        "p50": 5.449,
+        "p95": 10.507,
+        "p99": 13.182,
+        "p100": 13.182
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.295,
+        "p95": 10.248,
+        "p99": 10.792,
+        "p100": 10.792
+      },
+      "dispatch_rate_per_s": 39.87,
+      "fast_delivery_ms": {
+        "p50": 5.391,
+        "p95": 9.938,
+        "p99": 13.018,
+        "p100": 13.018
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.391,
+        "p95": 9.938,
+        "p99": 13.018,
+        "p100": 13.018
+      },
+      "journal_reads": 48,
+      "server_cpu_s": {
+        "spool": 0.1035
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-1",
+      "arm": "rabbit-redis",
+      "readers": 1,
+      "events_per_reader": 48,
+      "verified": 48,
+      "publish_ms": {
+        "p50": 1.443,
+        "p95": 2.35,
+        "p99": 2.474,
+        "p100": 2.474
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 5.895,
+        "p95": 9.305,
+        "p99": 10.921,
+        "p100": 10.921
+      },
+      "dispatch_rate_per_s": 39.85,
+      "fast_delivery_ms": {
+        "p50": 4.954,
+        "p95": 7.103,
+        "p99": 8.819,
+        "p100": 8.819
+      },
+      "last_reader_per_event_ms": {
+        "p50": 4.954,
+        "p95": 7.103,
+        "p99": 8.819,
+        "p100": 8.819
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0603,
+        "redis": 0.0409,
+        "sdk-api": 0.0304,
+        "hub": 0.0901
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-16",
+      "arm": "rabbit-redis",
+      "readers": 16,
+      "events_per_reader": 48,
+      "verified": 768,
+      "publish_ms": {
+        "p50": 1.171,
+        "p95": 1.993,
+        "p99": 2.676,
+        "p100": 2.676
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 4.218,
+        "p95": 10.744,
+        "p99": 10.91,
+        "p100": 10.91
+      },
+      "dispatch_rate_per_s": 39.94,
+      "fast_delivery_ms": {
+        "p50": 5.167,
+        "p95": 8.193,
+        "p99": 11.297,
+        "p100": 13.605
+      },
+      "last_reader_per_event_ms": {
+        "p50": 6.011,
+        "p95": 9.129,
+        "p99": 13.605,
+        "p100": 13.605
+      },
+      "journal_reads": null,
+      "server_cpu_s": {
+        "rabbit": 0.0653,
+        "redis": 0.0452,
+        "sdk-api": 0.1033,
+        "hub": 0.0796
+      },
+      "trial": 3
+    },
+    {
+      "case": "live-16",
+      "arm": "spooltail",
+      "readers": 16,
+      "events_per_reader": 48,
+      "verified": 768,
+      "publish_ms": {
+        "p50": 3.91,
+        "p95": 5.531,
+        "p99": 6.344,
+        "p100": 6.344
+      },
+      "publisher_start_lateness_ms": {
+        "p50": 6.729,
+        "p95": 9.826,
+        "p99": 11.071,
+        "p100": 11.071
+      },
+      "dispatch_rate_per_s": 39.77,
+      "fast_delivery_ms": {
+        "p50": 4.416,
+        "p95": 6.835,
+        "p99": 7.592,
+        "p100": 8.222
+      },
+      "last_reader_per_event_ms": {
+        "p50": 5.753,
+        "p95": 8.038,
+        "p99": 8.222,
+        "p100": 8.222
+      },
+      "journal_reads": 768,
+      "server_cpu_s": {
+        "spool": 0.3563
+      },
+      "trial": 3
+    }
+  ],
+  "images": {
+    "spool": "sha256:87a5c89dae3021fac6cad5bc23b3e43d1c3d40439cc572d392f266afb24f0e14",
+    "rabbit": "sha256:95cbcc81abe46d919d2ae2c783025a2f4e2a147108bb86e5b441ea8008af6596",
+    "redis": "sha256:c90c016450904cc9c63d38100c04c72554fcc983e257f1637ab451afaf32da7b",
+    "sdk-api": "sha256:e0e3ed7f73333bdd19823f2737e84c28b4d5e2aa0b65d315443f4d5c436fb084",
+    "hub": "sha256:e0e3ed7f73333bdd19823f2737e84c28b4d5e2aa0b65d315443f4d5c436fb084"
+  }
+}
