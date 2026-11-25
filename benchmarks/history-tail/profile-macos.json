@@ -1,0 +1,242 @@
+[
+  {
+    "round": 1,
+    "binary": "parent",
+    "p99_ms": {
+      "publish_rpc": 12.028625,
+      "journal_sync": 6.737,
+      "journal_write": 0.046,
+      "lock_acquisition_spans": 5.843,
+      "index_finish": 0.286,
+      "outside_publish_span": 0.795625
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 10.815041,
+      "journal_sync": 4.3975,
+      "journal_write": 0.0265,
+      "lock_acquisition_spans": 5.5445,
+      "index_finish": 0.1525,
+      "outside_publish_span": 0.555188
+    }
+  },
+  {
+    "round": 1,
+    "binary": "current",
+    "p99_ms": {
+      "publish_rpc": 12.629416,
+      "journal_sync": 8.109,
+      "journal_write": 0.962,
+      "lock_acquisition_spans": 1.678,
+      "index_finish": 1.113,
+      "outside_publish_span": 3.1855
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 10.703833,
+      "journal_sync": 5.2565,
+      "journal_write": 0.244,
+      "lock_acquisition_spans": 0.009,
+      "index_finish": 0.4065,
+      "outside_publish_span": 2.111229
+    }
+  },
+  {
+    "round": 1,
+    "binary": "idle",
+    "p99_ms": {
+      "publish_rpc": 13.780291,
+      "journal_sync": 8.97,
+      "journal_write": 1.046,
+      "lock_acquisition_spans": 0.018,
+      "index_finish": 3.158,
+      "outside_publish_span": 3.621625
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 12.432146,
+      "journal_sync": 5.5415,
+      "journal_write": 0.1125,
+      "lock_acquisition_spans": 0.0085,
+      "index_finish": 1.1135,
+      "outside_publish_span": 2.885021
+    }
+  },
+  {
+    "round": 2,
+    "binary": "idle",
+    "p99_ms": {
+      "publish_rpc": 17.603083,
+      "journal_sync": 10.085,
+      "journal_write": 0.655,
+      "lock_acquisition_spans": 0.028,
+      "index_finish": 3.606,
+      "outside_publish_span": 7.710083
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 15.237708,
+      "journal_sync": 6.792,
+      "journal_write": 0.22,
+      "lock_acquisition_spans": 0.0075,
+      "index_finish": 0.934,
+      "outside_publish_span": 4.628104
+    }
+  },
+  {
+    "round": 2,
+    "binary": "current",
+    "p99_ms": {
+      "publish_rpc": 12.00625,
+      "journal_sync": 8.253,
+      "journal_write": 0.874,
+      "lock_acquisition_spans": 0.956,
+      "index_finish": 0.96,
+      "outside_publish_span": 4.975125
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 11.310521,
+      "journal_sync": 5.5555,
+      "journal_write": 0.0645,
+      "lock_acquisition_spans": 0.007,
+      "index_finish": 0.3535,
+      "outside_publish_span": 2.76423
+    }
+  },
+  {
+    "round": 2,
+    "binary": "parent",
+    "p99_ms": {
+      "publish_rpc": 11.420542,
+      "journal_sync": 7.317,
+      "journal_write": 0.057,
+      "lock_acquisition_spans": 5.446,
+      "index_finish": 0.277,
+      "outside_publish_span": 0.829333
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 10.341812,
+      "journal_sync": 4.406,
+      "journal_write": 0.034,
+      "lock_acquisition_spans": 5.009,
+      "index_finish": 0.168,
+      "outside_publish_span": 0.568979
+    }
+  },
+  {
+    "round": 3,
+    "binary": "current",
+    "p99_ms": {
+      "publish_rpc": 18.360334,
+      "journal_sync": 8.447,
+      "journal_write": 0.472,
+      "lock_acquisition_spans": 1.982,
+      "index_finish": 3.178,
+      "outside_publish_span": 3.785916
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 11.854583,
+      "journal_sync": 5.292,
+      "journal_write": 0.0525,
+      "lock_acquisition_spans": 0.0055,
+      "index_finish": 1.136,
+      "outside_publish_span": 2.667458
+    }
+  },
+  {
+    "round": 3,
+    "binary": "idle",
+    "p99_ms": {
+      "publish_rpc": 12.001708,
+      "journal_sync": 7.312,
+      "journal_write": 1.89,
+      "lock_acquisition_spans": 0.013,
+      "index_finish": 1.51,
+      "outside_publish_span": 4.056709
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 11.185271,
+      "journal_sync": 5.399,
+      "journal_write": 0.295,
+      "lock_acquisition_spans": 0.0095,
+      "index_finish": 0.8315,
+      "outside_publish_span": 3.038375
+    }
+  },
+  {
+    "round": 3,
+    "binary": "parent",
+    "p99_ms": {
+      "publish_rpc": 13.444625,
+      "journal_sync": 7.699,
+      "journal_write": 0.072,
+      "lock_acquisition_spans": 5.318,
+      "index_finish": 0.415,
+      "outside_publish_span": 0.94625
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 10.123854,
+      "journal_sync": 4.5335,
+      "journal_write": 0.0355,
+      "lock_acquisition_spans": 4.6505,
+      "index_finish": 0.157,
+      "outside_publish_span": 0.625583
+    }
+  },
+  {
+    "round": 4,
+    "binary": "parent",
+    "p99_ms": {
+      "publish_rpc": 10.967666,
+      "journal_sync": 7.108,
+      "journal_write": 0.05,
+      "lock_acquisition_spans": 5.187,
+      "index_finish": 0.314,
+      "outside_publish_span": 0.7995
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 10.250709,
+      "journal_sync": 4.735,
+      "journal_write": 0.0245,
+      "lock_acquisition_spans": 4.42,
+      "index_finish": 0.1665,
+      "outside_publish_span": 0.558312
+    }
+  },
+  {
+    "round": 4,
+    "binary": "idle",
+    "p99_ms": {
+      "publish_rpc": 15.227,
+      "journal_sync": 8.602,
+      "journal_write": 2.663,
+      "lock_acquisition_spans": 0.015,
+      "index_finish": 2.244,
+      "outside_publish_span": 3.847125
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 11.139,
+      "journal_sync": 6.129,
+      "journal_write": 0.258,
+      "lock_acquisition_spans": 0.0095,
+      "index_finish": 0.9095,
+      "outside_publish_span": 3.403541
+    }
+  },
+  {
+    "round": 4,
+    "binary": "current",
+    "p99_ms": {
+      "publish_rpc": 11.509292,
+      "journal_sync": 9.275,
+      "journal_write": 0.428,
+      "lock_acquisition_spans": 1.956,
+      "index_finish": 1.194,
+      "outside_publish_span": 3.1455
+    },
+    "slowest_5_percent_median_ms": {
+      "publish_rpc": 10.911583,
+      "journal_sync": 7.003,
+      "journal_write": 0.0455,
+      "lock_acquisition_spans": 0.008,
+      "index_finish": 0.499,
+      "outside_publish_span": 1.338666
+    }
+  }
+]

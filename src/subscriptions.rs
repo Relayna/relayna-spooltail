@@ -1,4 +1,7 @@
-use crate::store::{Problem, Record, Store, identifier};
+use crate::{
+    journal::Address,
+    store::{Problem, Record, RecordLocation, Store, identifier},
+};
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -80,7 +83,7 @@ fn valid_group(topic: &str, group: &str) -> Result<()> {
     identifier(group)
 }
 
-fn validate_batch_count(count: u32) -> Result<()> {
+pub(crate) fn validate_batch_count(count: u32) -> Result<()> {
     if !(1..=MAX_STREAM_BATCH_RECORDS).contains(&count) {
         return Err(Problem::Invalid(format!(
             "batch count must be between 1 and {MAX_STREAM_BATCH_RECORDS}"
@@ -345,27 +348,28 @@ impl Store {
         Ok(())
     }
 
-    fn batch_offsets(
+    fn batch_locations(
         &self,
         topic: &str,
-        group: &str,
-        scope: Option<(u32, i64)>,
+        scope: Option<(&str, u32, i64)>,
         after: i64,
         limit: u32,
-    ) -> Result<Vec<i64>> {
+    ) -> Result<Vec<RecordLocation>> {
         let floor = self.floor(topic)?;
         let sql = if scope.is_some() {
-            "SELECT offset, len FROM records WHERE topic=?1 AND offset>?2 AND partition=?4
+            "SELECT offset, len, partition, segment, pos
+             FROM records WHERE topic=?1 AND offset>?2 AND partition=?4
              ORDER BY offset LIMIT ?3"
         } else {
-            "SELECT offset, len FROM records WHERE topic=?1 AND offset>?2 ORDER BY offset LIMIT ?3"
+            "SELECT offset, len, partition, segment, pos
+             FROM records WHERE topic=?1 AND offset>?2 ORDER BY offset LIMIT ?3"
         };
         let mut stmt = self.db.prepare(sql)?;
         let mut rows = match scope {
-            Some((partition, _)) => stmt.query(params![topic, after, limit, partition])?,
+            Some((_, partition, _)) => stmt.query(params![topic, after, limit, partition])?,
             None => stmt.query(params![topic, after, limit])?,
         };
-        let mut offsets = Vec::new();
+        let mut locations = Vec::new();
         let mut remaining = MAX_STREAM_BATCH_BYTES;
         while let Some(row) = rows.next()? {
             let offset: i64 = row.get(0)?;
@@ -375,7 +379,7 @@ impl Store {
                 ))
                 .into());
             }
-            if let Some((partition, baseline)) = scope
+            if let Some((group, partition, baseline)) = scope
                 && !self.partition_record_ready(topic, group, partition, baseline, offset)?
             {
                 break;
@@ -385,9 +389,17 @@ impl Store {
                 break;
             };
             remaining = left;
-            offsets.push(offset);
+            locations.push(RecordLocation {
+                offset,
+                partition: row.get(2)?,
+                address: Address {
+                    segment: u64::try_from(row.get::<_, i64>(3)?)?,
+                    pos: u64::try_from(row.get::<_, i64>(4)?)?,
+                    len: frame_bytes,
+                },
+            });
         }
-        Ok(offsets)
+        Ok(locations)
     }
 
     pub fn next_batch(
@@ -399,9 +411,11 @@ impl Store {
     ) -> Result<(i64, Vec<Record>)> {
         validate_batch_count(limit)?;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
-        let scope = partition.zip(baseline);
+        let scope = partition
+            .zip(baseline)
+            .map(|(partition, baseline)| (group, partition, baseline));
         let after = match scope {
-            Some((partition, baseline)) => {
+            Some((_, partition, baseline)) => {
                 if !initialized {
                     self.db.execute(
                         "INSERT INTO partitioned_groups VALUES(?,?,?)",
@@ -413,11 +427,31 @@ impl Store {
             }
             None => self.init_global_checkpoint(topic, group, self.floor(topic)?)?,
         };
-        let records = self
-            .batch_offsets(topic, group, scope, after, limit)?
-            .into_iter()
-            .map(|offset| self.read(offset))
-            .collect::<Result<_>>()?;
+        let locations = self.batch_locations(topic, scope, after, limit)?;
+        let records = self.read_indexed_page(locations)?;
+        Ok((after, records))
+    }
+
+    pub fn read_after_batch(
+        &self,
+        topic: &str,
+        after: Option<i64>,
+        limit: u32,
+    ) -> Result<(i64, Vec<Record>)> {
+        identifier(topic)?;
+        validate_batch_count(limit)?;
+        let floor = self.floor(topic)?;
+        let after = after.unwrap_or(floor - 1);
+        if after < 0 {
+            return Err(Problem::Invalid("after must be a nonnegative offset".into()).into());
+        }
+        if after < floor - 1 {
+            return Err(Problem::Conflict(format!(
+                "replay offset fell behind retention; earliest allowed record offset {floor}"
+            ))
+            .into());
+        }
+        let records = self.read_indexed_page(self.batch_locations(topic, None, after, limit)?)?;
         Ok((after, records))
     }
 
@@ -438,9 +472,11 @@ impl Store {
             .into());
         }
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
-        let scope = partition.zip(baseline);
+        let scope = partition
+            .zip(baseline)
+            .map(|(partition, baseline)| (group, partition, baseline));
         let saved = match scope {
-            Some((partition, baseline)) if initialized => Some(
+            Some((_, partition, baseline)) if initialized => Some(
                 self.partition_checkpoint(topic, group, partition)?
                     .unwrap_or(baseline),
             ),
@@ -453,8 +489,10 @@ impl Store {
         if saved != Some(after) {
             return Err(Problem::Conflict("stream checkpoint changed since fetch".into()).into());
         }
-        let offsets = self.batch_offsets(topic, group, scope, after, count)?;
-        if offsets.len() != count as usize || offsets.last() != Some(&through) {
+        let locations = self.batch_locations(topic, scope, after, count)?;
+        if locations.len() != count as usize
+            || locations.last().map(|record| record.offset) != Some(through)
+        {
             return Err(
                 Problem::Conflict("commit must cover the next consecutive records".into()).into(),
             );
@@ -476,12 +514,16 @@ impl Store {
     ) -> Result<Option<Claim>> {
         self.ensure_writable()?;
         valid_group(topic, group)?;
+        if self.audit_only.contains(topic) {
+            return Err(Problem::Invalid("audit-only topics cannot be claimed".into()).into());
+        }
         if !(1..=3_600_000).contains(&lease_ms) {
             return Err(Problem::Invalid("lease_ms must be 1..3600000".into()).into());
         }
         if let Some(partition) = partition {
             self.validate_partition(partition)?;
         }
+        self.admit_disk_write(0, false)?;
         let now = now()?;
         let tx = self.db.transaction()?;
         let filter = if partition.is_some() {

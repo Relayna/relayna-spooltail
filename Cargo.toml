@@ -1,6 +1,6 @@
 [package]
 name = "spooltail"
-version = "0.0.1"
+version = "0.0.5"
 edition = "2024"
 publish = false
 description = "Prototype Rust broker for durable work queues and replayable topics"
@@ -9,6 +9,7 @@ description = "Prototype Rust broker for durable work queues and replayable topi
 bench-lock-timing = []
 bench-transports = ["axum/http2", "tokio-stream/net"]
 bench-tls = ["bench-transports", "dep:axum-server"]
+pack-fault-injection = []
 
 [dependencies]
 anyhow = "1"
@@ -16,15 +17,18 @@ async-stream = "0.3"
 axum = { version = "0.8", features = ["ws"] }
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"], optional = true }
 crc32fast = "1"
+libc = "0.2"
 prost = "0.14"
+ring = "0.17"
 rusqlite = { version = "0.43", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
 tokio-stream = "0.1"
 tonic = { version = "0.14.9", features = ["tls-ring"] }
 tonic-prost = "0.14.9"
+zstd = { version = "0.14", default-features = false }
 
 [build-dependencies]
 protoc-bin-vendored = "3"

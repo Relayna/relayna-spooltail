@@ -1,0 +1,122 @@
+{
+  "settings": {
+    "durability": "single node; confirmed publishes; synchronous sink writes; sync Rabbit arm uses chattr +S",
+    "restart": "broker restarted after seeding; Redis restarted and SQLite reopened; fresh consumer process",
+    "backlog": 768,
+    "live_count": 384,
+    "offered_rate": 240,
+    "batch": 32,
+    "rabbit_prefetch": 128,
+    "event_payload_bytes": 16384,
+    "event_shape": "repeated text with 4 KiB of deterministic opaque bytes encoded as base64",
+    "image_ids": {
+      "python:3.13-slim-bookworm": "sha256:8353ef33b6dea0ccf6eaf7d09905c675d0bd8f3bd38ac43d7171cf62f0e35e79",
+      "rabbitmq:4-alpine": "sha256:0a42f376e5994f0acb783e171a06ef35e009cc1d1bf54878fb8c4a9ab8f53a77",
+      "redis:7-alpine": "sha256:eab78b9649d5ca8b91192621c91136c9c1465a81338fb686fbc02bac4dd851ae"
+    },
+    "broker_sha256": "9b685075ea56ee70ae32123ca7ed8516774fdbdf81e4b1276582c516ec0c8cb4"
+  },
+  "medians": {
+    "spooltail": {
+      "catchup_ms": 125.68208299998673,
+      "publish_p95_ms": 4.7248749999937445,
+      "publish_rate_observed": 240.20213249651647
+    },
+    "rabbit-redis": {
+      "catchup_ms": 110.36466600000949,
+      "publish_p95_ms": 5.531834000009894,
+      "publish_rate_observed": 240.26898232706307
+    },
+    "rabbit-redis-sync": {
+      "catchup_ms": 112.51849999999308,
+      "publish_p95_ms": 7.803042000006144,
+      "publish_rate_observed": 240.11750750523385
+    }
+  },
+  "trials": [
+    {
+      "arm": "spooltail",
+      "catchup_ms": 128.18495900000926,
+      "publish_p95_ms": 4.97587500001373,
+      "publish_overlap_count": 31,
+      "publish_rate_observed": 240.1756909196624,
+      "verified_records": 1216,
+      "packed_bytes": 4286125,
+      "trial": 1
+    },
+    {
+      "arm": "rabbit-redis",
+      "catchup_ms": 110.11958299999947,
+      "publish_p95_ms": 5.531834000009894,
+      "publish_overlap_count": 27,
+      "publish_rate_observed": 240.06404818781698,
+      "verified_records": 1216,
+      "trial": 1
+    },
+    {
+      "arm": "rabbit-redis-sync",
+      "catchup_ms": 111.99495799999681,
+      "publish_p95_ms": 7.803042000006144,
+      "publish_overlap_count": 22,
+      "publish_rate_observed": 240.11479227903394,
+      "verified_records": 1216,
+      "trial": 1
+    },
+    {
+      "arm": "rabbit-redis",
+      "catchup_ms": 114.57820800001173,
+      "publish_p95_ms": 6.857625000009193,
+      "publish_overlap_count": 28,
+      "publish_rate_observed": 240.28617197026261,
+      "verified_records": 1216,
+      "trial": 2
+    },
+    {
+      "arm": "rabbit-redis-sync",
+      "catchup_ms": 112.51849999999308,
+      "publish_p95_ms": 9.555792000014662,
+      "publish_overlap_count": 22,
+      "publish_rate_observed": 240.11750750523385,
+      "verified_records": 1216,
+      "trial": 2
+    },
+    {
+      "arm": "spooltail",
+      "catchup_ms": 123.20345799997767,
+      "publish_p95_ms": 4.7248749999937445,
+      "publish_overlap_count": 29,
+      "publish_rate_observed": 240.20213249651647,
+      "verified_records": 1216,
+      "packed_bytes": 4286087,
+      "trial": 2
+    },
+    {
+      "arm": "rabbit-redis-sync",
+      "catchup_ms": 114.93354200001704,
+      "publish_p95_ms": 3.959207999997716,
+      "publish_overlap_count": 22,
+      "publish_rate_observed": 240.14283485692272,
+      "verified_records": 1216,
+      "trial": 3
+    },
+    {
+      "arm": "spooltail",
+      "catchup_ms": 125.68208299998673,
+      "publish_p95_ms": 4.513959000007617,
+      "publish_overlap_count": 30,
+      "publish_rate_observed": 240.2420312337582,
+      "verified_records": 1216,
+      "packed_bytes": 4285923,
+      "trial": 3
+    },
+    {
+      "arm": "rabbit-redis",
+      "catchup_ms": 110.36466600000949,
+      "publish_p95_ms": 4.7603750000178024,
+      "publish_overlap_count": 27,
+      "publish_rate_observed": 240.26898232706307,
+      "verified_records": 1216,
+      "trial": 3
+    }
+  ]
+}
