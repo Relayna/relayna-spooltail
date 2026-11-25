@@ -5,12 +5,18 @@ service Spooltail {
   rpc Ping(Empty) returns (Empty);
   rpc Latest(Task) returns (Record);
   rpc History(Task) returns (Page);
+  rpc AuditHistory(AuditHistoryRequest) returns (AuditHistoryPage);
   rpc Append(Publish) returns (Offset);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
   rpc Settle(SettleRequest) returns (Empty);
   rpc Complete(CompleteRequest) returns (Offset);
   rpc Next(StreamGroup) returns (NextResponse);
   rpc Commit(CommitRequest) returns (Empty);
+  rpc NextBatch(StreamBatchRequest) returns (StreamBatch);
+  rpc CommitBatch(StreamBatchCommit) returns (Empty);
+  rpc ReadReplayPage(TopicReplayRequest) returns (ReplayPage);
+  rpc ReadNumericPage(NumericRequest) returns (NumericPage);
+  rpc ReadAfterBatch(TopicReplayRequest) returns (StreamBatch);
   rpc Subscribe(Task) returns (stream Delivery);
   rpc Stats(Empty) returns (StatsResponse);
   rpc ListPartitions(Empty) returns (Partitions);
@@ -33,6 +39,21 @@ message Record {
   uint32 partition = 3;
 }
 message Page { repeated Record records = 1; }
+message AuditHistoryRequest {
+  string topic = 1;
+  string task_id = 2;
+  // Exclusive event ID, resolved across hot and archived history.
+  optional string after = 3;
+  // Inclusive snapshot bound. Omit to capture the latest retained offset.
+  optional int64 through = 4;
+  // Requested count, 1 through 64. When omitted, defaults to 32.
+  optional uint32 limit = 5;
+}
+message AuditHistoryPage {
+  // A consecutive prefix of the task's records, also limited by response bytes.
+  repeated Record records = 1;
+  optional int64 through = 2;
+}
 message Publish {
   string topic = 1;
   bytes event_json = 2;
@@ -100,9 +121,46 @@ message CommitRequest {
   int64 offset = 3;
   optional uint32 partition = 4;
 }
+message StreamBatchRequest {
+  string topic = 1;
+  string group = 2;
+  optional uint32 partition = 3;
+  // Requested record count, 1 through 64. When omitted, defaults to 32.
+  optional uint32 limit = 4;
+}
+message StreamBatch {
+  // The exclusive starting offset. NextBatch uses the durable group checkpoint.
+  int64 after = 1;
+  // A consecutive prefix of eligible records, also limited by response bytes.
+  repeated Record records = 2;
+}
+message TopicReplayRequest {
+  string topic = 1;
+  // Exclusive offset. Omit it to start from the first retained record.
+  optional int64 after = 2;
+  // Requested record count, 1 through 64. When omitted, defaults to 32.
+  optional uint32 limit = 3;
+}
+message StreamBatchCommit {
+  string topic = 1;
+  string group = 2;
+  optional uint32 partition = 3;
+  // The checkpoint returned by NextBatch.
+  int64 after = 4;
+  // Offset of the last processed record in the consecutive prefix.
+  int64 through = 5;
+  uint32 count = 6;
+}
 message StatsResponse {
   uint64 payload_reads = 1;
   uint64 recovered_frames = 2;
+  uint64 free_bytes = 3;
+  uint64 disk_reserve_bytes = 4;
+  uint64 raw_journal_bytes = 5;
+  uint64 packed_journal_bytes = 6;
+  uint64 archive_pending_records = 7;
+  uint64 retired_segments = 8;
+  uint64 packing_space_pauses = 9;
 }
 message TaskId { string task_id = 1; }
 message Partition { uint32 id = 1; }
@@ -111,4 +169,54 @@ message MoveTaskRequest {
   string task_id = 1;
   optional uint32 from_partition = 2;
   optional uint32 to_partition = 3;
+}
+
+// The identity and optional string payload can be read without decoding user fields.
+message ReplayEvent {
+  int64 offset = 1;
+  uint32 partition = 2;
+  string task_id = 3;
+  string event_id = 4;
+  optional string payload = 5;
+  oneof attributes {
+    // A serialized ReplayObject. Keeping the bytes opaque permits lazy and native decoding.
+    bytes object_proto = 6;
+    // Lossless escape for deeply nested or unusually dense JSON objects.
+    bytes object_json = 7;
+  }
+}
+message ReplayPage { int64 after = 1; repeated ReplayEvent records = 2; }
+message ReplayObject { repeated ReplayField fields = 1; }
+message ReplayField { string key = 1; ReplayValue value = 2; }
+message ReplayArray { repeated ReplayValue items = 1; }
+message ReplayValue {
+  oneof kind {
+    bool null_value = 1;
+    bool boolean = 2;
+    sint64 integer = 3;
+    uint64 positive = 4;
+    double real = 5;
+    string text = 6;
+    ReplayArray array = 7;
+    ReplayObject object = 8;
+  }
+}
+message NumericRequest {
+  TopicReplayRequest replay = 1;
+  // Exact object keys. Each element of array_field must have a numeric value_field.
+  string array_field = 2;
+  string value_field = 3;
+}
+message NumericRow {
+  int64 offset = 1;
+  uint32 partition = 2;
+  string task_id = 3;
+  string event_id = 4;
+  uint32 count = 5;
+}
+message NumericPage {
+  int64 after = 1;
+  repeated NumericRow rows = 2;
+  // Concatenated IEEE 754 little-endian doubles in row order.
+  bytes values_f64_le = 3;
 }

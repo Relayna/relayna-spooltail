@@ -1,8 +1,15 @@
-use crate::store::{Problem, Record, Store, identifier};
+use crate::{
+    journal::Address,
+    store::{Problem, Record, RecordLocation, Store, identifier},
+};
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+pub const DEFAULT_STREAM_BATCH_RECORDS: u32 = 32;
+const MAX_STREAM_BATCH_RECORDS: u32 = 64;
+pub const MAX_STREAM_BATCH_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct Claim {
@@ -76,28 +83,43 @@ fn valid_group(topic: &str, group: &str) -> Result<()> {
     identifier(group)
 }
 
+pub(crate) fn validate_batch_count(count: u32) -> Result<()> {
+    if !(1..=MAX_STREAM_BATCH_RECORDS).contains(&count) {
+        return Err(Problem::Invalid(format!(
+            "batch count must be between 1 and {MAX_STREAM_BATCH_RECORDS}"
+        ))
+        .into());
+    }
+    Ok(())
+}
+
 impl Store {
-    fn group_next_offset(&self, topic: &str, group: &str) -> Result<Option<i64>> {
-        valid_group(topic, group)?;
-        let floor = self.floor(topic)?;
-        let saved: Option<i64> = self
+    fn global_checkpoint(&self, topic: &str, group: &str) -> Result<Option<i64>> {
+        Ok(self
             .db
             .query_row(
                 "SELECT offset FROM cursors WHERE topic=? AND name=?",
                 params![topic, group],
                 |r| r.get(0),
             )
-            .optional()?;
-        let next_after = match saved {
-            Some(offset) => offset,
-            None => {
-                self.db.execute(
-                    "INSERT INTO cursors VALUES(?,?,?)",
-                    params![topic, group, floor - 1],
-                )?;
-                floor - 1
-            }
-        };
+            .optional()?)
+    }
+
+    fn init_global_checkpoint(&self, topic: &str, group: &str, floor: i64) -> Result<i64> {
+        if let Some(offset) = self.global_checkpoint(topic, group)? {
+            return Ok(offset);
+        }
+        self.db.execute(
+            "INSERT INTO cursors VALUES(?,?,?)",
+            params![topic, group, floor - 1],
+        )?;
+        Ok(floor - 1)
+    }
+
+    fn group_next_offset(&self, topic: &str, group: &str) -> Result<Option<i64>> {
+        valid_group(topic, group)?;
+        let floor = self.floor(topic)?;
+        let next_after = self.init_global_checkpoint(topic, group, floor)?;
         let candidate: Option<i64> = self.db.query_row(
             "SELECT MIN(offset) FROM records WHERE topic=? AND offset>?",
             params![topic, next_after],
@@ -120,15 +142,7 @@ impl Store {
 
     fn global_commit(&self, topic: &str, group: &str, offset: i64) -> Result<()> {
         valid_group(topic, group)?;
-        let saved: Option<i64> = self
-            .db
-            .query_row(
-                "SELECT offset FROM cursors WHERE topic=? AND name=?",
-                params![topic, group],
-                |r| r.get(0),
-            )
-            .optional()?;
-        if saved == Some(offset) {
+        if self.global_checkpoint(topic, group)? == Some(offset) {
             return Ok(());
         }
         if self.group_next_offset(topic, group)? != Some(offset) {
@@ -136,7 +150,15 @@ impl Store {
                 Problem::Conflict("commit must be the next record in this topic".into()).into(),
             );
         }
-        self.db.execute("INSERT INTO cursors VALUES(?,?,?) ON CONFLICT(topic,name) DO UPDATE SET offset=excluded.offset",params![topic,group,offset])?;
+        self.save_global_checkpoint(topic, group, offset)
+    }
+
+    fn save_global_checkpoint(&self, topic: &str, group: &str, offset: i64) -> Result<()> {
+        self.db.execute(
+            "INSERT INTO cursors VALUES(?,?,?) ON CONFLICT(topic,name)
+             DO UPDATE SET offset=excluded.offset",
+            params![topic, group, offset],
+        )?;
         Ok(())
     }
 
@@ -184,14 +206,7 @@ impl Store {
         if let Some(baseline) = baseline {
             return Ok((Some(baseline), true));
         }
-        let global: Option<i64> = self
-            .db
-            .query_row(
-                "SELECT offset FROM cursors WHERE topic=? AND name=?",
-                params![topic, group],
-                |row| row.get(0),
-            )
-            .optional()?;
+        let global = self.global_checkpoint(topic, group)?;
         Ok((Some(global.unwrap_or(self.floor(topic)? - 1)), false))
     }
 
@@ -221,6 +236,19 @@ impl Store {
             .into());
         }
 
+        Ok(self
+            .partition_record_ready(topic, group, partition, baseline, offset)?
+            .then_some(offset))
+    }
+
+    fn partition_record_ready(
+        &self,
+        topic: &str,
+        group: &str,
+        partition: u32,
+        baseline: i64,
+        offset: i64,
+    ) -> Result<bool> {
         // A moved task's old stream records stay on the source partition. Hold the
         // destination read until this group has processed the previous record.
         let predecessor: Option<(u32, i64)> = self
@@ -241,9 +269,9 @@ impl Store {
                 .unwrap_or(baseline)
                 < previous
         {
-            return Ok(None);
+            return Ok(false);
         }
-        Ok(Some(offset))
+        Ok(true)
     }
 
     pub fn group_next(
@@ -287,8 +315,25 @@ impl Store {
             )
             .into());
         }
+        self.save_partition_checkpoint(
+            topic,
+            group,
+            partition,
+            offset,
+            (!initialized).then_some(baseline),
+        )
+    }
+
+    fn save_partition_checkpoint(
+        &mut self,
+        topic: &str,
+        group: &str,
+        partition: u32,
+        offset: i64,
+        initial_baseline: Option<i64>,
+    ) -> Result<()> {
         let tx = self.db.transaction()?;
-        if !initialized {
+        if let Some(baseline) = initial_baseline {
             tx.execute(
                 "INSERT INTO partitioned_groups VALUES(?,?,?)",
                 params![topic, group, baseline],
@@ -303,6 +348,163 @@ impl Store {
         Ok(())
     }
 
+    fn batch_locations(
+        &self,
+        topic: &str,
+        scope: Option<(&str, u32, i64)>,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<RecordLocation>> {
+        let floor = self.floor(topic)?;
+        let sql = if scope.is_some() {
+            "SELECT offset, len, partition, segment, pos
+             FROM records WHERE topic=?1 AND offset>?2 AND partition=?4
+             ORDER BY offset LIMIT ?3"
+        } else {
+            "SELECT offset, len, partition, segment, pos
+             FROM records WHERE topic=?1 AND offset>?2 ORDER BY offset LIMIT ?3"
+        };
+        let mut stmt = self.db.prepare(sql)?;
+        let mut rows = match scope {
+            Some((_, partition, _)) => stmt.query(params![topic, after, limit, partition])?,
+            None => stmt.query(params![topic, after, limit])?,
+        };
+        let mut locations = Vec::new();
+        let mut remaining = MAX_STREAM_BATCH_BYTES;
+        while let Some(row) = rows.next()? {
+            let offset: i64 = row.get(0)?;
+            if offset < floor {
+                return Err(Problem::Conflict(format!(
+                    "subscription fell behind retention; earliest allowed offset {floor}"
+                ))
+                .into());
+            }
+            if let Some((group, partition, baseline)) = scope
+                && !self.partition_record_ready(topic, group, partition, baseline, offset)?
+            {
+                break;
+            }
+            let frame_bytes = usize::try_from(row.get::<_, i64>(1)?)?;
+            let Some(left) = remaining.checked_sub(frame_bytes) else {
+                break;
+            };
+            remaining = left;
+            locations.push(RecordLocation {
+                offset,
+                partition: row.get(2)?,
+                address: Address {
+                    segment: u64::try_from(row.get::<_, i64>(3)?)?,
+                    pos: u64::try_from(row.get::<_, i64>(4)?)?,
+                    len: frame_bytes,
+                },
+            });
+        }
+        Ok(locations)
+    }
+
+    pub fn next_batch(
+        &self,
+        topic: &str,
+        group: &str,
+        partition: Option<u32>,
+        limit: u32,
+    ) -> Result<(i64, Vec<Record>)> {
+        validate_batch_count(limit)?;
+        let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
+        let scope = partition
+            .zip(baseline)
+            .map(|(partition, baseline)| (group, partition, baseline));
+        let after = match scope {
+            Some((_, partition, baseline)) => {
+                if !initialized {
+                    self.db.execute(
+                        "INSERT INTO partitioned_groups VALUES(?,?,?)",
+                        params![topic, group, baseline],
+                    )?;
+                }
+                self.partition_checkpoint(topic, group, partition)?
+                    .unwrap_or(baseline)
+            }
+            None => self.init_global_checkpoint(topic, group, self.floor(topic)?)?,
+        };
+        let locations = self.batch_locations(topic, scope, after, limit)?;
+        let records = self.read_indexed_page(locations)?;
+        Ok((after, records))
+    }
+
+    pub fn read_after_batch(
+        &self,
+        topic: &str,
+        after: Option<i64>,
+        limit: u32,
+    ) -> Result<(i64, Vec<Record>)> {
+        identifier(topic)?;
+        validate_batch_count(limit)?;
+        let floor = self.floor(topic)?;
+        let after = after.unwrap_or(floor - 1);
+        if after < 0 {
+            return Err(Problem::Invalid("after must be a nonnegative offset".into()).into());
+        }
+        if after < floor - 1 {
+            return Err(Problem::Conflict(format!(
+                "replay offset fell behind retention; earliest allowed record offset {floor}"
+            ))
+            .into());
+        }
+        let records = self.read_indexed_page(self.batch_locations(topic, None, after, limit)?)?;
+        Ok((after, records))
+    }
+
+    pub fn commit_batch(
+        &mut self,
+        topic: &str,
+        group: &str,
+        partition: Option<u32>,
+        after: i64,
+        through: i64,
+        count: u32,
+    ) -> Result<()> {
+        validate_batch_count(count)?;
+        if after < 0 || through <= after {
+            return Err(Problem::Invalid(
+                "through must be greater than a nonnegative checkpoint".into(),
+            )
+            .into());
+        }
+        let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
+        let scope = partition
+            .zip(baseline)
+            .map(|(partition, baseline)| (group, partition, baseline));
+        let saved = match scope {
+            Some((_, partition, baseline)) if initialized => Some(
+                self.partition_checkpoint(topic, group, partition)?
+                    .unwrap_or(baseline),
+            ),
+            Some(_) => None,
+            None => self.global_checkpoint(topic, group)?,
+        };
+        if saved == Some(through) {
+            return Ok(());
+        }
+        if saved != Some(after) {
+            return Err(Problem::Conflict("stream checkpoint changed since fetch".into()).into());
+        }
+        let locations = self.batch_locations(topic, scope, after, count)?;
+        if locations.len() != count as usize
+            || locations.last().map(|record| record.offset) != Some(through)
+        {
+            return Err(
+                Problem::Conflict("commit must cover the next consecutive records".into()).into(),
+            );
+        }
+        match partition {
+            Some(partition) => {
+                self.save_partition_checkpoint(topic, group, partition, through, None)
+            }
+            None => self.save_global_checkpoint(topic, group, through),
+        }
+    }
+
     pub fn claim(
         &mut self,
         topic: &str,
@@ -312,12 +514,16 @@ impl Store {
     ) -> Result<Option<Claim>> {
         self.ensure_writable()?;
         valid_group(topic, group)?;
+        if self.audit_only.contains(topic) {
+            return Err(Problem::Invalid("audit-only topics cannot be claimed".into()).into());
+        }
         if !(1..=3_600_000).contains(&lease_ms) {
             return Err(Problem::Invalid("lease_ms must be 1..3600000".into()).into());
         }
         if let Some(partition) = partition {
             self.validate_partition(partition)?;
         }
+        self.admit_disk_write(0, false)?;
         let now = now()?;
         let tx = self.db.transaction()?;
         let filter = if partition.is_some() {

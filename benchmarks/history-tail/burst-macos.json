@@ -1,0 +1,109 @@
+{
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "readers": 16,
+  "writer_payload_bytes": 256,
+  "binary_sha256": {
+    "current": "8d229d6e07bb38620b5b3c8d59f6cc20091d3b12e089d1ff224f32770e24441c",
+    "bounded": "b210be467997b9676e6c20b73e5022d600ba9180915aefafc3905799aa859593"
+  },
+  "trials": [
+    {
+      "round": 1,
+      "binary": "current",
+      "history_p50": 2.8013954870402813,
+      "history_p99": 5.033499910496175,
+      "publish_p50": 5.265145446173847,
+      "publish_p99": 9.70841699745506
+    },
+    {
+      "round": 1,
+      "binary": "bounded",
+      "history_p50": 2.729332947637886,
+      "history_p99": 4.983457969501615,
+      "publish_p50": 5.143542017322034,
+      "publish_p99": 6.318417028523982
+    },
+    {
+      "round": 2,
+      "binary": "bounded",
+      "history_p50": 2.6746250223368406,
+      "history_p99": 5.121749942190945,
+      "publish_p50": 5.090021004434675,
+      "publish_p99": 8.564374991692603
+    },
+    {
+      "round": 2,
+      "binary": "current",
+      "history_p50": 2.7695834869518876,
+      "history_p99": 5.592374945990741,
+      "publish_p50": 5.176645528990775,
+      "publish_p99": 9.304458973929286
+    },
+    {
+      "round": 3,
+      "binary": "bounded",
+      "history_p50": 2.6167710311710835,
+      "history_p99": 4.9873749958351254,
+      "publish_p50": 5.157125007826835,
+      "publish_p99": 8.668874972499907
+    },
+    {
+      "round": 3,
+      "binary": "current",
+      "history_p50": 2.7881250134669244,
+      "history_p99": 10.364290908910334,
+      "publish_p50": 5.3024995140731335,
+      "publish_p99": 12.607375043444335
+    },
+    {
+      "round": 4,
+      "binary": "current",
+      "history_p50": 2.7031669742427766,
+      "history_p99": 4.921249928884208,
+      "publish_p50": 5.235312564764172,
+      "publish_p99": 8.622958906926215
+    },
+    {
+      "round": 4,
+      "binary": "bounded",
+      "history_p50": 2.706479514017701,
+      "history_p99": 4.999166005291045,
+      "publish_p50": 5.135166516993195,
+      "publish_p99": 7.210165960714221
+    },
+    {
+      "round": 5,
+      "binary": "current",
+      "history_p50": 2.7172499685548246,
+      "history_p99": 4.90770791657269,
+      "publish_p50": 5.23979146964848,
+      "publish_p99": 8.84654198307544
+    },
+    {
+      "round": 5,
+      "binary": "bounded",
+      "history_p50": 2.703603939153254,
+      "history_p99": 5.523833096958697,
+      "publish_p50": 5.137124971952289,
+      "publish_p99": 8.31570802256465
+    },
+    {
+      "round": 6,
+      "binary": "bounded",
+      "history_p50": 2.663020510226488,
+      "history_p99": 5.048000020906329,
+      "publish_p50": 5.169499956537038,
+      "publish_p99": 8.203834062442183
+    },
+    {
+      "round": 6,
+      "binary": "current",
+      "history_p50": 2.7684164815582335,
+      "history_p99": 4.996667033992708,
+      "publish_p50": 5.201457999646664,
+      "publish_p99": 9.414750034920871
+    }
+  ],
+  "latency_units": "ms",
+  "publishes_per_trial": 240
+}

@@ -2,16 +2,25 @@
 
 import asyncio
 import json
+import os
+import sqlite3
+import subprocess
+import sys
 import tempfile
 from contextlib import aclosing
 from pathlib import Path
 
 import grpc
 import httpx
-from grpc_acceptance import env, identity, start
+from grpc_acceptance import BROKER, env, identity, start
 from relayna_spooltail import (
+    AuditOutcome,
+    AuditStore,
+    AuditTimeline,
     ConflictError,
     CursorGapError,
+    Record,
+    ReplayBatch,
     SettlementAction,
     SpooltailClient,
     StaleLeaseError,
@@ -121,6 +130,14 @@ async def exercise(directory):
         assert await client.history("status", task_id, after="running") == [latest]
         assert len(await client.history("status", task_id)) == 2
         assert await client.history("status", task_id, after="done") == []
+        batch = await client.next_batch("status", "batch-audit", limit=2)
+        assert [record.offset for record in batch.records] == [progress_offset, status_offset]
+        await client.commit_batch(batch, count=1)
+        await client.commit_batch(batch, count=1)
+        await expect_error(ConflictError, client.commit_batch(batch))
+        remaining = await client.next_batch("status", "batch-audit")
+        assert remaining.after == progress_offset and remaining.records == (latest,)
+        await client.commit_batch(remaining)
         assert await client.next("status", "audit") == latest
         await client.commit("status", "audit", status_offset)
         assert await client.next("status", "audit") is None
@@ -169,6 +186,8 @@ async def exercise(directory):
         SpooltailClient(f"127.0.0.1:{grpc_port}", tls=False) as client,
     ):
         assert await client.latest("status", task_id) == latest
+        batch = await client.next_batch("status", "batch-audit")
+        assert batch.after == status_offset and not batch.records
         # This history page exceeds gRPC's default client receive limit.
         blob = "x" * (900 * 1024)
         for i in range(5):
@@ -184,6 +203,11 @@ async def exercise(directory):
             "4",
         ]
         assert all(record.event["blob"] == blob for record in page)
+        batch = await client.next_batch("large", "bounded-audit", limit=64)
+        assert batch.records == tuple(page[:2])
+        await client.commit_batch(batch)
+        batch = await client.next_batch("large", "bounded-audit", limit=1)
+        assert batch.records == (page[2],)
 
 
 async def partitioning(directory):
@@ -303,14 +327,245 @@ async def service_routing(directory):
         assert await client.task_partition("new-urgent") == 3
 
 
+def init_consumer_state(path):
+    with sqlite3.connect(path) as db:
+        db.executescript("CREATE TABLE app(n INTEGER); INSERT INTO app VALUES (0);")
+
+
+def app_count(path):
+    with sqlite3.connect(path) as db:
+        return db.execute("SELECT n FROM app").fetchone()[0]
+
+
+def audit_crash_child(path, point):
+    batch = ReplayBatch("status", 0, (Record(17, {"task_id": "T1", "event_id": "E1"}),))
+    outcome = AuditOutcome(17, "policy", "rejected", "policy-service")
+
+    def apply(execute):
+        execute("UPDATE app SET n=n+1")
+
+    with AuditStore(path) as store:
+        if point == "before":
+            def interrupt_commit(sql):
+                if sql == "COMMIT":
+                    os._exit(47)
+
+            store._db.set_trace_callback(interrupt_commit)
+        store.commit_batch("audit", batch, [outcome], apply_state=apply)
+        os._exit(47)
+
+
+def verify_audit_crashes(directory):
+    for point, committed in [("before", False), ("after", True)]:
+        path = directory / f"crash-{point}.sqlite"
+        init_consumer_state(path)
+        result = subprocess.run(
+            [sys.executable, __file__, "--audit-crash", path, point], check=False
+        )
+        assert result.returncode == 47
+        with AuditStore(path) as store, sqlite3.connect(path) as db:
+            assert store.checkpoint("status", "audit") == (17 if committed else None)
+            assert db.execute("SELECT count(*) FROM spooltail_audit_outcome").fetchone() == (
+                int(committed),
+            )
+        assert app_count(path) == int(committed)
+
+
+async def audit_pages(timeline, cursor=None, limit=1, topic="status"):
+    entries = []
+    while True:
+        page = await timeline.read(topic, "T1", cursor=cursor, limit=limit)
+        entries.extend(page.entries)
+        if page.cursor is None:
+            return entries
+        assert page.entries
+        assert page.cursor != cursor
+        cursor = page.cursor
+
+
+async def audit_timeline(directory):
+    path = directory / "consumer.sqlite"
+    init_consumer_state(path)
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    roots = cert.read_bytes()
+    async with start(config) as (_, grpc_port), SpooltailClient(
+        f"localhost:{grpc_port}", root_certificates=roots
+    ) as client:
+        first = await client.publish("status", {"task_id": "T1", "event_id": "E1"})
+        await client.publish("other", {"task_id": "T1", "event_id": "E2"})
+        second = await client.publish("status", {"task_id": "T1", "event_id": "E3"})
+        batch = await client.read_after_batch("status", limit=2)
+        assert [r.offset for r in batch.records] == [first, second]
+        decision = AuditOutcome(first, "policy", "rejected", "policy-service", "policy-v2")
+        notice = AuditOutcome(first, "notify", "queued", "policy-service")
+        selected = [decision, notice]
+        with AuditStore(path) as store:
+            assert store.checkpoint("status", "audit") is None
+            try:
+                store.commit_batch(
+                    "audit", batch, selected,
+                    apply_state=lambda execute: (
+                        execute("UPDATE app SET n=n+1"), execute("COMMIT")
+                    ),
+                )
+            except sqlite3.DatabaseError:
+                pass
+            else:
+                raise AssertionError("application committed the SDK transaction")
+            assert app_count(path) == 0
+            assert store.checkpoint("status", "audit") is None
+
+            def apply(execute):
+                execute("UPDATE app SET n=n+1")
+
+            try:
+                store.commit_batch("audit", batch, [decision, decision], apply_state=apply)
+            except sqlite3.IntegrityError:
+                pass
+            else:
+                raise AssertionError("duplicate operation was accepted")
+            assert app_count(path) == 0
+            assert store.checkpoint("status", "audit") is None
+            assert store.commit_batch("audit", batch, selected, apply_state=apply)
+            assert not store.commit_batch("audit", batch, selected, apply_state=apply)
+            assert app_count(path) == 1
+            try:
+                store.commit_batch("audit", batch, [decision])
+            except ConflictError:
+                pass
+            else:
+                raise AssertionError("mismatched audit retry was accepted")
+
+            timeline = AuditTimeline(client, store)
+            initial = await timeline.read("status", "T1", limit=1)
+            assert initial.cursor and initial.entries[0].event["event_id"] == "E1"
+            assert not (await timeline.read("status", "missing")).entries
+            for i in range(70):
+                await client.publish("long-audit", {"task_id": "T1", "event_id": f"long-{i}"})
+            long_entries = await audit_pages(timeline, limit=16, topic="long-audit")
+            assert [entry.source_event_id for entry in long_entries] == [
+                f"long-{i}" for i in range(70)
+            ]
+            other_file = directory / "another.sqlite"
+            with AuditStore(other_file) as another:
+                await expect_error(ValueError, AuditTimeline(client, another).read(
+                    "status", "T1", cursor=initial.cursor,
+                ))
+            late = AuditOutcome(first, "review", "accepted", "review-service")
+            first_batch = await client.read_after_batch("status", limit=1)
+            store.commit_batch("review", first_batch, [late])
+            third = await client.publish("status", {"task_id": "T1", "event_id": "E4"})
+            tail = await client.read_after_batch(
+                "status", after=store.checkpoint("status", "audit")
+            )
+            assert [r.offset for r in tail.records] == [third]
+            assert store.commit_batch("audit", tail, [])
+            frozen = [*initial.entries, *await audit_pages(timeline, initial.cursor)]
+            assert [entry.source_offset for entry in frozen] == [first, first, first, second]
+            assert [entry.outcome for entry in frozen if entry.outcome] == selected
+            fresh = await audit_pages(timeline)
+            assert [entry.outcome for entry in fresh if entry.outcome] == [*selected, late]
+            assert await audit_pages(timeline, limit=64) == fresh
+            expired = (await timeline.read("status", "T1", limit=1)).cursor
+            assert expired
+
+    subprocess.run([BROKER, "expire-before", "status", str(second)], env=config, check=True)
+    with AuditStore(path) as store:
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            assert store.checkpoint("status", "audit") == third
+            await expect_error(ConflictError, client.read_after_batch("status", after=first))
+            assert [r.offset for r in (await client.read_after_batch("status")).records] == [
+                second, third
+            ]
+            timeline = AuditTimeline(client, store)
+            await expect_error(CursorGapError, timeline.read("status", "T1", cursor=expired))
+            fresh = await audit_pages(timeline)
+            assert [entry.source_offset for entry in fresh if entry.kind == "input"] == [second, third]
+            assert [entry.outcome for entry in fresh if entry.input_before_retained_history] == [
+                *selected, late
+            ]
+
+    subprocess.run([BROKER, "expire-before", "status", str(third + 1)], env=config, check=True)
+    with AuditStore(path) as store:
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            fresh = await audit_pages(AuditTimeline(client, store))
+            assert [entry.outcome for entry in fresh] == [*selected, late]
+            assert all(entry.input_before_retained_history for entry in fresh)
+
+
+async def archive_timeline(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    roots = cert.read_bytes()
+    policy = {"hot_for": "1s", "retain_for": "1h", "paused": True}
+    path = directory / "outcomes.sqlite"
+    events = [
+        {"task_id": "T1", "event_id": f"large-{i}", "payload": str(i) * 730_000}
+        for i in range(3)
+    ]
+    config["SPOOLTAIL_RETENTION"] = json.dumps({"status": policy})
+    with AuditStore(path) as store:
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            offsets = [await client.publish("status", event) for event in events]
+            batch = await client.read_after_batch("status")
+            assert [record.offset for record in batch.records] == offsets[:2]
+            assert store.commit_batch("audit", batch, [])
+            batch = await client.read_after_batch("status", after=offsets[1])
+            decision = AuditOutcome(offsets[2], "review", "accepted", "review-service")
+            assert store.commit_batch("audit", batch, [decision])
+            initial = await AuditTimeline(client, store).read("status", "T1", limit=1)
+            assert initial.cursor and initial.entries[0].source_offset == offsets[0]
+
+        policy["paused"] = False
+        config["SPOOLTAIL_RETENTION"] = json.dumps({"status": policy})
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            async with asyncio.timeout(10):
+                while await client.latest("status", "T1") is not None:
+                    await asyncio.sleep(0.1)
+            assert not (await client.read_after_batch("status")).records
+            await expect_error(ConflictError, client.read_after_batch("status", after=0))
+            await expect_error(CursorGapError, client.history("status", "T1", after="large-0"))
+            timeline = AuditTimeline(client, store)
+            fresh = await audit_pages(timeline, limit=64)
+            frozen = [*initial.entries, *await audit_pages(timeline, initial.cursor)]
+            assert fresh == frozen
+            assert [entry.kind for entry in fresh] == ["input", "input", "input", "outcome"]
+            assert [entry.event for entry in fresh[:-1]] == events
+            assert fresh[-1].outcome == decision
+            assert not fresh[-1].input_before_retained_history
+
+        # The broker resumes the saved policy without a configuration override.
+        del config["SPOOLTAIL_RETENTION"]
+        async with start(config) as (_, grpc_port), SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=roots
+        ) as client:
+            assert await audit_pages(AuditTimeline(client, store), limit=64) == fresh
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--audit-crash"]:
+        audit_crash_child(Path(sys.argv[2]), sys.argv[3])
     with tempfile.TemporaryDirectory(prefix="spooltail-python-sdk-") as temp:
         asyncio.run(asyncio.wait_for(exercise(Path(temp)), timeout=30))
     with tempfile.TemporaryDirectory(prefix="spooltail-partition-sdk-") as temp:
         asyncio.run(asyncio.wait_for(partitioning(Path(temp)), timeout=30))
     with tempfile.TemporaryDirectory(prefix="spooltail-service-sdk-") as temp:
         asyncio.run(asyncio.wait_for(service_routing(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-audit-sdk-") as temp:
+        verify_audit_crashes(Path(temp))
+        asyncio.run(asyncio.wait_for(audit_timeline(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-archive-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(archive_timeline(Path(temp)), timeout=30))
     print(
         "PASS: Python SDK publish, lease, completion, replay gaps, SSE resume, "
-        "partition moves, and service placement"
+        "partition moves, service placement, audit timeline recovery, and archive reads"
     )

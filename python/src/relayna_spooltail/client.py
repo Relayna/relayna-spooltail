@@ -14,6 +14,7 @@ import grpc
 
 from ._wire import spooltail_pb2 as wire
 from ._wire.spooltail_pb2_grpc import SpooltailStub
+from .replay import NumericBatch, NumericRow, Record, replay_records
 
 
 class SpooltailError(Exception):
@@ -44,10 +45,19 @@ class SubscriptionError(SpooltailError):
 
 
 @dataclass(frozen=True, slots=True)
-class Record:
-    offset: int
-    event: dict[str, Any]
-    partition: int = 0
+class StreamBatch:
+    topic: str
+    group: str
+    after: int
+    records: tuple[Record, ...]
+    partition: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayBatch:
+    topic: str
+    after: int
+    records: tuple[Record, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +88,13 @@ class Delivery:
 class BrokerStats:
     payload_reads: int
     recovered_frames: int
+    free_bytes: int = 0
+    disk_reserve_bytes: int = 0
+    raw_journal_bytes: int = 0
+    packed_journal_bytes: int = 0
+    archive_pending_records: int = 0
+    retired_segments: int = 0
+    packing_space_pauses: int = 0
 
 
 def _publish(
@@ -105,6 +122,20 @@ def _task(topic: str, task_id: str, after: str | None = None) -> wire.Task:
     if after is not None:
         request.after = after
     return request
+
+
+@contextmanager
+def _translate_cursor_gap(after: str | None) -> Iterator[None]:
+    try:
+        yield
+    except grpc.aio.AioRpcError as error:
+        if error.code() != grpc.StatusCode.FAILED_PRECONDITION:
+            raise
+        metadata = dict(error.trailing_metadata() or ())
+        earliest = metadata.get("spooltail-earliest-event-id-bin")
+        raise CursorGapError(
+            after, earliest.decode("utf-8") if earliest is not None else None
+        ) from error
 
 
 @contextmanager
@@ -156,6 +187,7 @@ class SpooltailClient:
             self._channel = grpc.aio.insecure_channel(target, options=options)
         self._stub = SpooltailStub(self._channel)
         self._timeout = timeout
+        self._legacy_replay = False
 
     async def __aenter__(self) -> Self:
         return self
@@ -203,19 +235,33 @@ class SpooltailClient:
         self, topic: str, task_id: str, *, after: str | None = None
     ) -> list[Record]:
         """Return one page of retained records after the exclusive event ID."""
-        try:
+        with _translate_cursor_gap(after):
             response = await self._stub.History(
                 _task(topic, task_id, after), timeout=self._timeout
             )
-        except grpc.aio.AioRpcError as error:
-            if error.code() != grpc.StatusCode.FAILED_PRECONDITION:
-                raise
-            metadata = dict(error.trailing_metadata() or ())
-            earliest = metadata.get("spooltail-earliest-event-id-bin")
-            raise CursorGapError(
-                after, earliest.decode("utf-8") if earliest is not None else None
-            ) from error
         return [_record(record) for record in response.records]
+
+    async def audit_history(
+        self,
+        topic: str,
+        task_id: str,
+        *,
+        after: str | None = None,
+        through: int | None = None,
+        limit: int = 32,
+    ) -> tuple[list[Record], int | None]:
+        """Return a bounded page of hot and archived inputs and its snapshot offset."""
+        with _translate_cursor_gap(after):
+            response = await self._stub.AuditHistory(
+                wire.AuditHistoryRequest(
+                    topic=topic, task_id=task_id, after=after, through=through, limit=limit
+                ),
+                timeout=self._timeout,
+            )
+        return (
+            [_record(record) for record in response.records],
+            response.through if response.HasField("through") else None,
+        )
 
     async def subscribe(
         self,
@@ -316,6 +362,74 @@ class SpooltailClient:
         with _translate_conflict():
             await self._stub.Commit(request, timeout=self._timeout)
 
+    async def next_batch(
+        self, topic: str, group: str, *, limit: int = 32, partition: int | None = None
+    ) -> StreamBatch:
+        """Fetch up to 64 records after a group's durable checkpoint."""
+        if not 1 <= limit <= 64:
+            raise ValueError("limit must be between 1 and 64")
+        request = wire.StreamBatchRequest(
+            topic=topic, group=group, partition=partition, limit=limit
+        )
+        with _translate_conflict():
+            response = await self._stub.NextBatch(request, timeout=self._timeout)
+        return StreamBatch(
+            topic, group, response.after, tuple(map(_record, response.records)), partition
+        )
+
+    async def commit_batch(self, batch: StreamBatch, *, count: int | None = None) -> None:
+        """Commit all records or a processed prefix of a fetched batch."""
+        if count is None:
+            count = len(batch.records)
+        if not 1 <= count <= len(batch.records):
+            raise ValueError("count must select a nonempty prefix of the batch")
+        request = wire.StreamBatchCommit(
+            topic=batch.topic,
+            group=batch.group,
+            partition=batch.partition,
+            after=batch.after,
+            through=batch.records[count - 1].offset,
+            count=count,
+        )
+        with _translate_conflict():
+            await self._stub.CommitBatch(request, timeout=self._timeout)
+
+    async def read_after_batch(
+        self, topic: str, *, after: int | None = None, limit: int = 32
+    ) -> ReplayBatch:
+        """Fetch topic records for a consumer that stores its own checkpoint."""
+        if not 1 <= limit <= 64:
+            raise ValueError("limit must be between 1 and 64")
+        request = wire.TopicReplayRequest(topic=topic, after=after, limit=limit)
+        with _translate_conflict():
+            if not self._legacy_replay:
+                try:
+                    page = await self._stub.ReadReplayPage(request, timeout=self._timeout)
+                except grpc.aio.AioRpcError as error:
+                    if error.code() != grpc.StatusCode.UNIMPLEMENTED:
+                        raise
+                    self._legacy_replay = True
+                else:
+                    return ReplayBatch(topic, page.after, replay_records(page))
+            response = await self._stub.ReadAfterBatch(request, timeout=self._timeout)
+        return ReplayBatch(topic, response.after, tuple(map(_record, response.records)))
+
+    async def read_numeric_batch(
+        self, topic: str, *, array_field: str, value_field: str,
+        after: int | None = None, limit: int = 32,
+    ) -> NumericBatch:
+        """Read one float64 column from an array of event objects, grouped by record."""
+        if not 1 <= limit <= 64:
+            raise ValueError("limit must be between 1 and 64")
+        request = wire.NumericRequest(
+            replay=wire.TopicReplayRequest(topic=topic, after=after, limit=limit),
+            array_field=array_field, value_field=value_field,
+        )
+        with _translate_conflict():
+            page = await self._stub.ReadNumericPage(request, timeout=self._timeout)
+        rows = tuple(NumericRow(r.offset, r.partition, r.task_id, r.event_id, r.count) for r in page.rows)
+        return NumericBatch(topic, page.after, rows, page.values_f64_le)
+
     async def list_partitions(self) -> list[int]:
         """List the broker's durable partition IDs."""
         response = await self._stub.ListPartitions(wire.Empty(), timeout=self._timeout)
@@ -345,6 +459,16 @@ class SpooltailClient:
             await self._stub.MoveTask(request, timeout=self._timeout)
 
     async def stats(self) -> BrokerStats:
-        """Read the broker's process-local counters."""
+        """Read process counters and a snapshot of journal storage."""
         response = await self._stub.Stats(wire.Empty(), timeout=self._timeout)
-        return BrokerStats(response.payload_reads, response.recovered_frames)
+        return BrokerStats(
+            response.payload_reads,
+            response.recovered_frames,
+            response.free_bytes,
+            response.disk_reserve_bytes,
+            response.raw_journal_bytes,
+            response.packed_journal_bytes,
+            response.archive_pending_records,
+            response.retired_segments,
+            response.packing_space_pauses,
+        )
