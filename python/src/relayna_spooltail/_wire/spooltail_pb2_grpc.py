@@ -51,6 +51,11 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.Task.SerializeToString,
                 response_deserializer=spooltail__pb2.Page.FromString,
                 _registered_method=True)
+        self.AuditHistory = channel.unary_unary(
+                '/spooltail.v1.Spooltail/AuditHistory',
+                request_serializer=spooltail__pb2.AuditHistoryRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.AuditHistoryPage.FromString,
+                _registered_method=True)
         self.Append = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Append',
                 request_serializer=spooltail__pb2.Publish.SerializeToString,
@@ -90,6 +95,21 @@ class SpooltailStub(object):
                 '/spooltail.v1.Spooltail/CommitBatch',
                 request_serializer=spooltail__pb2.StreamBatchCommit.SerializeToString,
                 response_deserializer=spooltail__pb2.Empty.FromString,
+                _registered_method=True)
+        self.ReadReplayPage = channel.unary_unary(
+                '/spooltail.v1.Spooltail/ReadReplayPage',
+                request_serializer=spooltail__pb2.TopicReplayRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.ReplayPage.FromString,
+                _registered_method=True)
+        self.ReadNumericPage = channel.unary_unary(
+                '/spooltail.v1.Spooltail/ReadNumericPage',
+                request_serializer=spooltail__pb2.NumericRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.NumericPage.FromString,
+                _registered_method=True)
+        self.ReadAfterBatch = channel.unary_unary(
+                '/spooltail.v1.Spooltail/ReadAfterBatch',
+                request_serializer=spooltail__pb2.TopicReplayRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamBatch.FromString,
                 _registered_method=True)
         self.Subscribe = channel.unary_stream(
                 '/spooltail.v1.Spooltail/Subscribe',
@@ -144,6 +164,12 @@ class SpooltailServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AuditHistory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Append(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -187,6 +213,24 @@ class SpooltailServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def CommitBatch(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadReplayPage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadNumericPage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadAfterBatch(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -246,6 +290,11 @@ def add_SpooltailServicer_to_server(servicer, server):
                     request_deserializer=spooltail__pb2.Task.FromString,
                     response_serializer=spooltail__pb2.Page.SerializeToString,
             ),
+            'AuditHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.AuditHistory,
+                    request_deserializer=spooltail__pb2.AuditHistoryRequest.FromString,
+                    response_serializer=spooltail__pb2.AuditHistoryPage.SerializeToString,
+            ),
             'Append': grpc.unary_unary_rpc_method_handler(
                     servicer.Append,
                     request_deserializer=spooltail__pb2.Publish.FromString,
@@ -285,6 +334,21 @@ def add_SpooltailServicer_to_server(servicer, server):
                     servicer.CommitBatch,
                     request_deserializer=spooltail__pb2.StreamBatchCommit.FromString,
                     response_serializer=spooltail__pb2.Empty.SerializeToString,
+            ),
+            'ReadReplayPage': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadReplayPage,
+                    request_deserializer=spooltail__pb2.TopicReplayRequest.FromString,
+                    response_serializer=spooltail__pb2.ReplayPage.SerializeToString,
+            ),
+            'ReadNumericPage': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadNumericPage,
+                    request_deserializer=spooltail__pb2.NumericRequest.FromString,
+                    response_serializer=spooltail__pb2.NumericPage.SerializeToString,
+            ),
+            'ReadAfterBatch': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadAfterBatch,
+                    request_deserializer=spooltail__pb2.TopicReplayRequest.FromString,
+                    response_serializer=spooltail__pb2.StreamBatch.SerializeToString,
             ),
             'Subscribe': grpc.unary_stream_rpc_method_handler(
                     servicer.Subscribe,
@@ -398,6 +462,33 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/History',
             spooltail__pb2.Task.SerializeToString,
             spooltail__pb2.Page.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AuditHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/AuditHistory',
+            spooltail__pb2.AuditHistoryRequest.SerializeToString,
+            spooltail__pb2.AuditHistoryPage.FromString,
             options,
             channel_credentials,
             insecure,
@@ -614,6 +705,87 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/CommitBatch',
             spooltail__pb2.StreamBatchCommit.SerializeToString,
             spooltail__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadReplayPage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/ReadReplayPage',
+            spooltail__pb2.TopicReplayRequest.SerializeToString,
+            spooltail__pb2.ReplayPage.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadNumericPage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/ReadNumericPage',
+            spooltail__pb2.NumericRequest.SerializeToString,
+            spooltail__pb2.NumericPage.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadAfterBatch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/ReadAfterBatch',
+            spooltail__pb2.TopicReplayRequest.SerializeToString,
+            spooltail__pb2.StreamBatch.FromString,
             options,
             channel_credentials,
             insecure,

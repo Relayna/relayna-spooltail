@@ -7,16 +7,39 @@ fn record(id: &str) -> Value {
 }
 
 #[tokio::test]
+async fn cancelled_history_keeps_its_slot_until_the_blocking_read_finishes() -> Result<()> {
+    let dir = tempdir()?;
+    let broker = Broker::new(Store::open(dir.path())?);
+    let reader = broker.clone();
+    let (started, running) = tokio::sync::oneshot::channel();
+    let (release, released) = tokio::sync::oneshot::channel();
+    let request = tokio::spawn(async move {
+        reader
+            .history_page(move |_| {
+                started.send(()).unwrap();
+                released.blocking_recv()?;
+                Ok(Vec::new())
+            })
+            .await
+    });
+    running.await?;
+    request.abort();
+    assert!(request.await.unwrap_err().is_cancelled());
+    assert_eq!(broker.history_reader.available_permits(), 0);
+    release.send(()).unwrap();
+    broker.history_page(|s| s.page("status", "T7", 0)).await?;
+    assert_eq!(broker.history_reader.available_permits(), 1);
+    Ok(())
+}
+
+#[tokio::test]
 async fn append_during_replay_is_delivered_after_the_page() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
     for id in ["E41", "E42"] {
         store.append("status", record(id))?;
     }
-    let b = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let b = Broker::new(store);
     let mut sub = feed(b.clone(), "status".into(), "T7".into(), Some("E41".into()));
     assert_eq!(sub.next().await.unwrap().kind, "ready");
     assert_eq!(sub.next().await.unwrap().id.as_deref(), Some("E42"));
@@ -34,6 +57,144 @@ async fn append_during_replay_is_delivered_after_the_page() -> Result<()> {
     assert_eq!(reply.0["offset"], 3);
     let next = tokio::time::timeout(std::time::Duration::from_secs(1), sub.next()).await?;
     assert_eq!(next.unwrap().id.as_deref(), Some("E43"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn first_event_after_ready_is_shared_on_an_empty_task() -> Result<()> {
+    let dir = tempdir()?;
+    let b = Broker::new(Store::open(dir.path())?);
+    let mut a = feed(b.clone(), "status".into(), "T7".into(), None);
+    let mut b_reader = feed(b.clone(), "status".into(), "T7".into(), None);
+    assert_eq!(a.next().await.unwrap().kind, "ready");
+    assert_eq!(b_reader.next().await.unwrap().kind, "ready");
+    publish(b.clone(), "status".into(), record("first"), None, None).await?;
+    let first = a.next().await.unwrap();
+    assert_eq!(first.id.as_deref(), Some("first"));
+    assert!(Arc::ptr_eq(&first, &b_reader.next().await.unwrap()));
+    assert_eq!(b.stats().await?.payload_reads, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_fanout_shares_commits_and_recovers_one_lagging_reader() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("seed"))?;
+    let b = Broker::new(store);
+    let mut readers: Vec<_> = (0..3)
+        .map(|_| feed(b.clone(), "status".into(), "T7".into(), None))
+        .collect();
+    for reader in &mut readers {
+        assert_eq!(reader.next().await.unwrap().kind, "ready");
+        assert_eq!(reader.next().await.unwrap().id.as_deref(), Some("seed"));
+    }
+    let before = b.stats().await?.payload_reads;
+    let mut slow = readers.pop().unwrap();
+    let count = live::LIVE_SLOTS + 3;
+    for n in 1..=count {
+        let id = n.to_string();
+        let mut event = record(&id);
+        if n == count {
+            event["status"] = json!("completed");
+        }
+        publish(b.clone(), "other".into(), record(&id), None, None).await?;
+        publish(b.clone(), "status".into(), event, None, None).await?;
+        let a = readers[0].next().await.unwrap();
+        let other = readers[1].next().await.unwrap();
+        assert!(Arc::ptr_eq(&a, &other));
+        assert_eq!(a.id.as_deref(), Some(id.as_str()));
+    }
+    assert_eq!(b.stats().await?.payload_reads, before);
+    for n in 1..=count {
+        assert_eq!(slow.next().await.unwrap().id, Some(n.to_string()));
+    }
+    assert_eq!(b.stats().await?.payload_reads - before, count as u64);
+    assert!(slow.next().await.is_none());
+    for mut reader in readers {
+        assert!(reader.next().await.is_none());
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_window_honors_retention_and_only_broadcasts_successful_new_records() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("seed"))?;
+    let b = Broker::new(store);
+    let mut reader = feed(b.clone(), "status".into(), "T7".into(), None);
+    assert_eq!(reader.next().await.unwrap().kind, "ready");
+    assert_eq!(reader.next().await.unwrap().id.as_deref(), Some("seed"));
+    b.run(|s| {
+        let (_, mut notices) = s.live.subscribe("status", "T7");
+        let offset = s.append("status", record("A"))?;
+        assert_eq!(notices.try_recv()?.0, offset);
+        assert_eq!(s.append("status", record("A"))?, offset);
+        let mut conflict = record("A");
+        conflict["meta"] = json!(2);
+        assert!(s.append("status", conflict).is_err());
+        assert!(matches!(
+            notices.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+        let retained = s.append("status", record("B"))?;
+        s.expire_before("status", retained)
+    })
+    .await?;
+    let gap = reader.next().await.unwrap();
+    assert_eq!(gap.kind, "gap");
+    assert_eq!(
+        serde_json::from_str::<Value>(gap.data.get())?["earliest_event_id"],
+        "B"
+    );
+    assert!(reader.next().await.is_none());
+    Ok(())
+}
+
+#[test]
+fn acknowledged_single_journal_offsets_survive_loss_of_the_index_wal_suffix() -> Result<()> {
+    let dir = tempdir()?;
+    let crash = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let seed = store.append("status", record("seed"))?;
+    store.commit("status", "audit", seed, None)?;
+    store.db.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")?;
+    // Preserve the last durable SQLite prefix. Supply none of the later WAL
+    // transactions on restart, even if the OS happened to write some of them.
+    std::fs::copy(
+        dir.path().join("index.sqlite"),
+        crash.path().join("index.sqlite"),
+    )?;
+    let mut offsets = Vec::new();
+    for i in 0..18 {
+        let topic = if i % 2 == 0 { "status" } else { "other" };
+        let mut event = record(&i.to_string());
+        event["payload"] = json!("x".repeat(512 * 1024));
+        offsets.push((topic, store.append(topic, event)?));
+    }
+    for entry in std::fs::read_dir(dir.path())? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|ext| ext == "seg") {
+            std::fs::copy(&path, crash.path().join(path.file_name().unwrap()))?;
+        }
+    }
+    assert!(crash.path().join("00000000000000000001.seg").exists());
+    let mut recovered = Store::open(crash.path())?;
+    assert_eq!(recovered.recovered_frames, offsets.len());
+    assert_eq!(
+        recovered
+            .group_next("status", "audit", None)?
+            .unwrap()
+            .offset,
+        offsets[0].1
+    );
+    for (i, (topic, offset)) in offsets.into_iter().enumerate() {
+        let event = recovered.read(offset)?.event;
+        assert_eq!(event["event_id"], i.to_string());
+        assert_eq!(event["payload"].as_str().unwrap().len(), 512 * 1024);
+        assert_eq!(recovered.append(topic, event)?, offset);
+    }
     Ok(())
 }
 
@@ -86,10 +247,7 @@ async fn partition_can_write_ahead_of_global_visibility() -> Result<()> {
     let Prepared::Write(body) = store.prepare_append(&mut earlier, 0)? else {
         panic!("expected a new record");
     };
-    let broker = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let broker = Broker::new(store);
     let publish_order = |task: &str| {
         tokio::spawn(publish(
             broker.clone(),
@@ -305,6 +463,73 @@ fn rolling_segments_preserves_indexed_reads_and_topic_isolation() -> Result<()> 
 }
 
 #[test]
+fn task_history_pages_sparse_records_across_a_partition_move() -> Result<()> {
+    for mode in ["shared", "partitioned"] {
+        let dir = tempdir()?;
+        let mut store = Store::open_mode(dir.path(), Some(mode))?;
+        let mut expected = Vec::new();
+        for n in 0..67 {
+            if n == 32 {
+                store.ensure_partition(1)?;
+                store.move_task("T7", 0, 1)?;
+            }
+            let event = record(&format!("E{n}"));
+            let offset = store.append("status", event.clone())?;
+            expected.push((offset, u32::from(n >= 32), event.clone()));
+            store.append("other-topic", event.clone())?;
+            let mut other_task = event;
+            other_task["task_id"] = json!("other-task");
+            store.append("status", other_task)?;
+        }
+        drop(store);
+        let store = Store::open(dir.path())?;
+        for (cursor, expected_page) in [(None, &expected[..64]), (Some("E63"), &expected[64..])] {
+            let after = store.resolve("status", "T7", cursor)?;
+            let before = store.payload_reads.get();
+            let page = store.page("status", "T7", after)?;
+            let actual: Vec<_> = page
+                .into_iter()
+                .map(|r| (r.offset, r.partition, r.event))
+                .collect();
+            assert_eq!(actual, expected_page);
+            assert_eq!(store.payload_reads.get() - before, actual.len() as u64);
+        }
+        let end = store.resolve("status", "T7", Some("E66"))?;
+        assert!(store.page("status", "T7", end)?.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
+fn task_history_reports_a_gap_if_retention_advances_between_pages() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("expired"))?;
+    let after = store.resolve("status", "T7", Some("expired"))?;
+    store.append("status", record("also-expired"))?;
+    let retained = store.append("status", record("retained"))?;
+    store.expire_before("status", retained)?;
+    let err = store.page("status", "T7", after).unwrap_err();
+    assert!(
+        matches!(err.downcast_ref::<Problem>(), Some(Problem::Gap { earliest }) if earliest.as_deref() == Some("retained"))
+    );
+    let start = store.resolve("status", "T7", None)?;
+    let page = store.page("status", "T7", start)?;
+    assert_eq!(
+        page.iter().map(|r| r.offset).collect::<Vec<_>>(),
+        [retained]
+    );
+
+    store.expire_before("status", retained + 1)?;
+    let err = store.page("status", "T7", after).unwrap_err();
+    assert!(matches!(
+        err.downcast_ref::<Problem>(),
+        Some(Problem::Gap { earliest: None })
+    ));
+    Ok(())
+}
+
+#[test]
 fn stream_batch_reads_sparse_records_across_partitions_and_segment_rollover() -> Result<()> {
     let dir = tempdir()?;
     let mut store = Store::open(dir.path())?;
@@ -361,6 +586,37 @@ fn stream_batch_reads_sparse_records_across_partitions_and_segment_rollover() ->
         tail.iter().map(|record| record.offset).collect::<Vec<_>>(),
         [tail_offset]
     );
+    Ok(())
+}
+
+#[test]
+fn stateless_replay_obeys_retention_without_creating_checkpoints() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let expired = store.append("status", record("expired"))?;
+    store.append("other", record("interleaved"))?;
+    let retained = store.append("status", record("retained"))?;
+
+    let (after, records) = store.read_after_batch("status", Some(expired), 1)?;
+    assert_eq!(after, expired);
+    assert_eq!(records[0].offset, retained);
+    store.expire_before("status", retained)?;
+    assert!(store.read_after_batch("status", Some(expired), 1).is_err());
+    let (after, records) = store.read_after_batch("status", None, 1)?;
+    assert_eq!(after, retained - 1);
+    assert_eq!(records[0].offset, retained);
+    assert!(
+        store
+            .read_after_batch("status", Some(retained), 1)?
+            .1
+            .is_empty()
+    );
+    assert!(store.read_after_batch("status", Some(-1), 1).is_err());
+    assert!(store.read_after_batch("status", None, 65).is_err());
+    let count: i64 = store
+        .db
+        .query_row("SELECT count(*) FROM cursors", [], |row| row.get(0))?;
+    assert_eq!(count, 0);
     Ok(())
 }
 
@@ -633,10 +889,7 @@ async fn expansion_during_publish_keeps_placement_and_other_journals_can_write()
     assert_eq!(store.task_partition(&fresh)?, 1);
     let next_offset = store.append("status", json!({"task_id":fresh,"event_id":"second"}))?;
     assert_eq!(store.read(next_offset)?.partition, 1);
-    let broker = Broker {
-        store: Arc::new(Mutex::new(store)),
-        watchers: Default::default(),
-    };
+    let broker = Broker::new(store);
     let (locked, ready) = tokio::sync::oneshot::channel();
     let (unlock, released) = tokio::sync::oneshot::channel();
     let holder = tokio::task::spawn_blocking(move || {

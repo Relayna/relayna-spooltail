@@ -1,0 +1,121 @@
+{
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "readers": 4,
+  "publishes_per_trial": 1200,
+  "writer_payload_bytes": 256,
+  "binary_sha256": {
+    "current": "8d229d6e07bb38620b5b3c8d59f6cc20091d3b12e089d1ff224f32770e24441c",
+    "bounded": "b210be467997b9676e6c20b73e5022d600ba9180915aefafc3905799aa859593"
+  },
+  "trials": [
+    {
+      "round": 1,
+      "binary": "current",
+      "elapsed_s": 16.01339304097928,
+      "history_p50": 2.059228951111436,
+      "history_p99": 5.897582974284887,
+      "publish_p50": 6.788728991523385,
+      "publish_p99": 12.22833408974111
+    },
+    {
+      "round": 1,
+      "binary": "bounded",
+      "elapsed_s": 16.01757137500681,
+      "history_p50": 2.333186974283308,
+      "history_p99": 6.20166608132422,
+      "publish_p50": 6.767854560166597,
+      "publish_p99": 12.13620905764401
+    },
+    {
+      "round": 2,
+      "binary": "bounded",
+      "elapsed_s": 16.024366208002903,
+      "history_p50": 2.103666542097926,
+      "history_p99": 6.023333058692515,
+      "publish_p50": 6.594375008717179,
+      "publish_p99": 11.640624958090484
+    },
+    {
+      "round": 2,
+      "binary": "current",
+      "elapsed_s": 16.028978874906898,
+      "history_p50": 2.11456255055964,
+      "history_p99": 5.934208980761468,
+      "publish_p50": 6.599229003768414,
+      "publish_p99": 11.192917008884251
+    },
+    {
+      "round": 3,
+      "binary": "bounded",
+      "elapsed_s": 16.030846792040393,
+      "history_p50": 2.0089164609089494,
+      "history_p99": 6.610791082493961,
+      "publish_p50": 6.441416509915143,
+      "publish_p99": 11.272959061898291
+    },
+    {
+      "round": 3,
+      "binary": "current",
+      "elapsed_s": 16.01569066697266,
+      "history_p50": 2.0474580232985318,
+      "history_p99": 6.407124921679497,
+      "publish_p50": 6.602125009521842,
+      "publish_p99": 12.144582928158343
+    },
+    {
+      "round": 4,
+      "binary": "current",
+      "elapsed_s": 16.020392249920405,
+      "history_p50": 1.890208397526294,
+      "history_p99": 5.851833033375442,
+      "publish_p50": 6.4900414436124265,
+      "publish_p99": 11.277582962065935
+    },
+    {
+      "round": 4,
+      "binary": "bounded",
+      "elapsed_s": 16.019472458865494,
+      "history_p50": 1.8837920506484807,
+      "history_p99": 4.515541018918157,
+      "publish_p50": 6.461000011768192,
+      "publish_p99": 10.123624932020903
+    },
+    {
+      "round": 5,
+      "binary": "current",
+      "elapsed_s": 16.030477666994557,
+      "history_p50": 1.8150415271520615,
+      "history_p99": 4.127916996367276,
+      "publish_p50": 6.3554790103808045,
+      "publish_p99": 10.252667008899152
+    },
+    {
+      "round": 5,
+      "binary": "bounded",
+      "elapsed_s": 16.021836082916707,
+      "history_p50": 1.8752915202639997,
+      "history_p99": 4.752834094688296,
+      "publish_p50": 6.46452052751556,
+      "publish_p99": 10.556292021647096
+    },
+    {
+      "round": 6,
+      "binary": "bounded",
+      "elapsed_s": 16.03117279196158,
+      "history_p50": 1.8813954666256905,
+      "history_p99": 4.633666016161442,
+      "publish_p50": 6.66006252868101,
+      "publish_p99": 10.962207918055356
+    },
+    {
+      "round": 6,
+      "binary": "current",
+      "elapsed_s": 16.027697541052476,
+      "history_p50": 1.846083498094231,
+      "history_p99": 4.145125043578446,
+      "publish_p50": 6.478437513578683,
+      "publish_p99": 10.101250023581088
+    }
+  ],
+  "latency_units": "ms"
+}
