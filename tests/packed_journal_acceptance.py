@@ -28,7 +28,10 @@ def query(volume, sql):
         return db.execute(sql).fetchall()
 
 
-async def launch(volume, mode, *, packing=False, paused=True, cut=None, resume=None):
+async def launch(
+    volume, mode, *, packing=False, paused=True, cut=None, resume=None,
+    retain_for="1h", audit_only=(), disk_reserve=0,
+):
     env = {key: value for key, value in os.environ.items() if not key.startswith("SPOOLTAIL_")}
     env.update(
         SPOOLTAIL_DATA=str(volume),
@@ -38,8 +41,10 @@ async def launch(volume, mode, *, packing=False, paused=True, cut=None, resume=N
         SPOOLTAIL_GRPC_TLS="off",
         SPOOLTAIL_PACK_SEALED=str(int(packing)),
         SPOOLTAIL_PACK_MIN_AGE_SECS="0",
+        SPOOLTAIL_DISK_RESERVE_BYTES=str(disk_reserve),
+        SPOOLTAIL_RETIRE_AUDIT_TOPICS=json.dumps(audit_only),
         SPOOLTAIL_RETENTION=json.dumps(
-            {"status": {"hot_for": "1s", "retain_for": "1h", "paused": paused}}
+            {"status": {"hot_for": "1s", "retain_for": retain_for, "paused": paused}}
         ),
     )
     if cut:
@@ -133,6 +138,11 @@ async def verify_history(client, status, replay):
         inputs.extend((record.offset, record.event) for record in page)
     assert inputs == status and through == status[-1][0]
     assert await client.history("status", "T1") == []
+
+    # This task's remaining records span the sealed segment and the active raw tail.
+    middle = len(replay) // 2
+    history = await client.history("replay", "T1", after=replay[middle - 1][1]["event_id"])
+    assert [(row.offset, row.event) for row in history] == replay[middle:]
 
     after = replay[0][0]
     replayed = []

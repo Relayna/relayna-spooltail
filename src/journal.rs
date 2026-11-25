@@ -214,6 +214,11 @@ impl Journal {
         ensure!(segment <= last, "indexed segment missing");
         loop {
             let packed_len = packed.get(&(partition, segment)).copied();
+            if packed_len == Some(0) {
+                segment += 1;
+                end = 0;
+                continue;
+            }
             let (mut reader, size) = match packed_len {
                 Some(len) => (open_segment(dir, segment, Some(len))?, len),
                 None => {

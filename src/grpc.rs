@@ -15,6 +15,8 @@ use tonic::{
     },
 };
 
+mod replay;
+
 mod wire {
     tonic::include_proto!("spooltail.v1");
 }
@@ -31,8 +33,27 @@ use wire::{
 
 struct Api(Broker);
 
+impl Api {
+    async fn replay_records(
+        &self,
+        q: TopicReplayRequest,
+    ) -> Result<(i64, Vec<store::Record>), Status> {
+        self.0
+            .run(move |s| {
+                s.read_after_batch(
+                    &q.topic,
+                    q.after,
+                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+                )
+            })
+            .await
+            .map_err(status)
+    }
+}
+
 fn status(error: anyhow::Error) -> Status {
     match error.downcast_ref::<Problem>() {
+        Some(Problem::Capacity) => Status::resource_exhausted(error.to_string()),
         Some(Problem::Missing) => Status::not_found(error.to_string()),
         Some(Problem::Invalid(_)) => Status::invalid_argument(error.to_string()),
         Some(Problem::Conflict(_)) => Status::failed_precondition(error.to_string()),
@@ -99,7 +120,7 @@ impl Spooltail for Api {
         let q = request.into_inner();
         let records = self
             .0
-            .run(move |s| {
+            .history_page(move |s| {
                 let position = s.resolve(&q.topic, &q.task_id, q.after.as_deref())?;
                 s.page(&q.topic, &q.task_id, position)
             })
@@ -275,19 +296,32 @@ impl Spooltail for Api {
         &self,
         request: Request<TopicReplayRequest>,
     ) -> Result<Response<StreamBatch>, Status> {
-        let q = request.into_inner();
-        let (after, records) = self
-            .0
-            .run(move |s| {
-                s.read_after_batch(
-                    &q.topic,
-                    q.after,
-                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
-                )
-            })
-            .await
-            .map_err(status)?;
+        let (after, records) = self.replay_records(request.into_inner()).await?;
         encode_batch(after, records)
+    }
+
+    async fn read_replay_page(
+        &self,
+        request: Request<TopicReplayRequest>,
+    ) -> Result<Response<wire::ReplayPage>, Status> {
+        let (after, records) = self.replay_records(request.into_inner()).await?;
+        Ok(Response::new(
+            replay::events(after, records).map_err(status)?,
+        ))
+    }
+
+    async fn read_numeric_page(
+        &self,
+        request: Request<wire::NumericRequest>,
+    ) -> Result<Response<wire::NumericPage>, Status> {
+        let q = request.into_inner();
+        let replay = q
+            .replay
+            .ok_or_else(|| Status::invalid_argument("missing replay request"))?;
+        let (after, records) = self.replay_records(replay).await?;
+        Ok(Response::new(
+            replay::numbers(after, records, &q.array_field, &q.value_field).map_err(status)?,
+        ))
     }
 
     async fn list_partitions(&self, _: Request<Empty>) -> Result<Response<Partitions>, Status> {
@@ -344,17 +378,18 @@ impl Spooltail for Api {
     }
 
     async fn stats(&self, _: Request<Empty>) -> Result<Response<StatsResponse>, Status> {
-        let stats = self
-            .0
-            .run(|s| {
-                Ok(StatsResponse {
-                    payload_reads: s.payload_reads.get(),
-                    recovered_frames: s.recovered_frames.try_into()?,
-                })
-            })
-            .await
-            .map_err(status)?;
-        Ok(Response::new(stats))
+        let stats = self.0.stats().await.map_err(status)?;
+        Ok(Response::new(StatsResponse {
+            payload_reads: stats.payload_reads,
+            recovered_frames: stats.recovered_frames,
+            free_bytes: stats.free_bytes,
+            disk_reserve_bytes: stats.disk_reserve_bytes,
+            raw_journal_bytes: stats.raw_journal_bytes,
+            packed_journal_bytes: stats.packed_journal_bytes,
+            archive_pending_records: stats.archive_pending_records,
+            retired_segments: stats.retired_segments,
+            packing_space_pauses: stats.packing_space_pauses,
+        }))
     }
 
     type SubscribeStream = Pin<Box<dyn Stream<Item = Result<Delivery, Status>> + Send>>;
@@ -365,11 +400,10 @@ impl Spooltail for Api {
     ) -> Result<Response<Self::SubscribeStream>, Status> {
         let q = request.into_inner();
         let events = feed(self.0.clone(), q.topic, q.task_id, q.after).map(|item| {
-            let data_json = serde_json::to_vec(&item.data).map_err(|error| status(error.into()))?;
             Ok(Delivery {
                 kind: item.kind.into(),
-                event_id: item.id,
-                data_json,
+                event_id: item.id.clone(),
+                data_json: item.data.get().as_bytes().to_vec(),
             })
         });
         Ok(Response::new(Box::pin(events)))

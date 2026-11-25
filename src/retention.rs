@@ -104,6 +104,12 @@ pub(crate) struct RetentionPolicy {
     activated_ms: i64,
 }
 
+impl RetentionPolicy {
+    pub fn has_expired(&self, accepted_at_ms: Option<i64>, timestamp: i64) -> bool {
+        accepted_at_ms.unwrap_or(self.activated_ms) <= timestamp.saturating_sub(self.retain_ms)
+    }
+}
+
 struct ArchiveInput {
     segment: u64,
     already_packed: bool,
@@ -321,12 +327,20 @@ impl Store {
             .offset
             .checked_add(1)
             .context("archive offset overflow")?;
-        let tx = self.db.transaction()?;
         let needs_blob = candidate.inputs.iter().any(|input| {
             !self
                 .packed
                 .contains_key(&(input.record.partition, input.segment))
         });
+        if needs_blob {
+            let bytes = block
+                .as_ref()
+                .context("missing compressed archive block")?
+                .compressed
+                .len();
+            self.admit_disk_write(bytes as u64, false)?;
+        }
+        let tx = self.db.transaction()?;
         let block_id = if needs_blob {
             let block = block.context("missing compressed archive block")?;
             tx.execute(
@@ -370,6 +384,7 @@ impl Store {
             params![candidate.topic, next],
         )?;
         tx.commit()?;
+        self.live.advance_floor(&candidate.topic, next);
         Ok(())
     }
 

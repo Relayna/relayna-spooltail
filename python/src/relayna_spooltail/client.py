@@ -14,6 +14,7 @@ import grpc
 
 from ._wire import spooltail_pb2 as wire
 from ._wire.spooltail_pb2_grpc import SpooltailStub
+from .replay import NumericBatch, NumericRow, Record, replay_records
 
 
 class SpooltailError(Exception):
@@ -41,13 +42,6 @@ class CursorGapError(SpooltailError):
 
 class SubscriptionError(SpooltailError):
     """The broker ended a subscription with an error delivery."""
-
-
-@dataclass(frozen=True, slots=True)
-class Record:
-    offset: int
-    event: dict[str, Any]
-    partition: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +88,13 @@ class Delivery:
 class BrokerStats:
     payload_reads: int
     recovered_frames: int
+    free_bytes: int = 0
+    disk_reserve_bytes: int = 0
+    raw_journal_bytes: int = 0
+    packed_journal_bytes: int = 0
+    archive_pending_records: int = 0
+    retired_segments: int = 0
+    packing_space_pauses: int = 0
 
 
 def _publish(
@@ -186,6 +187,7 @@ class SpooltailClient:
             self._channel = grpc.aio.insecure_channel(target, options=options)
         self._stub = SpooltailStub(self._channel)
         self._timeout = timeout
+        self._legacy_replay = False
 
     async def __aenter__(self) -> Self:
         return self
@@ -400,8 +402,33 @@ class SpooltailClient:
             raise ValueError("limit must be between 1 and 64")
         request = wire.TopicReplayRequest(topic=topic, after=after, limit=limit)
         with _translate_conflict():
+            if not self._legacy_replay:
+                try:
+                    page = await self._stub.ReadReplayPage(request, timeout=self._timeout)
+                except grpc.aio.AioRpcError as error:
+                    if error.code() != grpc.StatusCode.UNIMPLEMENTED:
+                        raise
+                    self._legacy_replay = True
+                else:
+                    return ReplayBatch(topic, page.after, replay_records(page))
             response = await self._stub.ReadAfterBatch(request, timeout=self._timeout)
         return ReplayBatch(topic, response.after, tuple(map(_record, response.records)))
+
+    async def read_numeric_batch(
+        self, topic: str, *, array_field: str, value_field: str,
+        after: int | None = None, limit: int = 32,
+    ) -> NumericBatch:
+        """Read one float64 column from an array of event objects, grouped by record."""
+        if not 1 <= limit <= 64:
+            raise ValueError("limit must be between 1 and 64")
+        request = wire.NumericRequest(
+            replay=wire.TopicReplayRequest(topic=topic, after=after, limit=limit),
+            array_field=array_field, value_field=value_field,
+        )
+        with _translate_conflict():
+            page = await self._stub.ReadNumericPage(request, timeout=self._timeout)
+        rows = tuple(NumericRow(r.offset, r.partition, r.task_id, r.event_id, r.count) for r in page.rows)
+        return NumericBatch(topic, page.after, rows, page.values_f64_le)
 
     async def list_partitions(self) -> list[int]:
         """List the broker's durable partition IDs."""
@@ -432,6 +459,16 @@ class SpooltailClient:
             await self._stub.MoveTask(request, timeout=self._timeout)
 
     async def stats(self) -> BrokerStats:
-        """Read the broker's process-local counters."""
+        """Read process counters and a snapshot of journal storage."""
         response = await self._stub.Stats(wire.Empty(), timeout=self._timeout)
-        return BrokerStats(response.payload_reads, response.recovered_frames)
+        return BrokerStats(
+            response.payload_reads,
+            response.recovered_frames,
+            response.free_bytes,
+            response.disk_reserve_bytes,
+            response.raw_journal_bytes,
+            response.packed_journal_bytes,
+            response.archive_pending_records,
+            response.retired_segments,
+            response.packing_space_pauses,
+        )

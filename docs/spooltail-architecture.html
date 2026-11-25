@@ -47,7 +47,7 @@
     <div class="title"><h3>Spooltail broker</h3><span class="scope">One Rust process · Axum / Tokio</span></div>
     <div class="pair">
       <div><strong>HTTP operations</strong><small>Publish, look up a task, manage leases and advance group cursors. Store access shares one mutex.</small></div>
-      <div><strong>SSE and WebSocket subscriptions</strong><small>Replay indexed task events, then wait on an in-memory notification. A commit wakes readers to query again.</small></div>
+      <div><strong>SSE and WebSocket subscriptions</strong><small>Replay indexed task events, then share new committed events. A reader that falls behind resumes from its own journal offset.</small></div>
     </div>
   </div>
   <svg class="bus" viewBox="0 0 800 30" preserveAspectRatio="none" aria-hidden="true"><path d="M400 1 V29 M395 6 L400 1 L405 6 M395 24 L400 29 L405 24"/></svg>
@@ -79,7 +79,7 @@
       <summary>Follow a subscriber after reconnect</summary>
       <ol>
         <li>The client supplies its last event ID through SSE or WebSocket. A fresh subscription starts at the first retained event for the task.</li>
-        <li>The broker registers for wakeups and replays retained records after that ID. An unknown or expired ID produces a gap.</li>
+        <li>The broker subscribes to live commits and replays retained records after that ID. An unknown or expired ID produces a gap.</li>
         <li>Once caught up, the subscriber waits for the next commit. A terminal status ends that task’s subscription.</li>
       </ol>
     </details>
