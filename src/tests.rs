@@ -60,6 +60,144 @@ async fn append_during_replay_is_delivered_after_the_page() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn first_event_after_ready_is_shared_on_an_empty_task() -> Result<()> {
+    let dir = tempdir()?;
+    let b = Broker::new(Store::open(dir.path())?);
+    let mut a = feed(b.clone(), "status".into(), "T7".into(), None);
+    let mut b_reader = feed(b.clone(), "status".into(), "T7".into(), None);
+    assert_eq!(a.next().await.unwrap().kind, "ready");
+    assert_eq!(b_reader.next().await.unwrap().kind, "ready");
+    publish(b.clone(), "status".into(), record("first"), None, None).await?;
+    let first = a.next().await.unwrap();
+    assert_eq!(first.id.as_deref(), Some("first"));
+    assert!(Arc::ptr_eq(&first, &b_reader.next().await.unwrap()));
+    assert_eq!(b.stats().await?.payload_reads, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_fanout_shares_commits_and_recovers_one_lagging_reader() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("seed"))?;
+    let b = Broker::new(store);
+    let mut readers: Vec<_> = (0..3)
+        .map(|_| feed(b.clone(), "status".into(), "T7".into(), None))
+        .collect();
+    for reader in &mut readers {
+        assert_eq!(reader.next().await.unwrap().kind, "ready");
+        assert_eq!(reader.next().await.unwrap().id.as_deref(), Some("seed"));
+    }
+    let before = b.stats().await?.payload_reads;
+    let mut slow = readers.pop().unwrap();
+    let count = live::LIVE_SLOTS + 3;
+    for n in 1..=count {
+        let id = n.to_string();
+        let mut event = record(&id);
+        if n == count {
+            event["status"] = json!("completed");
+        }
+        publish(b.clone(), "other".into(), record(&id), None, None).await?;
+        publish(b.clone(), "status".into(), event, None, None).await?;
+        let a = readers[0].next().await.unwrap();
+        let other = readers[1].next().await.unwrap();
+        assert!(Arc::ptr_eq(&a, &other));
+        assert_eq!(a.id.as_deref(), Some(id.as_str()));
+    }
+    assert_eq!(b.stats().await?.payload_reads, before);
+    for n in 1..=count {
+        assert_eq!(slow.next().await.unwrap().id, Some(n.to_string()));
+    }
+    assert_eq!(b.stats().await?.payload_reads - before, count as u64);
+    assert!(slow.next().await.is_none());
+    for mut reader in readers {
+        assert!(reader.next().await.is_none());
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_window_honors_retention_and_only_broadcasts_successful_new_records() -> Result<()> {
+    let dir = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    store.append("status", record("seed"))?;
+    let b = Broker::new(store);
+    let mut reader = feed(b.clone(), "status".into(), "T7".into(), None);
+    assert_eq!(reader.next().await.unwrap().kind, "ready");
+    assert_eq!(reader.next().await.unwrap().id.as_deref(), Some("seed"));
+    b.run(|s| {
+        let (_, mut notices) = s.live.subscribe("status", "T7");
+        let offset = s.append("status", record("A"))?;
+        assert_eq!(notices.try_recv()?.0, offset);
+        assert_eq!(s.append("status", record("A"))?, offset);
+        let mut conflict = record("A");
+        conflict["meta"] = json!(2);
+        assert!(s.append("status", conflict).is_err());
+        assert!(matches!(
+            notices.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+        let retained = s.append("status", record("B"))?;
+        s.expire_before("status", retained)
+    })
+    .await?;
+    let gap = reader.next().await.unwrap();
+    assert_eq!(gap.kind, "gap");
+    assert_eq!(
+        serde_json::from_str::<Value>(gap.data.get())?["earliest_event_id"],
+        "B"
+    );
+    assert!(reader.next().await.is_none());
+    Ok(())
+}
+
+#[test]
+fn acknowledged_single_journal_offsets_survive_loss_of_the_index_wal_suffix() -> Result<()> {
+    let dir = tempdir()?;
+    let crash = tempdir()?;
+    let mut store = Store::open(dir.path())?;
+    let seed = store.append("status", record("seed"))?;
+    store.commit("status", "audit", seed, None)?;
+    store.db.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")?;
+    // Preserve the last durable SQLite prefix. Supply none of the later WAL
+    // transactions on restart, even if the OS happened to write some of them.
+    std::fs::copy(
+        dir.path().join("index.sqlite"),
+        crash.path().join("index.sqlite"),
+    )?;
+    let mut offsets = Vec::new();
+    for i in 0..18 {
+        let topic = if i % 2 == 0 { "status" } else { "other" };
+        let mut event = record(&i.to_string());
+        event["payload"] = json!("x".repeat(512 * 1024));
+        offsets.push((topic, store.append(topic, event)?));
+    }
+    for entry in std::fs::read_dir(dir.path())? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|ext| ext == "seg") {
+            std::fs::copy(&path, crash.path().join(path.file_name().unwrap()))?;
+        }
+    }
+    assert!(crash.path().join("00000000000000000001.seg").exists());
+    let mut recovered = Store::open(crash.path())?;
+    assert_eq!(recovered.recovered_frames, offsets.len());
+    assert_eq!(
+        recovered
+            .group_next("status", "audit", None)?
+            .unwrap()
+            .offset,
+        offsets[0].1
+    );
+    for (i, (topic, offset)) in offsets.into_iter().enumerate() {
+        let event = recovered.read(offset)?.event;
+        assert_eq!(event["event_id"], i.to_string());
+        assert_eq!(event["payload"].as_str().unwrap().len(), 512 * 1024);
+        assert_eq!(recovered.append(topic, event)?, offset);
+    }
+    Ok(())
+}
+
 #[test]
 fn truncates_incomplete_tail_and_rejects_bad_checksum() -> Result<()> {
     let dir = tempdir()?;

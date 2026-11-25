@@ -186,7 +186,7 @@ The generator reads the broker's Protobuf schema. The build writes the source di
 Set `project.version` in `python/pyproject.toml` to the next three-part [semantic version](https://semver.org/), regenerate `python/uv.lock` with `uv lock --project python`, and merge the version change. On an up-to-date `main`, create and push an annotated `vMAJOR.MINOR.PATCH` tag matching that version.
 
 ```sh
-sdk_version=0.0.2
+sdk_version=0.0.5
 git tag -a "v${sdk_version}" -m "Spooltail v${sdk_version}"
 git push origin "refs/tags/v${sdk_version}"
 ```

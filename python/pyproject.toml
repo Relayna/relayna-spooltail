@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "relayna-spooltail"
-version = "0.0.1"
+version = "0.0.5"
 description = "Async Python client for the Relayna Spooltail broker"
 readme = "README.md"
 requires-python = ">=3.11"

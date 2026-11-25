@@ -4,6 +4,7 @@ mod bench_lock;
 mod bench_tls;
 mod grpc;
 mod journal;
+mod live;
 mod packing;
 mod partition_index;
 mod retention;
@@ -26,25 +27,23 @@ use axum::{
     },
     routing::{get, post, put},
 };
-use serde::Deserialize;
+use live::Delivery;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap,
     convert::Infallible,
     path::Path as DiskPath,
     pin::Pin,
-    sync::{Arc, Mutex, Weak},
+    sync::{Arc, Mutex},
 };
-use store::{Frame, Position, Prepared, Problem, Store, identifier, terminal_status};
+use store::{Frame, Position, Prepared, Problem, Store, identifier};
 use subscriptions::WorkLease;
-use tokio::sync::watch;
+use tokio::sync::broadcast::error::RecvError;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 
-type Notices = HashMap<(String, String), Weak<watch::Sender<()>>>;
 #[derive(Clone)]
 struct Broker {
     store: Arc<Mutex<Store>>,
-    watchers: Arc<Mutex<Notices>>,
     history_reader: Arc<tokio::sync::Semaphore>,
 }
 
@@ -52,7 +51,6 @@ impl Broker {
     fn new(store: Store) -> Self {
         Self {
             store: Arc::new(Mutex::new(store)),
-            watchers: Default::default(),
             history_reader: Arc::new(tokio::sync::Semaphore::new(1)),
         }
     }
@@ -97,29 +95,6 @@ impl Broker {
             with_idle_task(&store, &task, |s| s.move_task(&task, from, to))
         })
         .await?
-    }
-    fn subscribe(&self, topic: &str, task: &str) -> Arc<watch::Sender<()>> {
-        let mut map = self.watchers.lock().unwrap();
-        let key = (topic.to_owned(), task.to_owned());
-        if let Some(s) = map.get(&key).and_then(Weak::upgrade) {
-            return s;
-        }
-        // Prune dead subscriptions, including tasks that have stopped publishing.
-        map.retain(|_, s| s.strong_count() > 0);
-        let s = Arc::new(watch::channel(()).0);
-        map.insert(key, Arc::downgrade(&s));
-        s
-    }
-    fn notify(&self, topic: String, task: String) {
-        if let Some(s) = self
-            .watchers
-            .lock()
-            .unwrap()
-            .get(&(topic, task))
-            .and_then(Weak::upgrade)
-        {
-            s.send_replace(());
-        }
     }
 }
 
@@ -226,7 +201,7 @@ async fn publish(
         identifier(service)?;
     }
     tokio::task::spawn_blocking(move || {
-        let mut frame = Frame::new(topic.clone(), event, lease)?;
+        let mut frame = Frame::new(topic, event, lease)?;
         let task = frame.key()?.0.to_owned();
         let position = loop {
             let ticket = with_store(&b.store, |store| {
@@ -283,8 +258,6 @@ async fn publish(
                 }
             }
         };
-        // The request can disconnect while blocking I/O completes. Wake readers on commit anyway.
-        b.notify(topic, task);
         Ok(position)
     })
     .await?
@@ -334,50 +307,57 @@ async fn history(
     )))
 }
 
-struct Delivery {
-    kind: &'static str,
-    data: Value,
-    id: Option<String>,
+fn failure(error: anyhow::Error) -> Arc<Delivery> {
+    let (_, kind, data) = error_body(&error);
+    Delivery::new(kind, &data)
 }
-impl Delivery {
-    fn failure(error: anyhow::Error) -> Self {
-        let (_, kind, data) = error_body(&error);
-        Self {
-            kind,
-            data,
-            id: None,
-        }
-    }
-}
-type Feed = Pin<Box<dyn Stream<Item = Delivery> + Send>>;
+
+type Feed = Pin<Box<dyn Stream<Item = Arc<Delivery>> + Send>>;
 fn feed(b: Broker, topic: String, task: String, after: Option<String>) -> Feed {
     Box::pin(async_stream::stream! {
-        let sender = b.subscribe(&topic, &task);
-        let mut wake = sender.subscribe();
         let scope = (topic.clone(), task.clone());
-        let start = b.run(move |s| s.resolve(&scope.0, &scope.1, after.as_deref())).await;
-        let mut position = match start {
-            Ok(offset) => offset,
-            Err(error) => { yield Delivery::failure(error); return; }
+        let start = b.run(move |s| {
+            let position = s.resolve(&scope.0, &scope.1, after.as_deref())?;
+            let replay = s.has_task_records_after(&scope.0, &scope.1, position)?;
+            Ok((position, replay, s.live.subscribe(&scope.0, &scope.1)))
+        }).await;
+        let (mut position, mut replay, (channel, mut receiver)) = match start {
+            Ok(start) => start,
+            Err(error) => { yield failure(error); return; }
         };
-        yield Delivery { kind: "ready", data: json!({}), id: None };
+        yield Delivery::new("ready", &json!({}));
         loop {
-            let scope = (topic.clone(), task.clone());
-            let result = b.history_page(move |s| s.page(&scope.0, &scope.1, position)).await;
-            let page = match result {
-                Ok(page) => page,
-                Err(error) => { yield Delivery::failure(error); return; }
-            };
-            if page.is_empty() {
-                if wake.changed().await.is_err() { return; }
-                continue;
+            if replay {
+                let scope = (topic.clone(), task.clone());
+                let page = match b.history_page(move |s| s.page(&scope.0, &scope.1, position)).await {
+                    Ok(page) => page,
+                    Err(error) => { yield failure(error); return; }
+                };
+                // A short page covers all commits through the query snapshot.
+                replay = page.len() == store::PAGE_SIZE as usize;
+                for record in page {
+                    position = record.offset;
+                    let delivery = Delivery::new("status", &record.event);
+                    let terminal = delivery.terminal;
+                    yield delivery;
+                    if terminal { return; }
+                }
+                if replay { continue; }
             }
-            for record in page {
-                position = record.offset;
-                let terminal = terminal_status(&record.event);
-                let id = record.event["event_id"].as_str().map(str::to_owned);
-                yield Delivery { kind: "status", data: record.event, id };
-                if terminal { return; }
+            match receiver.recv().await {
+                Ok((offset, _)) if offset <= position => continue,
+                Ok((offset, delivery)) if channel.can_deliver_after(position) => {
+                    position = offset;
+                    let terminal = delivery.terminal;
+                    yield delivery;
+                    if terminal { return; }
+                }
+                Ok(_) | Err(RecvError::Lagged(_)) => {
+                    // Register for new commits before reading the missing interval.
+                    receiver = receiver.resubscribe();
+                    replay = true;
+                }
+                Err(RecvError::Closed) => return,
             }
         }
     })
@@ -398,8 +378,8 @@ async fn sse(
         None => q.after,
     };
     let events = feed(b, topic, task, after).map(|d| {
-        let mut event = Event::default().event(d.kind).data(d.data.to_string());
-        if let Some(id) = d.id {
+        let mut event = Event::default().event(d.kind).data(d.data.get());
+        if let Some(id) = &d.id {
             event = event.id(id)
         }
         Ok::<_, Infallible>(event)
@@ -445,6 +425,15 @@ fn change_subscription(
     Ok(())
 }
 
+#[derive(Serialize)]
+struct WebSocketDelivery<'a> {
+    #[serde(rename = "type")]
+    kind: &'a str,
+    topic: &'a str,
+    task_id: &'a str,
+    data: &'a serde_json::value::RawValue,
+}
+
 async fn session(b: Broker, mut socket: WebSocket) {
     let mut feeds = StreamMap::new();
     loop {
@@ -452,22 +441,20 @@ async fn session(b: Broker, mut socket: WebSocket) {
             message = socket.recv() => match message {
                 Some(Ok(Message::Text(text))) => match change_subscription(&b, &mut feeds, &text) {
                     Ok(()) => continue,
-                    Err(error) => json!({"type":"error","error":error.to_string()}),
+                    Err(error) => json!({"type":"error","error":error.to_string()}).to_string(),
                 },
                 Some(Ok(Message::Ping(_) | Message::Pong(_))) => continue,
-                Some(Ok(Message::Binary(_))) => json!({"type":"error","error":"expected JSON text"}),
+                Some(Ok(Message::Binary(_))) => json!({"type":"error","error":"expected JSON text"}).to_string(),
                 _ => break,
             },
             item = feeds.next(), if !feeds.is_empty() => {
                 let Some(((topic,task), delivery)) = item else { continue; };
-                json!({"type":delivery.kind, "topic":topic, "task_id":task, "data":delivery.data})
+                serde_json::to_string(&WebSocketDelivery {
+                    kind: delivery.kind, topic: &topic, task_id: &task, data: &delivery.data,
+                }).expect("delivery contains valid JSON")
             },
         };
-        if socket
-            .send(Message::Text(reply.to_string().into()))
-            .await
-            .is_err()
-        {
+        if socket.send(Message::Text(reply.into())).await.is_err() {
             break;
         }
     }
