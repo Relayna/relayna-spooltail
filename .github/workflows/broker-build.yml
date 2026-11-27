@@ -1,0 +1,72 @@
+name: Build Spooltail broker
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/broker-build.yml'
+      - 'Dockerfile.dockerignore'
+      - 'Dockerfile'
+      - 'Cargo.*'
+      - 'build.rs'
+      - 'src/**'
+      - 'proto/**'
+      - 'deploy/helm/spooltail/**'
+  push:
+    tags: ['broker-v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.2
+
+      - name: Verify broker and chart metadata
+        id: version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "broker-v$version" ]]; then
+            echo "Expected broker-v$version, got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          chart_version=$(helm show chart deploy/helm/spooltail | awk '/^appVersion:/ {print $2}')
+          test "$version" = "$chart_version"
+          echo "number=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build and smoke-test the image
+        env:
+          BROKER_VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          image="relayna-spooltail:$BROKER_VERSION"
+          docker build --tag "$image" .
+          test "$(docker run --rm "$image" --version)" = "spooltail $BROKER_VERSION"
+          container=$(docker run -d -v /data -p 127.0.0.1::7474 "$image")
+          trap 'docker rm -fv "$container"' EXIT
+          address=$(docker port "$container" 7474/tcp)
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 "http://$address/stats" > /dev/null
+
+      - name: Check and package deployment artifacts
+        env:
+          BROKER_VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          mkdir dist
+          helm lint --strict deploy/helm/spooltail
+          helm template spooltail deploy/helm/spooltail > /dev/null
+          helm package deploy/helm/spooltail --destination dist
+          docker save "relayna-spooltail:$BROKER_VERSION" | gzip > "dist/spooltail-broker-$BROKER_VERSION-linux-amd64.tar.gz"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: spooltail-broker-${{ steps.version.outputs.number }}
+          path: dist/
+          if-no-files-found: error

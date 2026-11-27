@@ -319,13 +319,18 @@ fn feed(b: Broker, topic: String, task: String, after: Option<String>) -> Feed {
         let start = b.run(move |s| {
             let position = s.resolve(&scope.0, &scope.1, after.as_deref())?;
             let replay = s.has_task_records_after(&scope.0, &scope.1, position)?;
-            Ok((position, replay, s.live.subscribe(&scope.0, &scope.1)))
+            // Atomic completion ends a worker's task. A status sent by a
+            // standalone publisher can still be followed by another event.
+            let finished = after.is_some() && !replay && s.is_completion(position)?;
+            let live = (!finished).then(|| s.live.subscribe(&scope.0, &scope.1));
+            Ok((position, replay, live))
         }).await;
-        let (mut position, mut replay, (channel, mut receiver)) = match start {
+        let (mut position, mut replay, live) = match start {
             Ok(start) => start,
             Err(error) => { yield failure(error); return; }
         };
         yield Delivery::new("ready", &json!({}));
+        let Some((channel, mut receiver)) = live else { return; };
         loop {
             if replay {
                 let scope = (topic.clone(), task.clone());
@@ -621,8 +626,13 @@ fn read_service_rules(store: &mut Store) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let dir = std::env::var("SPOOLTAIL_DATA").unwrap_or_else(|_| "data".into());
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["--version"] {
+        println!("spooltail {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    let dir = std::env::var("SPOOLTAIL_DATA").unwrap_or_else(|_| "data".into());
     let mode = std::env::var("SPOOLTAIL_INDEX_MODE").ok();
     let mut store = Store::open_mode(DiskPath::new(&dir), mode.as_deref())?;
     match args.as_slice() {
@@ -630,7 +640,7 @@ async fn main() -> Result<()> {
             return store.expire_before(topic, first.parse()?);
         }
         [] => {}
-        _ => anyhow::bail!("usage: spooltail [expire-before TOPIC FIRST_OFFSET]"),
+        _ => anyhow::bail!("usage: spooltail [--version | expire-before TOPIC FIRST_OFFSET]"),
     }
     read_service_rules(&mut store)?;
     store.dynamic_placement = match std::env::var("SPOOLTAIL_DYNAMIC_PLACEMENT") {
