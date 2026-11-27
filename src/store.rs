@@ -67,14 +67,19 @@ pub(crate) struct Frame {
 
 pub fn terminal_status(event: &Value) -> bool {
     event["status"].as_str().is_some_and(|status| {
-        status.eq_ignore_ascii_case("completed") || status.eq_ignore_ascii_case("failed")
+        status.eq_ignore_ascii_case("completed")
+            || status.eq_ignore_ascii_case("failed")
+            || status.eq_ignore_ascii_case("cancelled")
     })
 }
 
 impl Frame {
     pub fn new(topic: String, event: Value, completion: Option<WorkLease>) -> Result<Self> {
         if completion.is_some() && !terminal_status(&event) {
-            return Err(Problem::Invalid("expected a completed or failed status".into()).into());
+            return Err(Problem::Invalid(
+                "expected a completed, failed, or cancelled status".into(),
+            )
+            .into());
         }
         let frame = Self {
             topic,

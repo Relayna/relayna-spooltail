@@ -311,14 +311,14 @@ def crash_after_write(broker):
     assert [r["offset"] for r in history] == [off]
 
 
-def atomic_completion(broker):
-    topic = "completion.tasks"
+def atomic_completion(broker, terminal):
+    topic = f"completion.{terminal}.tasks"
     work = f"/topics/{topic}/work/workers"
-    task = "atomic-live"
+    task = f"atomic-live-{terminal}"
     offset = broker.publish(task, "queued", topic)
     claim = broker.request(work + "/claim", {"lease_ms": 30_000})
     assert claim["record"]["offset"] == offset
-    event = {"task_id": task, "event_id": "finished", "status": "completed"}
+    event = {"task_id": task, "event_id": "finished", "status": terminal}
     body = {
         "offset": offset,
         "generation": claim["generation"],
@@ -335,7 +335,7 @@ def atomic_completion(broker):
     assert broker.request(f"/topics/status/tasks/{task}/history") == []
     # Even identical public content cannot turn a plain publish into a completion receipt.
     collision = event | {"event_id": "published"}
-    broker.publish(task, "published", status="completed")
+    broker.publish(task, "published", status=terminal)
     expect_http(409, lambda: complete(event=collision))
     with broker.ws() as ws, broker.sse(task, "published") as sse:
         subscribe(ws, task, "published")
@@ -347,6 +347,9 @@ def atomic_completion(broker):
         assert sse_event(sse) == ("status", "finished", event)
         assert not sse.readline()
         assert ws_event(ws)["data"] == event
+    with broker.sse(task, "finished") as sse:
+        assert sse_event(sse) == ("ready", None, {})
+        assert not sse.readline()
     assert broker.request(work + "/claim", {"lease_ms": 30_000}) is None
     assert broker.request(f"/topics/status/tasks/{task}/history?after=published") == [
         {"offset": receipt["offset"], "event": event}
@@ -664,7 +667,8 @@ if __name__ == "__main__":
             floor, latency = cross_protocol(broker, prefix, offline)
             subscriptions(broker)
             crash_after_write(broker)
-            atomic_completion(broker)
+            for terminal in ("completed", "cancelled"):
+                atomic_completion(broker, terminal)
             crash_during_completion(broker)
             expired(broker, floor)
             partition_expansion(broker)
@@ -673,7 +677,7 @@ if __name__ == "__main__":
             print(
                 f"PASS: {args.events:,} fixture events; sample WebSocket resume {latency:.2f} ms; "
                 "both transport directions, independent groups, lease fencing, write/ack crash, "
-                "atomic completion, retention gap, and partition expansion"
+                "atomic completion and cancellation, retention gap, and partition expansion"
             )
         finally:
             broker.kill()

@@ -199,6 +199,52 @@ async def exercise(directory):
                 done,
             ]
 
+    cancel_topic = "cancel.work"
+    cancel_task = "cancel-task"
+    cancelled = {
+        "task_id": cancel_task,
+        "attempt_id": "worker-attempt",
+        "event_id": "cancelled",
+        "status": "cancelled",
+    }
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(f"localhost:{grpc_port}", root_certificates=tls_roots) as client,
+    ):
+        work = {"task_id": cancel_task, "event_id": "queued"}
+        await client.publish(cancel_topic, work)
+        lease_to_cancel = await client.claim(cancel_topic, "workers")
+        assert lease_to_cancel is not None and lease_to_cancel.record.event == work
+        async with aclosing(client.subscribe("cancel.status", cancel_task, timeout=5)) as feed:
+            assert (await anext(feed)).kind == "ready"
+            cancel_offset = await client.complete(lease_to_cancel, "cancel.status", cancelled)
+            delivery = await anext(feed)
+            assert (delivery.kind, delivery.event_id, delivery.data) == (
+                "status",
+                "cancelled",
+                cancelled,
+            )
+            assert await anext(feed, None) is None
+
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(f"localhost:{grpc_port}", root_certificates=tls_roots) as client,
+    ):
+        latest_cancelled = await client.latest("cancel.status", cancel_task)
+        assert latest_cancelled is not None
+        assert (latest_cancelled.offset, latest_cancelled.event) == (cancel_offset, cancelled)
+        assert await client.complete(lease_to_cancel, "cancel.status", cancelled) == cancel_offset
+        await expect_error(
+            ConflictError,
+            client.complete(lease_to_cancel, "cancel.status", {**cancelled, "status": "completed"}),
+        )
+        assert await client.claim(cancel_topic, "workers") is None
+        async with aclosing(
+            client.subscribe("cancel.status", cancel_task, after="cancelled", timeout=5)
+        ) as feed:
+            assert (await anext(feed)).kind == "ready"
+            assert await anext(feed, None) is None
+
     plaintext = {
         key: value
         for key, value in config.items()
@@ -590,6 +636,6 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="spooltail-archive-sdk-") as temp:
         asyncio.run(asyncio.wait_for(archive_timeline(Path(temp)), timeout=30))
     print(
-        "PASS: Python SDK publish, lease, completion, replay gaps, SSE resume, "
+        "PASS: Python SDK publish, lease, completion, cancellation, replay gaps, SSE resume, "
         "partition moves, service placement, audit timeline recovery, and archive reads"
     )

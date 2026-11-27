@@ -41,6 +41,25 @@ For the same replay over WebSocket, connect to `ws://127.0.0.1:7474/ws` and send
 
 Both transports send `ready` and then the original `E42` payload. A WebSocket wraps it as `{"type":"status","topic":"status","task_id":"T7","data":{...}}`. A terminal event ends that task’s subscription. Other subscriptions on the socket continue. Resuming from the latest retained event written by atomic task completion returns `ready` and ends the subscription without repeating the result. Clients can read latest status to recover the terminal result. A browser SSE client should close its EventSource after a terminal event or an explicit gap.
 
+### Run the broker in Docker
+
+Build the broker image from this checkout and use a named volume for its journal and SQLite index.
+
+```sh
+docker build -t relayna-spooltail:0.0.6 .
+docker run --rm --name spooltail \
+  --mount type=volume,source=spooltail-data,target=/data \
+  -p 127.0.0.1:7474:7474 -p 127.0.0.1:7443:7443 \
+  -e SPOOLTAIL_GRPC_LISTEN=0.0.0.0:7443 -e SPOOLTAIL_GRPC_TLS=off \
+  relayna-spooltail:0.0.6
+```
+
+The image runs as UID/GID 10001. If you bind-mount a directory at `/data`, give that user write access. Use `docker run --rm relayna-spooltail:0.0.6 --version` to check the broker version.
+
+The [Helm chart](deploy/helm/spooltail) uses one broker, one PVC, and an internal service with plaintext gRPC on port 7443 for a trusted local cluster. Make the tagged image available to the cluster, then run `helm upgrade --install spooltail deploy/helm/spooltail`. SDK services in the same namespace can connect to `spooltail:7443`. Configure `persistence.storageClassName` if the cluster has no default. Helm uninstall removes the chart-managed PVC.
+
+The [broker build workflow](.github/workflows/broker-build.yml) packages a Linux amd64 image archive and the Helm chart as Actions artifacts. Use `docker load -i` to load the downloaded image archive. Broker versions come from `Cargo.toml` and use `broker-v<version>` build tags. Python SDK releases retain their separate package versions and `v<version>` release tags. The broker workflow can also package an untagged commit through a manual run.
+
 ### Enable gRPC
 
 Set `SPOOLTAIL_GRPC_LISTEN` to enable the TCP listener. TLS is on by default and can be selected explicitly with `SPOOLTAIL_GRPC_TLS=on`. Set `SPOOLTAIL_GRPC_TLS_CERT` to a PEM certificate chain whose leaf covers the broker hostname and `SPOOLTAIL_GRPC_TLS_KEY` to its PEM private key. The browser HTTP listener uses `SPOOLTAIL_LISTEN` independently.
@@ -234,7 +253,7 @@ Suppose a worker claims task `T7` from `inference.tasks` in group `workers` and 
 }
 ```
 
-Keep the producer’s `task_id` for the life of the task. Choose the terminal `event_id` once and reuse the entire request if the response is lost. The claim’s `generation` identifies the worker’s lease attempt. An exact retry returns the same status offset, even after restart or lease expiry. A stale claim, a different task, or a conflicting use of the same event ID returns HTTP 409. The terminal status can be `completed` or `failed`. Either settles this work subscription and wakes readers of the status topic. External effects performed by a worker still need their own idempotency guarantees.
+Keep the producer’s `task_id` for the life of the task. Choose the terminal `event_id` once and reuse the entire request if the response is lost. The claim’s `generation` identifies the worker’s lease attempt. An exact retry returns the same status offset, even after restart or lease expiry. A stale claim, a different task, or a conflicting use of the same event ID returns HTTP 409. The terminal status can be `completed`, `failed`, or `cancelled`. Each settles the claim and wakes readers of the status topic. Broker 0.0.6 adds `cancelled` using the existing `Complete` RPC and JSON event format. The SDK service owns cancellation requests and stores any cancellation intent separately. The broker commits only the terminal event submitted by the active lease. External effects performed by a worker still need their own idempotency guarantees.
 
 ## Verify
 

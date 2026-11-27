@@ -1,0 +1,10 @@
+image:
+  repository: relayna-spooltail
+  # An empty tag selects the broker version from Chart.yaml.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+persistence:
+  size: 1Gi
+  # An empty value uses the cluster's default StorageClass.
+  storageClassName: ""
