@@ -66,7 +66,13 @@ async def exercise(directory):
         await client.ping()
         assert await client.latest("status", task_id) is None
         assert await client.claim("work", "workers") is None
-        work_offset = await client.publish("work", queued)
+        async with SpooltailClient(
+            f"localhost:{grpc_port}", root_certificates=tls_roots
+        ) as retrier:
+            work_offset, retry_offset = await asyncio.gather(
+                client.publish("work", queued), retrier.publish("work", queued)
+            )
+        assert retry_offset == work_offset
         assert await client.publish("work", queued) == work_offset
         await expect_error(
             ConflictError, client.publish("work", {**queued, "changed": True})
@@ -77,12 +83,18 @@ async def exercise(directory):
         assert original.record.event == queued and original.lease_until_ms > 0
         await client.settle(original, SettlementAction.RENEW, delay_ms=30_000)
         await client.settle(original, SettlementAction.RETRY)
-        lease = await client.claim("work", "workers")
-        assert lease is not None and lease.generation > original.generation
+        abandoned = await client.claim("work", "workers", lease_ms=50)
+        assert abandoned is not None and abandoned.generation > original.generation
+        # No settlement arrives for this attempt. Another worker reclaims it.
+        async with asyncio.timeout(5):
+            while (lease := await client.claim("work", "workers")) is None:
+                await asyncio.sleep(0.02)
+        assert lease.record.offset == work_offset
+        assert lease.generation > abandoned.generation
         await expect_error(
             StaleLeaseError, client.settle(original, SettlementAction.ACK)
         )
-        await expect_error(StaleLeaseError, client.complete(original, "status", done))
+        await expect_error(StaleLeaseError, client.complete(abandoned, "status", done))
 
         progress_offset = await client.publish("status", running)
         async with http.stream("GET", f"/topics/status/tasks/{task_id}/events") as sse:
@@ -156,9 +168,21 @@ async def exercise(directory):
         async with aclosing(client.subscribe("", task_id)) as stream:
             await expect_error(SubscriptionError, anext(stream))
         async with aclosing(
-            client.subscribe("status", task_id, after="done")
+            client.subscribe("status", task_id, after="done", timeout=5)
         ) as stream:
             assert (await anext(stream)).kind == "ready"
+            assert await anext(stream, None) is None
+
+        async with http.stream(
+            "GET",
+            f"/topics/status/tasks/{task_id}/events",
+            headers={"Last-Event-ID": "done"},
+        ) as sse:
+            sse.raise_for_status()
+            assert [line async for line in sse.aiter_lines() if line] == [
+                "event: ready",
+                "data: {}",
+            ]
 
         async with http.stream(
             "GET",

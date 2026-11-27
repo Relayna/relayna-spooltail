@@ -39,7 +39,7 @@ For the same replay over WebSocket, connect to `ws://127.0.0.1:7474/ws` and send
 {"op":"subscribe","topic":"status","task_id":"T7","after":"E41"}
 ```
 
-Both transports send `ready` and then the original `E42` payload. A WebSocket wraps it as `{"type":"status","topic":"status","task_id":"T7","data":{...}}`. A terminal event ends that task’s subscription. Other subscriptions on the socket continue. A browser SSE client should close its EventSource after a terminal event or an explicit gap.
+Both transports send `ready` and then the original `E42` payload. A WebSocket wraps it as `{"type":"status","topic":"status","task_id":"T7","data":{...}}`. A terminal event ends that task’s subscription. Other subscriptions on the socket continue. Resuming from the latest retained event written by atomic task completion returns `ready` and ends the subscription without repeating the result. Clients can read latest status to recover the terminal result. A browser SSE client should close its EventSource after a terminal event or an explicit gap.
 
 ### Enable gRPC
 
@@ -79,6 +79,12 @@ History and subscriptions take the same exclusive event ID cursor as HTTP/SSE. A
 ## Python client
 
 Install the `relayna-spooltail` wheel from [GitHub Releases](https://github.com/sarattha/relayna-spooltail/releases). The [Python SDK quickstart](python/README.md) shows how to install it into a Relayna environment and use the native client to publish and complete work. For saved-offset consumers, see [when to use the native decoder or a numeric projection](python/README.md#choosing-a-replay-reader).
+
+### Relayna task services
+
+Configure a work topic, a status topic, and one shared worker group per task service. The SDK task service owns the task envelope and exposes client-facing submit, status, history, and events routes. Gateway and Studio can use those routes while Spooltail durably stores the work and status events.
+
+The SDK publishes a single work event for each task ID. Concurrent publishes of identical content return the same offset. If a retry uses a new server-generated timestamp, the broker reports a content conflict. A service using a single work event per task can use `Latest` on the work topic to compare the original request with the stored event. When a worker loses its lease, another worker in the same group can reclaim the work. The broker fences stale completion and writes the active claim's terminal result atomically.
 
 ## Broker operations
 

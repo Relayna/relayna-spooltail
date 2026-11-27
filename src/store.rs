@@ -938,6 +938,10 @@ impl Store {
         Ok(frame.into_record(offset, partition))
     }
 
+    pub(crate) fn is_completion(&self, offset: i64) -> Result<bool> {
+        Ok(self.read_frame(offset)?.1.completion.is_some())
+    }
+
     pub(crate) fn read_indexed_page(&self, locations: Vec<RecordLocation>) -> Result<Vec<Record>> {
         let mut records = Vec::with_capacity(locations.len());
         self.visit_indexed_page(locations, |location, frame| {
