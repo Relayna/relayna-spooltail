@@ -923,6 +923,85 @@ def service_quotas_and_metrics(broker):
     assert broker.request(lag)["lag"] == 2
 
 
+def managed_stream_groups(broker):
+    broker.start()
+    topic = "managed.status"
+    group = f"/topics/{topic}/streams/audit"
+    members = group + "/members"
+
+    def join(member_id, lease_ms=30_000):
+        return broker.request(members, {"member_id": member_id, "lease_ms": lease_ms})
+
+    def heartbeat(member):
+        return broker.request(
+            f"{members}/{member['member_epoch']}/heartbeat", method="POST"
+        )
+
+    def leave(member):
+        return broker.request(f"{members}/{member['member_epoch']}", method="DELETE")
+
+    def scope(member, partition):
+        assignment = next(
+            a for a in member["assignments"] if a["partition"] == partition
+        )
+        return (
+            f"?partition={partition}&member_epoch={member['member_epoch']}"
+            f"&assignment_epoch={assignment['assignment_epoch']}"
+        )
+
+    initial = broker.publish("moved", "initial", topic)
+    assert broker.request(group + "/next")["offset"] == initial
+    broker.request(group + "/commit", {"offset": initial})
+    predecessor = broker.publish("moved", "source", topic)
+    broker.request("/partitions/2", method="PUT")
+    broker.request("/tasks/moved/move", {"from_partition": 0, "to_partition": 2})
+    moved = broker.publish("moved", "destination", topic)
+
+    first = join("first")
+    assert join("first") == first
+    source = scope(first, 0)
+    original_destination = scope(first, 2)
+    assert broker.request(group + "/next" + original_destination) is None
+    expect_http(409, lambda: broker.request(group + "/next?partition=0"))
+    expect_http(409, lambda: broker.request(group + "/commit", {"offset": initial}))
+    assert broker.request(group + "/lag?partition=0")["checkpoint"] == initial
+
+    second = join("second", lease_ms=1_000)
+    destination = scope(second, 2)
+    assert heartbeat(first)["assignments"] == [first["assignments"][0]]
+    expect_http(409, lambda: broker.request(group + "/next" + original_destination))
+    assert broker.request(group + "/next" + source)["offset"] == predecessor
+    broker.request(group + "/commit" + source, {"offset": predecessor})
+    assert broker.request(group + "/next" + destination)["offset"] == moved
+
+    time.sleep(max(0, second["lease_until_ms"] / 1000 - time.time()) + 0.02)
+    expect_http(409, lambda: broker.request(group + "/next" + destination))
+    expect_http(409, lambda: heartbeat(second))
+    reassigned = heartbeat(first)
+    current_destination = scope(reassigned, 2)
+    assert (
+        current_destination != original_destination and scope(reassigned, 0) == source
+    )
+    expect_http(409, lambda: broker.request(group + "/next" + original_destination))
+    assert broker.request(group + "/next" + current_destination)["offset"] == moved
+    broker.request(group + "/commit" + current_destination, {"offset": moved})
+    expect_http(
+        409, lambda: broker.request(group + "/commit" + destination, {"offset": moved})
+    )
+
+    broker.kill()
+    broker.start()
+    assert broker.request(group + "/next" + current_destination) is None
+    broker.request("/partitions/3", method="PUT")
+    expanded = heartbeat(first)
+    assert [a["partition"] for a in expanded["assignments"]] == [0, 2, 3]
+    assert scope(expanded, 2) == current_destination
+    assert leave(first) == leave(first) == {"ok": True}
+    expect_http(409, lambda: broker.request(group + "/next" + current_destination))
+    expect_http(409, lambda: broker.request(group + "/next?partition=2"))
+    assert join("first")["member_epoch"] != first["member_epoch"]
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, default=Path("target/release/spooltail"))
@@ -981,5 +1060,13 @@ if __name__ == "__main__":
         try:
             service_quotas_and_metrics(broker)
             print("PASS: service fairness, lease quotas, work metrics, and stream lag")
+        finally:
+            broker.kill()
+
+    with tempfile.TemporaryDirectory() as path:
+        broker = Broker(args.binary.resolve(), Path(path))
+        try:
+            managed_stream_groups(broker)
+            print("PASS: stream assignment, rebalance, fencing, and checkpoint handoff")
         finally:
             broker.kill()

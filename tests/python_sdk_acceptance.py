@@ -701,6 +701,47 @@ async def dead_letter_operations(directory):
         assert await client.claim(topic, group) is None
 
 
+async def managed_stream_membership(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    async with (
+        start(config) as (_, port),
+        SpooltailClient(f"localhost:{port}", root_certificates=cert.read_bytes()) as client,
+    ):
+        topic, group = "managed", "audit"
+        initial = await client.publish(topic, {"task_id": "T1", "event_id": "initial"})
+        legacy = await client.next_batch(topic, group, partition=0)
+        assert legacy.records[0].offset == initial
+        await client.commit_batch(legacy)
+        await client.ensure_partition(2)
+        await client.move_task("T1", from_partition=0, to_partition=2)
+        offset = await client.publish(topic, {"task_id": "T1", "event_id": "moved"})
+        first = await client.join_stream_group(topic, group, "first")
+        retained, moving = first.assignments
+        assert (retained.partition, moving.partition) == (0, 2)
+        await client.join_stream_group(topic, "isolated", "first")
+        await expect_error(ConflictError, client.next(topic, "isolated", assignment=retained))
+        assert await client.next(topic, group, assignment=retained) is None
+        stale_batch = await client.next_batch(topic, group, assignment=moving)
+        assert [r.offset for r in stale_batch.records] == [offset]
+        await expect_error(ConflictError, client.next_batch(topic, group, partition=2))
+        second = await client.join_stream_group(topic, group, "second")
+        (destination,) = second.assignments
+        assert destination.partition == 2
+        await expect_error(ConflictError, client.commit_batch(stale_batch))
+        await expect_error(ConflictError, client.commit(topic, group, offset, assignment=moving))
+        delivered = await client.next_batch(topic, group, assignment=destination)
+        assert delivered.records == stale_batch.records
+        await client.commit_batch(delivered)
+        await expect_error(ConflictError, client.commit_batch(stale_batch))
+        await client.leave_stream_group(topic, group, second.member_epoch)
+        returned = await client.heartbeat_stream_group(topic, group, first.member_epoch)
+        assert returned.assignments[0] == retained
+        assert returned.assignments[1] != moving
+        assert await client.next(topic, group, assignment=returned.assignments[1]) is None
+        await expect_error(ConflictError, client.commit_batch(stale_batch))
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--audit-crash"]:
         audit_crash_child(Path(sys.argv[2]), sys.argv[3])
@@ -717,6 +758,8 @@ if __name__ == "__main__":
         asyncio.run(asyncio.wait_for(archive_timeline(Path(temp)), timeout=30))
     with tempfile.TemporaryDirectory(prefix="spooltail-dlq-sdk-") as temp:
         asyncio.run(asyncio.wait_for(dead_letter_operations(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-managed-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(managed_stream_membership(Path(temp)), timeout=30))
     print(
         "PASS: Python SDK publish, lease, completion, cancellation, dead-letter redrive, replay gaps, SSE resume, "
         "partition moves, service placement, audit timeline recovery, and archive reads"

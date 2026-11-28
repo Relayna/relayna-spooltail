@@ -106,6 +106,21 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
                 response_deserializer=spooltail__pb2.NextResponse.FromString,
                 _registered_method=True)
+        self.JoinStreamGroup = channel.unary_unary(
+                '/spooltail.v1.Spooltail/JoinStreamGroup',
+                request_serializer=spooltail__pb2.StreamJoinRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamMembership.FromString,
+                _registered_method=True)
+        self.HeartbeatStreamGroup = channel.unary_unary(
+                '/spooltail.v1.Spooltail/HeartbeatStreamGroup',
+                request_serializer=spooltail__pb2.StreamMemberRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamMembership.FromString,
+                _registered_method=True)
+        self.LeaveStreamGroup = channel.unary_unary(
+                '/spooltail.v1.Spooltail/LeaveStreamGroup',
+                request_serializer=spooltail__pb2.StreamMemberRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Empty.FromString,
+                _registered_method=True)
         self.GetStreamLag = channel.unary_unary(
                 '/spooltail.v1.Spooltail/GetStreamLag',
                 request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
@@ -255,6 +270,24 @@ class SpooltailServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def Next(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def JoinStreamGroup(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HeartbeatStreamGroup(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LeaveStreamGroup(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -410,6 +443,21 @@ def add_SpooltailServicer_to_server(servicer, server):
                     servicer.Next,
                     request_deserializer=spooltail__pb2.StreamGroup.FromString,
                     response_serializer=spooltail__pb2.NextResponse.SerializeToString,
+            ),
+            'JoinStreamGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.JoinStreamGroup,
+                    request_deserializer=spooltail__pb2.StreamJoinRequest.FromString,
+                    response_serializer=spooltail__pb2.StreamMembership.SerializeToString,
+            ),
+            'HeartbeatStreamGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.HeartbeatStreamGroup,
+                    request_deserializer=spooltail__pb2.StreamMemberRequest.FromString,
+                    response_serializer=spooltail__pb2.StreamMembership.SerializeToString,
+            ),
+            'LeaveStreamGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.LeaveStreamGroup,
+                    request_deserializer=spooltail__pb2.StreamMemberRequest.FromString,
+                    response_serializer=spooltail__pb2.Empty.SerializeToString,
             ),
             'GetStreamLag': grpc.unary_unary_rpc_method_handler(
                     servicer.GetStreamLag,
@@ -855,6 +903,87 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/Next',
             spooltail__pb2.StreamGroup.SerializeToString,
             spooltail__pb2.NextResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def JoinStreamGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/JoinStreamGroup',
+            spooltail__pb2.StreamJoinRequest.SerializeToString,
+            spooltail__pb2.StreamMembership.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def HeartbeatStreamGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/HeartbeatStreamGroup',
+            spooltail__pb2.StreamMemberRequest.SerializeToString,
+            spooltail__pb2.StreamMembership.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LeaveStreamGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/LeaveStreamGroup',
+            spooltail__pb2.StreamMemberRequest.SerializeToString,
+            spooltail__pb2.Empty.FromString,
             options,
             channel_credentials,
             insecure,

@@ -45,12 +45,27 @@ class SubscriptionError(SpooltailError):
 
 
 @dataclass(frozen=True, slots=True)
+class StreamAssignment:
+    partition: int
+    member_epoch: int
+    assignment_epoch: int
+
+
+@dataclass(frozen=True, slots=True)
+class StreamMembership:
+    member_epoch: int
+    lease_until_ms: int
+    assignments: tuple[StreamAssignment, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class StreamBatch:
     topic: str
     group: str
     after: int
     records: tuple[Record, ...]
     partition: int | None = None
+    assignment: StreamAssignment | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +175,29 @@ def _task(topic: str, task_id: str, after: str | None = None) -> wire.Task:
     if after is not None:
         request.after = after
     return request
+
+
+def _membership(response: wire.StreamMembership) -> StreamMembership:
+    return StreamMembership(
+        response.member_epoch,
+        response.lease_until_ms,
+        tuple(
+            StreamAssignment(entry.partition, response.member_epoch, entry.assignment_epoch)
+            for entry in response.assignments
+        ),
+    )
+
+
+def _stream_scope(
+    partition: int | None, assignment: StreamAssignment | None
+) -> tuple[int | None, wire.StreamOwnership | None]:
+    if assignment is None:
+        return partition, None
+    if partition is not None and partition != assignment.partition:
+        raise ValueError("partition does not match the stream assignment")
+    return assignment.partition, wire.StreamOwnership(
+        member_epoch=assignment.member_epoch, assignment_epoch=assignment.assignment_epoch
+    )
 
 
 @contextmanager
@@ -478,40 +516,69 @@ class SpooltailClient:
             )
         return response.offset
 
+    async def join_stream_group(
+        self, topic: str, group: str, member_id: str, *, lease_ms: int = 30_000
+    ) -> StreamMembership:
+        """Join a managed group using a unique ID for this consumer instance."""
+        request = wire.StreamJoinRequest(topic=topic, group=group, member_id=member_id, lease_ms=lease_ms)
+        with _translate_conflict():
+            response = await self._stub.JoinStreamGroup(request, timeout=self._timeout)
+        return _membership(response)
+
+    async def heartbeat_stream_group(
+        self, topic: str, group: str, member_epoch: int
+    ) -> StreamMembership:
+        """Renew a live membership and fetch the complete current assignment."""
+        request = wire.StreamMemberRequest(topic=topic, group=group, member_epoch=member_epoch)
+        with _translate_conflict():
+            response = await self._stub.HeartbeatStreamGroup(request, timeout=self._timeout)
+        return _membership(response)
+
+    async def leave_stream_group(self, topic: str, group: str, member_epoch: int) -> None:
+        """Release this membership and rebalance its partitions."""
+        request = wire.StreamMemberRequest(topic=topic, group=group, member_epoch=member_epoch)
+        await self._stub.LeaveStreamGroup(request, timeout=self._timeout)
+
     async def next(
-        self, topic: str, group: str, *, partition: int | None = None
+        self, topic: str, group: str, *, partition: int | None = None,
+        assignment: StreamAssignment | None = None,
     ) -> Record | None:
         """Read the next record after a stream group's durable checkpoint."""
+        partition, ownership = _stream_scope(partition, assignment)
         with _translate_conflict():
             response = await self._stub.Next(
-                wire.StreamGroup(topic=topic, group=group, partition=partition),
+                wire.StreamGroup(topic=topic, group=group, partition=partition, ownership=ownership),
                 timeout=self._timeout,
             )
         return _record(response.record) if response.HasField("record") else None
 
     async def commit(
-        self, topic: str, group: str, offset: int, *, partition: int | None = None
+        self, topic: str, group: str, offset: int, *, partition: int | None = None,
+        assignment: StreamAssignment | None = None,
     ) -> None:
         """Advance a stream group's checkpoint through its next record."""
+        partition, ownership = _stream_scope(partition, assignment)
         request = wire.CommitRequest(
-            topic=topic, group=group, offset=offset, partition=partition
+            topic=topic, group=group, offset=offset, partition=partition, ownership=ownership
         )
         with _translate_conflict():
             await self._stub.Commit(request, timeout=self._timeout)
 
     async def next_batch(
-        self, topic: str, group: str, *, limit: int = 32, partition: int | None = None
+        self, topic: str, group: str, *, limit: int = 32, partition: int | None = None,
+        assignment: StreamAssignment | None = None,
     ) -> StreamBatch:
         """Fetch up to 64 records after a group's durable checkpoint."""
         if not 1 <= limit <= 64:
             raise ValueError("limit must be between 1 and 64")
+        partition, ownership = _stream_scope(partition, assignment)
         request = wire.StreamBatchRequest(
-            topic=topic, group=group, partition=partition, limit=limit
+            topic=topic, group=group, partition=partition, limit=limit, ownership=ownership
         )
         with _translate_conflict():
             response = await self._stub.NextBatch(request, timeout=self._timeout)
         return StreamBatch(
-            topic, group, response.after, tuple(map(_record, response.records)), partition
+            topic, group, response.after, tuple(map(_record, response.records)), partition, assignment
         )
 
     async def commit_batch(self, batch: StreamBatch, *, count: int | None = None) -> None:
@@ -520,10 +587,12 @@ class SpooltailClient:
             count = len(batch.records)
         if not 1 <= count <= len(batch.records):
             raise ValueError("count must select a nonempty prefix of the batch")
+        partition, ownership = _stream_scope(batch.partition, batch.assignment)
         request = wire.StreamBatchCommit(
             topic=batch.topic,
             group=batch.group,
-            partition=batch.partition,
+            partition=partition,
+            ownership=ownership,
             after=batch.after,
             through=batch.records[count - 1].offset,
             count=count,

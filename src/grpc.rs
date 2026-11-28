@@ -22,6 +22,7 @@ mod replay;
 mod wire {
     tonic::include_proto!("spooltail.v1");
 }
+use crate::stream_members::{StreamAccess, StreamMembership, StreamOwnership};
 use crate::subscriptions::{
     DEFAULT_STREAM_BATCH_RECORDS, MAX_STREAM_BATCH_BYTES, validate_batch_count,
 };
@@ -103,6 +104,31 @@ fn encode_batch(after: i64, records: Vec<store::Record>) -> Result<Response<Stre
 fn decode(bytes: &[u8]) -> Result<Value> {
     serde_json::from_slice(bytes)
         .map_err(|error| Problem::Invalid(format!("invalid event JSON: {error}")).into())
+}
+
+fn stream_access(partition: Option<u32>, ownership: Option<wire::StreamOwnership>) -> StreamAccess {
+    StreamAccess {
+        partition,
+        ownership: ownership.map(|owner| StreamOwnership {
+            member_epoch: owner.member_epoch,
+            assignment_epoch: owner.assignment_epoch,
+        }),
+    }
+}
+
+fn encode_membership(member: StreamMembership) -> wire::StreamMembership {
+    wire::StreamMembership {
+        member_epoch: member.member_epoch,
+        lease_until_ms: member.lease_until_ms,
+        assignments: member
+            .assignments
+            .into_iter()
+            .map(|assignment| wire::StreamAssignment {
+                partition: assignment.partition,
+                assignment_epoch: assignment.assignment_epoch,
+            })
+            .collect(),
+    }
 }
 
 #[tonic::async_trait]
@@ -348,11 +374,49 @@ impl Spooltail for Api {
         let q = request.into_inner();
         let record = self
             .0
-            .run(move |s| s.group_next(&q.topic, &q.group, q.partition))
+            .run(move |s| s.group_next(&q.topic, &q.group, stream_access(q.partition, q.ownership)))
             .await
             .map_err(status)?;
         let record = record.map(encode).transpose().map_err(status)?;
         Ok(Response::new(NextResponse { record }))
+    }
+
+    async fn join_stream_group(
+        &self,
+        request: Request<wire::StreamJoinRequest>,
+    ) -> Result<Response<wire::StreamMembership>, Status> {
+        let q = request.into_inner();
+        let member = self
+            .0
+            .run(move |s| s.join_stream_group(&q.topic, &q.group, &q.member_id, q.lease_ms))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(encode_membership(member)))
+    }
+
+    async fn heartbeat_stream_group(
+        &self,
+        request: Request<wire::StreamMemberRequest>,
+    ) -> Result<Response<wire::StreamMembership>, Status> {
+        let q = request.into_inner();
+        let member = self
+            .0
+            .run(move |s| s.heartbeat_stream_group(&q.topic, &q.group, q.member_epoch))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(encode_membership(member)))
+    }
+
+    async fn leave_stream_group(
+        &self,
+        request: Request<wire::StreamMemberRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let q = request.into_inner();
+        self.0
+            .run(move |s| s.leave_stream_group(&q.topic, &q.group, q.member_epoch))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Empty {}))
     }
 
     async fn get_stream_lag(
@@ -376,7 +440,14 @@ impl Spooltail for Api {
     async fn commit(&self, request: Request<CommitRequest>) -> Result<Response<Empty>, Status> {
         let q = request.into_inner();
         self.0
-            .run(move |s| s.commit(&q.topic, &q.group, q.offset, q.partition))
+            .run(move |s| {
+                s.commit(
+                    &q.topic,
+                    &q.group,
+                    q.offset,
+                    stream_access(q.partition, q.ownership),
+                )
+            })
             .await
             .map_err(status)?;
         Ok(Response::new(Empty {}))
@@ -393,7 +464,7 @@ impl Spooltail for Api {
                 s.next_batch(
                     &q.topic,
                     &q.group,
-                    q.partition,
+                    stream_access(q.partition, q.ownership),
                     q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
                 )
             })
@@ -409,7 +480,14 @@ impl Spooltail for Api {
         let q = request.into_inner();
         self.0
             .run(move |s| {
-                s.commit_batch(&q.topic, &q.group, q.partition, q.after, q.through, q.count)
+                s.commit_batch(
+                    &q.topic,
+                    &q.group,
+                    stream_access(q.partition, q.ownership),
+                    q.after,
+                    q.through,
+                    q.count,
+                )
             })
             .await
             .map_err(status)?;

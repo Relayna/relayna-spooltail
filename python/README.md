@@ -61,6 +61,12 @@ A browser that already received `T7-running` can resume the same task over SSE w
 
 For catch-up, use `next_batch(topic, group, limit=32)`. Process the returned `batch.records` in order, then call `await client.commit_batch(batch)`. Pass `count=n` to checkpoint only the first `n` records after their effects are durable. A page with no records needs no commit. The broker persists the cursor, so reconnecting with the same topic, group, and partition resumes from the last commit.
 
+## Use broker-managed stream assignments
+
+Join with `await client.join_stream_group(topic, group, member_id, lease_ms=30_000)`. Use a unique member ID for each consumer instance. Renew it with `await client.heartbeat_stream_group(topic, group, member.member_epoch)` and use the returned `assignments` as the current set of partitions to process. Heartbeat independently of record processing so a slow handler can keep its lease.
+
+Pass an assignment to `next_batch(topic, group, assignment=assignment)`. `commit_batch(batch)` keeps the assignment used to fetch that batch. For `next` and `commit`, pass the same assignment to both methods. A stale assignment raises `ConflictError`. Refresh membership and process only partitions in the current assignment. Leave with `await client.leave_stream_group(topic, group, member.member_epoch)` when shutting down.
+
 ## Redrive dead-lettered work
 
 List one page with `await client.list_dead_letters("work", "workers", limit=32)`. Inspect an entry's payload with `await client.get_dead_letter("work", "workers", entry.offset)`. To return the original work to the group, call `await client.redrive_dead_letter("work", "workers", entry.offset, entry.generation)`. Retry with the same generation if the response is lost. Use the last entry's offset as `after` for the next page.

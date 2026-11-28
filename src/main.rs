@@ -11,6 +11,7 @@ mod retention;
 mod retire;
 mod space;
 mod store;
+mod stream_members;
 mod subscriptions;
 mod work;
 
@@ -26,7 +27,7 @@ use axum::{
         IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
     },
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use live::Delivery;
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use store::{Frame, Position, Prepared, Problem, Store, identifier};
+use stream_members::{StreamAccess, StreamMembership, StreamOwnership};
 use subscriptions::{DEFAULT_STREAM_BATCH_RECORDS, WorkLease};
 use tokio::sync::broadcast::error::RecvError;
 use tokio_stream::{Stream, StreamExt, StreamMap};
@@ -705,6 +707,70 @@ struct PartitionQuery {
     partition: Option<u32>,
 }
 
+#[derive(Deserialize)]
+struct StreamAccessQuery {
+    partition: Option<u32>,
+    member_epoch: Option<i64>,
+    assignment_epoch: Option<i64>,
+}
+
+impl StreamAccessQuery {
+    fn access(self) -> Result<StreamAccess> {
+        let ownership = match (self.member_epoch, self.assignment_epoch) {
+            (Some(member_epoch), Some(assignment_epoch)) => Some(StreamOwnership {
+                member_epoch,
+                assignment_epoch,
+            }),
+            (None, None) => None,
+            _ => {
+                return Err(
+                    Problem::Invalid("both stream ownership epochs are required".into()).into(),
+                );
+            }
+        };
+        Ok(StreamAccess {
+            partition: self.partition,
+            ownership,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct JoinStreamGroup {
+    member_id: String,
+    lease_ms: i64,
+}
+
+async fn join_stream_group(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Json(q): Json<JoinStreamGroup>,
+) -> Result<Json<StreamMembership>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.join_stream_group(&topic, &group, &q.member_id, q.lease_ms))
+            .await?,
+    ))
+}
+
+async fn heartbeat_stream_group(
+    State(b): State<Broker>,
+    Path((topic, group, member)): Path<(String, String, i64)>,
+) -> Result<Json<StreamMembership>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.heartbeat_stream_group(&topic, &group, member))
+            .await?,
+    ))
+}
+
+async fn leave_stream_group(
+    State(b): State<Broker>,
+    Path((topic, group, member)): Path<(String, String, i64)>,
+) -> Reply {
+    b.run(move |s| s.leave_stream_group(&topic, &group, member))
+        .await?;
+    Ok(Json(json!({"ok":true})))
+}
+
 async fn stream_lag(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
@@ -719,20 +785,21 @@ async fn stream_lag(
 async fn next(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
-    Query(q): Query<PartitionQuery>,
+    Query(q): Query<StreamAccessQuery>,
 ) -> Reply {
+    let access = q.access()?;
     Ok(Json(json!(
-        b.run(move |s| s.group_next(&topic, &group, q.partition))
-            .await?
+        b.run(move |s| s.group_next(&topic, &group, access)).await?
     )))
 }
 async fn commit(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
-    Query(scope): Query<PartitionQuery>,
+    Query(scope): Query<StreamAccessQuery>,
     Json(q): Json<Commit>,
 ) -> Reply {
-    b.run(move |s| s.commit(&topic, &group, q.offset, scope.partition))
+    let access = scope.access()?;
+    b.run(move |s| s.commit(&topic, &group, q.offset, access))
         .await?;
     Ok(Json(json!({"ok":true})))
 }
@@ -891,6 +958,18 @@ async fn main() -> Result<()> {
         .route("/topics/{topic}/work/{group}/complete", post(complete))
         .route("/topics/{topic}/streams/{group}/next", get(next))
         .route("/topics/{topic}/streams/{group}/lag", get(stream_lag))
+        .route(
+            "/topics/{topic}/streams/{group}/members",
+            post(join_stream_group),
+        )
+        .route(
+            "/topics/{topic}/streams/{group}/members/{member}/heartbeat",
+            post(heartbeat_stream_group),
+        )
+        .route(
+            "/topics/{topic}/streams/{group}/members/{member}",
+            delete(leave_stream_group),
+        )
         .route("/topics/{topic}/streams/{group}/commit", post(commit))
         .route("/partitions", get(partitions))
         .route("/partitions/{id}", put(ensure_partition))

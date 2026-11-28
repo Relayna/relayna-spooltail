@@ -243,6 +243,25 @@ CREATE INDEX IF NOT EXISTS by_task ON records(topic,task,offset);
 CREATE INDEX IF NOT EXISTS by_topic ON records(topic,offset);
 CREATE TABLE IF NOT EXISTS floors(topic TEXT PRIMARY KEY, first_offset INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS cursors(topic TEXT, name TEXT, offset INTEGER NOT NULL, PRIMARY KEY(topic,name));
+CREATE TABLE IF NOT EXISTS managed_stream_groups (
+    topic TEXT NOT NULL, name TEXT NOT NULL,
+    PRIMARY KEY(topic,name)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS stream_epoch (
+    id INTEGER PRIMARY KEY CHECK(id=1), epoch INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO stream_epoch VALUES(1,0);
+CREATE TABLE IF NOT EXISTS stream_members (
+    topic TEXT NOT NULL, name TEXT NOT NULL, member_id TEXT NOT NULL,
+    member_epoch INTEGER NOT NULL, lease_ms INTEGER NOT NULL, lease_until_ms INTEGER NOT NULL,
+    PRIMARY KEY(topic,name,member_epoch), UNIQUE(topic,name,member_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS stream_assignments (
+    topic TEXT NOT NULL, name TEXT NOT NULL, partition INTEGER NOT NULL,
+    member_epoch INTEGER NOT NULL, assignment_epoch INTEGER NOT NULL,
+    PRIMARY KEY(topic,name,partition)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS stream_assignments_by_member ON stream_assignments(topic,name,member_epoch,partition);
 CREATE TABLE IF NOT EXISTS leases(topic TEXT, name TEXT, offset INTEGER, generation INTEGER NOT NULL,
     visible_at INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(topic,name,offset));
 CREATE INDEX IF NOT EXISTS dead_leases ON leases(topic,name,offset) WHERE state='dead';

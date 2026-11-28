@@ -1,6 +1,7 @@
 use crate::{
     journal::Address,
     store::{Problem, Record, RecordLocation, Store, identifier},
+    stream_members::StreamAccess,
     work::record_owner,
 };
 use anyhow::Result;
@@ -121,7 +122,7 @@ pub(crate) fn validate_batch_count(count: u32) -> Result<()> {
 }
 
 impl Store {
-    fn global_checkpoint(&self, topic: &str, group: &str) -> Result<Option<i64>> {
+    pub(crate) fn global_checkpoint(&self, topic: &str, group: &str) -> Result<Option<i64>> {
         Ok(self
             .db
             .query_row(
@@ -343,8 +344,11 @@ impl Store {
         &self,
         topic: &str,
         group: &str,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
     ) -> Result<Option<Record>> {
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let (Some(partition), Some(baseline)) = (partition, baseline) else {
             return self.global_next(topic, group);
@@ -365,8 +369,11 @@ impl Store {
         topic: &str,
         group: &str,
         offset: i64,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
     ) -> Result<()> {
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let (Some(partition), Some(baseline)) = (partition, baseline) else {
             return self.global_commit(topic, group, offset);
@@ -471,10 +478,13 @@ impl Store {
         &self,
         topic: &str,
         group: &str,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
         limit: u32,
     ) -> Result<(i64, Vec<Record>)> {
         validate_batch_count(limit)?;
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let scope = partition
             .zip(baseline)
@@ -524,7 +534,7 @@ impl Store {
         &mut self,
         topic: &str,
         group: &str,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
         after: i64,
         through: i64,
         count: u32,
@@ -536,6 +546,9 @@ impl Store {
             )
             .into());
         }
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let scope = partition
             .zip(baseline)

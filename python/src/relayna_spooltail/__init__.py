@@ -22,8 +22,10 @@ from .client import (
     SpooltailClient,
     SpooltailError,
     StaleLeaseError,
+    StreamAssignment,
     StreamBatch,
     StreamLag,
+    StreamMembership,
     SubscriptionError,
     WorkStats,
 )
@@ -51,8 +53,10 @@ __all__ = [
     "SpooltailClient",
     "SpooltailError",
     "StaleLeaseError",
+    "StreamAssignment",
     "StreamBatch",
     "StreamLag",
+    "StreamMembership",
     "SubscriptionError",
     "WorkStats",
 ]

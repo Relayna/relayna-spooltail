@@ -120,6 +120,9 @@ The SDK publishes a single work event for each task ID. Concurrent publishes of 
 | `POST /topics/{topic}/work/{group}/claim` | Send `{"lease_ms":30000}`. Returns `{record,generation,lease_until_ms}` or JSON `null`. |
 | `GET /topics/{topic}/work/{group}/stats` | Inspect queue depth, oldest ready age, expired leases, and retry rates. Optionally filter by `partition` and `owner_service`. |
 | `GET /topics/{topic}/streams/{group}/lag` | Count retained records behind a group checkpoint. Pass `partition` for a partition-scoped group. |
+| `POST /topics/{topic}/streams/{group}/members` | Join a managed stream group with `member_id` and `lease_ms`. Returns the member epoch, deadline, and assigned partitions. |
+| `POST /topics/{topic}/streams/{group}/members/{member_epoch}/heartbeat` | Renew membership and return the current partition assignments. |
+| `DELETE /topics/{topic}/streams/{group}/members/{member_epoch}` | Leave the group and redistribute the member's partitions. |
 | `POST /topics/{topic}/work/{group}/settle` | Send the claimed `offset`, `generation`, and an `action` of `ack`, `renew`, `retry`, or `dead-letter`. Set `delay_ms` for renewal or delayed retry. Stale settlements return HTTP 409. |
 | `GET /topics/{topic}/work/{group}/dead-letters` | List summaries for the group's dead-lettered work. Use optional `after` and `limit` query parameters. |
 | `GET /topics/{topic}/work/{group}/dead-letters/{offset}` | Read the original record and dead-letter generation. Returns HTTP 404 if the entry is absent. |
@@ -199,7 +202,7 @@ Creating the same partition ID again is safe. A move changes where future events
 | Read or commit stream progress | Add `?partition=1` to both the `next` and `commit` paths. The group keeps a separate checkpoint for each partition. |
 | Call from gRPC | Use `ListPartitions`, `EnsurePartition`, `TaskPartition`, and `MoveTask`. `Claim`, `Next`, `Commit`, and both batch replay operations accept an optional `partition`. |
 
-Unscoped stream groups continue to read in broker-wide offset order across all partitions. Stop the unscoped reader before switching its group to partition-scoped reads. The first scoped read uses the saved unscoped checkpoint as its starting point, then that group uses scoped operations. Assign one logical reader per partition in each group and poll all partitions. After a task move, a destination reader waits until its group commits the task's preceding record on the source partition.
+Unscoped stream groups continue to read in broker-wide offset order across all partitions. Stop the unscoped reader before switching its group to partition-scoped reads. The first scoped read uses the saved unscoped checkpoint as its starting point, then that group uses scoped operations. With manual assignment, assign one logical reader per partition and poll all partitions. Managed groups receive assignments from the broker. After a task move, a destination reader waits until its group commits the task's preceding record on the source partition.
 
 Each partition has its own journal writer. All writers share the broker process and SQLite index. Moving tasks redistributes future journal writes and partition-scoped claims. Historical reads still use the original journal. The offline `expire-before` command continues to set one logical floor per topic. Use the partition-aware broker binary for subsequent restarts of a partitioned volume.
 
@@ -250,6 +253,16 @@ Use the HTTP routes above or the gRPC `GetWorkStats` and `GetStreamLag` operatio
 `expired_leases` counts leases that have expired and can be reclaimed. `expired_lease_redeliveries_total` counts successful claims of expired leases since startup. `retries_total` counts accepted explicit retry settlements, and `retries_per_minute` counts them over the last 60 one-second buckets. Those counters reset on restart and are attributed to the service and work partition at the time of the operation.
 
 Stream lag counts retained, uncommitted records after the group's checkpoint, even when offsets are sparse. `retention_gap` indicates that retention removed unprocessed records. A lag query never creates or advances a checkpoint. Match the consumer's partition scope to inspect its lag.
+
+### Manage stream consumer groups
+
+Use `JoinStreamGroup` over gRPC or the HTTP members route to enable managed assignment for one topic and stream group. Use a unique `member_id` per running consumer instance and reuse it when retrying a join. A repeat join for a live member returns its membership. Heartbeats renew its lease and return the full current assignment. Send heartbeats regularly during processing, for example every third of the lease duration. An expired member must join again to obtain a new membership.
+
+Spooltail balances all registered journal partitions across live members. Joins, leaves, and heartbeats redistribute partitions after membership changes. A surviving member picks up an expired member's partitions on heartbeat. Newly registered partitions are assigned on the next join or heartbeat. Checkpoints remain attached to partitions and the broker preserves assignments that can stay in place. Memberships and their deadlines survive broker restart.
+
+For HTTP `next` and `commit`, pass `partition`, `member_epoch`, and `assignment_epoch` as query parameters. For gRPC `Next`, `Commit`, `NextBatch`, and `CommitBatch`, pass the partition and `ownership`. Keep the token from the original fetch when committing. Revoked, expired, or missing ownership is rejected with HTTP 409 or gRPC `FAILED_PRECONDITION`. Stop processing a partition when it leaves your assignment or its token is rejected. Delivery remains at least once, so downstream effects still need idempotency.
+
+Joining turns that group into a managed partitioned group and retains its saved progress. Existing partition checkpoints take precedence. An existing unscoped checkpoint becomes the starting point for every partition when switching from unscoped mode. Stop manual readers before the switch, and use a broker version that supports managed groups on that volume afterward.
 
 ### Use a SQLite index per partition
 
