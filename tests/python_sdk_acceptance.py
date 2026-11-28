@@ -200,6 +200,7 @@ async def exercise(directory):
             ]
 
     cancel_topic = "cancel.work"
+    cancel_control = "cancel.control"
     cancel_task = "cancel-task"
     cancelled = {
         "task_id": cancel_task,
@@ -215,6 +216,16 @@ async def exercise(directory):
         await client.publish(cancel_topic, work)
         lease_to_cancel = await client.claim(cancel_topic, "workers")
         assert lease_to_cancel is not None and lease_to_cancel.record.event == work
+        intent_offset = await client.request_cancellation(
+            cancel_topic,
+            cancel_task,
+            status_topic="cancel.status",
+            cancel_topic=cancel_control,
+        )
+        intent = await client.latest(cancel_control, cancel_task)
+        assert intent == Record(
+            intent_offset, {"task_id": cancel_task, "event_id": "cancel"}
+        )
         async with aclosing(client.subscribe("cancel.status", cancel_task, timeout=5)) as feed:
             assert (await anext(feed)).kind == "ready"
             cancel_offset = await client.complete(lease_to_cancel, "cancel.status", cancelled)
@@ -233,6 +244,24 @@ async def exercise(directory):
         latest_cancelled = await client.latest("cancel.status", cancel_task)
         assert latest_cancelled is not None
         assert (latest_cancelled.offset, latest_cancelled.event) == (cancel_offset, cancelled)
+        assert (
+            await client.request_cancellation(
+                cancel_topic,
+                cancel_task,
+                status_topic="cancel.status",
+                cancel_topic=cancel_control,
+            )
+            == intent_offset
+        )
+        await expect_error(
+            ConflictError,
+            client.request_cancellation(
+                cancel_topic,
+                cancel_task,
+                status_topic="cancel.status",
+                cancel_topic="other.control",
+            ),
+        )
         assert await client.complete(lease_to_cancel, "cancel.status", cancelled) == cancel_offset
         await expect_error(
             ConflictError,

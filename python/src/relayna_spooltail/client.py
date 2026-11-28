@@ -341,6 +341,22 @@ class SpooltailClient:
             response = await self._stub.Complete(request, timeout=self._timeout)
         return response.offset
 
+    async def request_cancellation(
+        self, task_topic: str, task_id: str, *, status_topic: str, cancel_topic: str
+    ) -> int:
+        """Record cooperative cancellation intent and return its durable offset."""
+        request = wire.CancellationRequest(
+            task_topic=task_topic,
+            task_id=task_id,
+            status_topic=status_topic,
+            cancel_topic=cancel_topic,
+        )
+        with _translate_conflict():
+            response = await self._stub.RequestCancellation(
+                request, timeout=self._timeout
+            )
+        return response.offset
+
     async def next(
         self, topic: str, group: str, *, partition: int | None = None
     ) -> Record | None:

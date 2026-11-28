@@ -47,7 +47,7 @@ class Broker:
             self.process.stdout.close()
             self.process = None
 
-    def request(self, route, body=None, *, method=None):
+    def request(self, route, body=None, *, method=None, expected_status=200):
         data = None if body is None else json.dumps(body).encode()
         req = Request(
             f"http://{self.address}{route}",
@@ -56,6 +56,7 @@ class Broker:
             headers={"Content-Type": "application/json"},
         )
         with urlopen(req, timeout=10) as res:
+            assert res.status == expected_status
             return json.load(res)
 
     def sse(self, task, after=None, *, topic="status"):
@@ -366,6 +367,76 @@ def atomic_completion(broker, terminal):
     assert broker.request(f"/topics/{topic}/streams/audit/next")["offset"] == offset
 
 
+def cancellation_requests(broker):
+    task_topic = "cancellation.tasks"
+    status_topic = "cancellation.status"
+    cancel_topic = "cancellation.control"
+    work = f"/topics/{task_topic}/work/workers"
+    topics = {"status_topic": status_topic, "cancel_topic": cancel_topic}
+
+    def cancel(task):
+        return broker.request(
+            f"/topics/{task_topic}/tasks/{task}/cancel", topics, expected_status=202
+        )
+
+    def complete(lease, task, status):
+        return broker.request(
+            work + "/complete",
+            {
+                "offset": lease["record"]["offset"],
+                "generation": lease["generation"],
+                "status_topic": status_topic,
+                "event": {"task_id": task, "event_id": "result", "status": status},
+            },
+        )
+
+    expect_http(404, lambda: cancel("unknown"))
+    expect_http(
+        400,
+        lambda: broker.request(
+            f"/topics/{task_topic}/tasks/unknown/cancel",
+            topics | {"cancel_topic": task_topic},
+        ),
+    )
+    task = "cancel-after-restart"
+    broker.publish(task, "queued", task_topic)
+    kill_after_journal_write(broker, lambda: cancel(task))
+    assert broker.start() >= 1
+    (intent,) = broker.request(f"/topics/{cancel_topic}/tasks/{task}/history")
+    receipt = cancel(task)
+    assert intent == receipt | {"event": {"task_id": task, "event_id": "cancel"}}
+    assert broker.request(f"/topics/{status_topic}/tasks/{task}/history") == []
+    lease = broker.request(work + "/claim", {"lease_ms": 30_000})
+    complete(lease, task, "cancelled")
+    assert cancel(task) == receipt
+    assert broker.request(work + "/claim", {"lease_ms": 30_000}) is None
+
+    task = "already-finished"
+    broker.publish(task, "queued", task_topic)
+    lease = broker.request(work + "/claim", {"lease_ms": 30_000})
+    complete(lease, task, "completed")
+    expect_http(409, lambda: cancel(task))
+    assert broker.request(f"/topics/{cancel_topic}/tasks/{task}/history") == []
+
+    task = "racing-completion"
+    broker.publish(task, "queued", task_topic)
+    lease = broker.request(work + "/claim", {"lease_ms": 30_000})
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        finish = pool.submit(complete, lease, task, "completed")
+        requests = [pool.submit(cancel, task) for _ in range(2)]
+        finished = finish.result()
+        outcomes = []
+        for request in requests:
+            try:
+                outcomes.append(request.result())
+            except HTTPError as error:
+                assert error.code == 409
+                outcomes.append(None)
+    assert outcomes[0] == outcomes[1]
+    if outcomes[0] is not None:
+        assert outcomes[0]["offset"] < finished["offset"]
+
+
 def crash_during_completion(broker):
     task = "atomic-crash"
     topic = "crash.tasks"
@@ -669,6 +740,7 @@ if __name__ == "__main__":
             crash_after_write(broker)
             for terminal in ("completed", "cancelled"):
                 atomic_completion(broker, terminal)
+            cancellation_requests(broker)
             crash_during_completion(broker)
             expired(broker, floor)
             partition_expansion(broker)
@@ -686,8 +758,9 @@ if __name__ == "__main__":
         broker = Broker(args.binary.resolve(), Path(path))
         try:
             background_index_recovery(broker)
+            cancellation_requests(broker)
             print(
-                "PASS: background index catch-up and recovery after acknowledged appends"
+                "PASS: background index catch-up and recovery for appends and cancellation"
             )
         finally:
             broker.kill()

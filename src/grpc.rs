@@ -1,5 +1,7 @@
 //! gRPC service over the same store and subscription machinery as the HTTP API.
-use crate::{Broker, Problem, WorkLease, feed, publish, store};
+use crate::{
+    Broker, CancellationTopics, Problem, WorkLease, feed, publish, request_cancellation, store,
+};
 use anyhow::{Context, Result};
 use prost::Message;
 use serde_json::Value;
@@ -25,10 +27,11 @@ use crate::subscriptions::{
 };
 use wire::spooltail_server::{Spooltail, SpooltailServer};
 use wire::{
-    AuditHistoryPage, AuditHistoryRequest, ClaimRequest, ClaimResponse, CommitRequest,
-    CompleteRequest, Delivery, Empty, MoveTaskRequest, NextResponse, Offset, Page, Partition,
-    Partitions, Publish, Record, SettleRequest, SettlementAction, StatsResponse, StreamBatch,
-    StreamBatchCommit, StreamBatchRequest, StreamGroup, Task, TaskId, TopicReplayRequest,
+    AuditHistoryPage, AuditHistoryRequest, CancellationRequest, ClaimRequest, ClaimResponse,
+    CommitRequest, CompleteRequest, Delivery, Empty, MoveTaskRequest, NextResponse, Offset, Page,
+    Partition, Partitions, Publish, Record, SettleRequest, SettlementAction, StatsResponse,
+    StreamBatch, StreamBatchCommit, StreamBatchRequest, StreamGroup, Task, TaskId,
+    TopicReplayRequest,
 };
 
 struct Api(Broker);
@@ -205,6 +208,24 @@ impl Spooltail for Api {
         };
         let event = decode(&terminal.event_json).map_err(status)?;
         let position = publish(self.0.clone(), terminal.topic, event, Some(lease), None)
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Offset {
+            offset: position.offset,
+            partition: position.partition,
+        }))
+    }
+
+    async fn request_cancellation(
+        &self,
+        request: Request<CancellationRequest>,
+    ) -> Result<Response<Offset>, Status> {
+        let q = request.into_inner();
+        let topics = CancellationTopics {
+            status_topic: q.status_topic,
+            cancel_topic: q.cancel_topic,
+        };
+        let position = request_cancellation(self.0.clone(), q.task_topic, q.task_id, topics)
             .await
             .map_err(status)?;
         Ok(Response::new(Offset {

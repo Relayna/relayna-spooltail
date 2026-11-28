@@ -200,12 +200,51 @@ async fn publish(
     if let Some(service) = owner_service.as_deref() {
         identifier(service)?;
     }
+    publish_frame(b, Frame::new(topic, event, lease)?, owner_service, None).await
+}
+
+struct CancellationTarget {
+    task_topic: String,
+    status_topic: String,
+}
+
+impl CancellationTarget {
+    fn check(&self, store: &Store, task: &str, intent: &Frame) -> Result<()> {
+        let floor = store.floor(&self.task_topic)?;
+        if !store.has_task_records_after(&self.task_topic, task, floor - 1)? {
+            return Err(Problem::Missing.into());
+        }
+        // A retry can recover its receipt even if the worker has since finished.
+        if store.existing_event(intent)?.is_some() {
+            return Ok(());
+        }
+        match store.latest(&self.status_topic, task) {
+            Ok(record) if store::terminal_status(&record.event) => {
+                Err(Problem::Conflict("task is already terminal".into()).into())
+            }
+            Ok(_) => Ok(()),
+            Err(error) if matches!(error.downcast_ref::<Problem>(), Some(Problem::Missing)) => {
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+async fn publish_frame(
+    b: Broker,
+    mut frame: Frame,
+    owner_service: Option<String>,
+    cancellation: Option<CancellationTarget>,
+) -> Result<Position> {
     tokio::task::spawn_blocking(move || {
-        let mut frame = Frame::new(topic, event, lease)?;
         let task = frame.key()?.0.to_owned();
         let position = loop {
             let ticket = with_store(&b.store, |store| {
-                if store.space.reserve > 0
+                if cancellation.is_some() {
+                    // A request for an unknown task must not pick its initial partition.
+                    store.task_partition(&task)?;
+                } else if store.space.reserve > 0
                     && frame.completion.is_none()
                     && store.existing_event(&frame)?.is_none()
                 {
@@ -224,6 +263,10 @@ async fn publish(
                 }
                 if ticket.grouped && store.is_appending(&task)? {
                     return Ok(None);
+                }
+                if let Some(target) = &cancellation {
+                    // Other writes for this task must wait for the intent to commit.
+                    target.check(store, &task, &frame)?;
                 }
                 store.prepare_append(&mut frame, partition).map(Some)
             })?;
@@ -492,6 +535,11 @@ struct Completion {
     event: Value,
 }
 #[derive(Deserialize)]
+struct CancellationTopics {
+    status_topic: String,
+    cancel_topic: String,
+}
+#[derive(Deserialize)]
 struct Commit {
     offset: i64,
 }
@@ -537,6 +585,41 @@ async fn complete(
     Ok(Json(json!(
         publish(b, q.status_topic, q.event, Some(lease), None).await?
     )))
+}
+
+async fn request_cancellation(
+    b: Broker,
+    task_topic: String,
+    task_id: String,
+    topics: CancellationTopics,
+) -> Result<Position> {
+    identifier(&task_topic)?;
+    identifier(&topics.status_topic)?;
+    if task_topic == topics.status_topic
+        || task_topic == topics.cancel_topic
+        || topics.status_topic == topics.cancel_topic
+    {
+        return Err(Problem::Invalid("cancellation requires three distinct topics".into()).into());
+    }
+    let intent = Frame::new(
+        topics.cancel_topic,
+        json!({"task_id": task_id, "event_id": "cancel"}),
+        None,
+    )?;
+    let target = CancellationTarget {
+        task_topic,
+        status_topic: topics.status_topic,
+    };
+    publish_frame(b, intent, None, Some(target)).await
+}
+
+async fn cancel_task(
+    State(b): State<Broker>,
+    Path((task_topic, task_id)): Parts,
+    Json(topics): Json<CancellationTopics>,
+) -> Result<(StatusCode, Json<Position>), ApiError> {
+    let receipt = request_cancellation(b, task_topic, task_id, topics).await?;
+    Ok((StatusCode::ACCEPTED, Json(receipt)))
 }
 
 #[derive(Deserialize)]
@@ -699,6 +782,7 @@ async fn main() -> Result<()> {
         .route("/topics/{topic}/tasks/{task}/latest", get(latest))
         .route("/topics/{topic}/tasks/{task}/history", get(history))
         .route("/topics/{topic}/tasks/{task}/events", get(sse))
+        .route("/topics/{topic}/tasks/{task}/cancel", post(cancel_task))
         .route("/topics/{topic}/work/{group}/claim", post(claim))
         .route("/topics/{topic}/work/{group}/settle", post(settle))
         .route("/topics/{topic}/work/{group}/complete", post(complete))

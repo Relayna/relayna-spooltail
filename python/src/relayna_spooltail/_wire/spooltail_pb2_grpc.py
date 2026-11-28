@@ -76,6 +76,11 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.CompleteRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.Offset.FromString,
                 _registered_method=True)
+        self.RequestCancellation = channel.unary_unary(
+                '/spooltail.v1.Spooltail/RequestCancellation',
+                request_serializer=spooltail__pb2.CancellationRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Offset.FromString,
+                _registered_method=True)
         self.Next = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Next',
                 request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
@@ -189,6 +194,12 @@ class SpooltailServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def Complete(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RequestCancellation(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -313,6 +324,11 @@ def add_SpooltailServicer_to_server(servicer, server):
             'Complete': grpc.unary_unary_rpc_method_handler(
                     servicer.Complete,
                     request_deserializer=spooltail__pb2.CompleteRequest.FromString,
+                    response_serializer=spooltail__pb2.Offset.SerializeToString,
+            ),
+            'RequestCancellation': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestCancellation,
+                    request_deserializer=spooltail__pb2.CancellationRequest.FromString,
                     response_serializer=spooltail__pb2.Offset.SerializeToString,
             ),
             'Next': grpc.unary_unary_rpc_method_handler(
@@ -596,6 +612,33 @@ class Spooltail(object):
             target,
             '/spooltail.v1.Spooltail/Complete',
             spooltail__pb2.CompleteRequest.SerializeToString,
+            spooltail__pb2.Offset.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RequestCancellation(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/RequestCancellation',
+            spooltail__pb2.CancellationRequest.SerializeToString,
             spooltail__pb2.Offset.FromString,
             options,
             channel_credentials,

@@ -83,7 +83,7 @@ SPOOLTAIL_GRPC_LISTEN=127.0.0.1:7443 SPOOLTAIL_GRPC_TLS=off \
   ./target/release/spooltail
 ```
 
-Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1/spooltail.proto). Service clients use `Append`, `Latest`, `History`, `Subscribe`, `Claim`, `Settle`, and `Complete`. Stream groups can use `Next` and `Commit` for one record at a time, or `NextBatch` and `CommitBatch` for a page. `Ping` checks the connection and `Stats` reports broker counters. Event fields retain their JSON encoding inside the Protobuf messages. `Claim` and `Next` return an absent record when there is nothing to deliver.
+Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1/spooltail.proto). Service clients use `Append`, `Latest`, `History`, `Subscribe`, `Claim`, `Settle`, `Complete`, and `RequestCancellation`. Stream groups can use `Next` and `Commit` for one record at a time, or `NextBatch` and `CommitBatch` for a page. `Ping` checks the connection and `Stats` reports broker counters. Event fields retain their JSON encoding inside the Protobuf messages. `Claim` and `Next` return an absent record when there is nothing to deliver.
 
 `NextBatch` returns the group's saved checkpoint and up to 32 records by default. Request 1 to 64 records. Each encoded response is capped at 2 MiB, so a page can contain fewer records than requested. After processing a consecutive prefix, pass the returned checkpoint as `after`, the last processed record's offset as `through`, and the number of processed records as `count` to `CommitBatch`. The broker advances the checkpoint durably in its embedded SQLite database. A retry succeeds while the checkpoint is still at `through`. Fetch again after a checkpoint conflict. An empty page needs no commit.
 
@@ -113,6 +113,7 @@ The SDK publishes a single work event for each task ID. Concurrent publishes of 
 | `GET /topics/{topic}/tasks/{task}/latest` | Return `{offset,event}` or HTTP 404. |
 | `GET /topics/{topic}/tasks/{task}/history?after=E41` | Return up to 64 retained records in order. For the next page, pass the last record’s event ID. An empty array means caught up. |
 | `GET /topics/{topic}/tasks/{task}/events` | SSE, with an exclusive `Last-Event-ID` cursor or an initial `?after=` value. The header takes precedence. |
+| `POST /topics/{work_topic}/tasks/{task}/cancel` | Send `{"status_topic":"status","cancel_topic":"control"}`. Returns HTTP 202 and the durable cancellation intent offset. |
 | `GET /ws` | WebSocket upgrade. Send `subscribe` or `unsubscribe` with a topic and task. Up to 32 task subscriptions per socket. |
 | `GET /topics/{topic}/streams/{group}/next` | Read one record after this group’s durable checkpoint. Returns JSON `null` when caught up. |
 | `POST /topics/{topic}/streams/{group}/commit` | Send `{"offset":42}` after processing. Advances through consecutive records of this topic. |
@@ -253,7 +254,13 @@ Suppose a worker claims task `T7` from `inference.tasks` in group `workers` and 
 }
 ```
 
-Keep the producer’s `task_id` for the life of the task. Choose the terminal `event_id` once and reuse the entire request if the response is lost. The claim’s `generation` identifies the worker’s lease attempt. An exact retry returns the same status offset, even after restart or lease expiry. A stale claim, a different task, or a conflicting use of the same event ID returns HTTP 409. The terminal status can be `completed`, `failed`, or `cancelled`. Each settles the claim and wakes readers of the status topic. Broker 0.0.6 adds `cancelled` using the existing `Complete` RPC and JSON event format. The SDK service owns cancellation requests and stores any cancellation intent separately. The broker commits only the terminal event submitted by the active lease. External effects performed by a worker still need their own idempotency guarantees.
+Keep the producer’s `task_id` for the life of the task. Choose the terminal `event_id` once and reuse the entire request if the response is lost. The claim’s `generation` identifies the worker’s lease attempt. An exact retry returns the same status offset, even after restart or lease expiry. A stale claim, a different task, or a conflicting use of the same event ID returns HTTP 409. The terminal status can be `completed`, `failed`, or `cancelled`. Each settles the claim and wakes readers of the status topic. The broker commits the terminal event submitted by the active lease. External effects performed by a worker still need their own idempotency guarantees.
+
+### Request task cancellation
+
+Use `RequestCancellation` or the HTTP cancel route with the service's work, status, and cancellation topics. Use a distinct cancellation topic per service and retain its records while work can still run or be retried. The broker checks for retained work and a terminal result under the same write lock it uses to accept the intent. It saves an event with the task ID and `event_id: "cancel"`, the format Relayna workers already read. Unknown work returns HTTP 404 or gRPC `NOT_FOUND`. A first request after a retained terminal result returns HTTP 409 or `FAILED_PRECONDITION`. While the work is retained, retrying an accepted intent returns the original offset even if the worker has since finished.
+
+Cancellation is cooperative. A worker checks the cancellation topic before starting work and while the handler runs. When cancellation wins, the worker cleans up and calls `Complete` with `status: "cancelled"`. A worker may still finish normally after the broker accepts an intent. Read the status topic for the final outcome.
 
 ## Verify
 

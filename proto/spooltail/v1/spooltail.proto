@@ -10,6 +10,7 @@ service Spooltail {
   rpc Claim(ClaimRequest) returns (ClaimResponse);
   rpc Settle(SettleRequest) returns (Empty);
   rpc Complete(CompleteRequest) returns (Offset);
+  rpc RequestCancellation(CancellationRequest) returns (Offset);
   rpc Next(StreamGroup) returns (NextResponse);
   rpc Commit(CommitRequest) returns (Empty);
   rpc NextBatch(StreamBatchRequest) returns (StreamBatch);
@@ -99,6 +100,13 @@ message CompleteRequest {
   int64 offset = 3;
   int64 generation = 4;
   Publish status = 5;
+}
+message CancellationRequest {
+  // The work, status, and cancellation topics must be distinct.
+  string task_topic = 1;
+  string task_id = 2;
+  string status_topic = 3;
+  string cancel_topic = 4;
 }
 message Delivery {
   // One of ready, status, gap, or error.

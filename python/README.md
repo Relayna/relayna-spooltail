@@ -54,6 +54,7 @@ A browser that already received `T7-running` can resume the same task over SSE w
 
 - `publish` and `complete` return an offset. Unary calls default to a five-second timeout. Retries are caller-controlled. On an ambiguous result, retry with the same event ID and payload, and for completion reuse the same lease.
 - `claim` returns a lease or `None`. Pass the lease to `complete` or to `settle` with a `SettlementAction`. An inactive lease raises `StaleLeaseError`. Other state conflicts raise `ConflictError`. Transport errors retain their gRPC status.
+- `await client.request_cancellation("work", "T7", status_topic="status", cancel_topic="control")` returns the durable intent offset. Configure the worker to watch the same control topic. Read the status topic for the worker's terminal result. A first request for an already-terminal task raises `ConflictError`.
 - `history` returns one page. Use the last record's `event["event_id"]` as the next page's `after` cursor. `subscribe` yields `ready` and `status` deliveries. Use `contextlib.aclosing` if leaving a subscription early. Both methods raise `CursorGapError` for an unavailable cursor and expose `earliest_event_id`, which can be `None`.
 - `next` and `commit` let an independent consumer read and checkpoint status records in order.
 
