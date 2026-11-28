@@ -348,7 +348,7 @@ def native_dead_letters(broker):
     ]
 
 
-def kill_after_journal_write(broker, operation):
+def kill_after_journal_write(broker, operation, *, background_index=False):
     """Kill after the complete frame reaches the journal and before SQLite commits."""
     journal = max(broker.directory.glob("*.seg"))
     before = journal.stat().st_size
@@ -382,9 +382,13 @@ def kill_after_journal_write(broker, operation):
                 assert time.monotonic() < deadline
             assert zlib.crc32(body) == checksum
             os.fsync(f.fileno())
+        # The background index can be blocked while a journaled append is acknowledged.
+        receipt = pending.result(timeout=5) if background_index else None
         broker.kill()
         lock.rollback()
-        assert pending.exception(timeout=5) is not None
+        if not background_index:
+            assert pending.exception(timeout=5) is not None
+        return receipt
 
 
 def crash_after_write(broker):
@@ -452,7 +456,7 @@ def atomic_completion(broker, terminal):
     assert broker.request(f"/topics/{topic}/streams/audit/next")["offset"] == offset
 
 
-def cancellation_requests(broker):
+def cancellation_requests(broker, *, background_index=False):
     task_topic = "cancellation.tasks"
     status_topic = "cancellation.status"
     cancel_topic = "cancellation.control"
@@ -485,11 +489,15 @@ def cancellation_requests(broker):
     )
     task = "cancel-after-restart"
     broker.publish(task, "queued", task_topic)
-    kill_after_journal_write(broker, lambda: cancel(task))
+    acknowledged = kill_after_journal_write(
+        broker, lambda: cancel(task), background_index=background_index
+    )
     assert broker.start() >= 1
     (intent,) = broker.request(f"/topics/{cancel_topic}/tasks/{task}/history")
     receipt = cancel(task)
     assert intent == receipt | {"event": {"task_id": task, "event_id": "cancel"}}
+    if background_index:
+        assert receipt == acknowledged
     assert broker.request(f"/topics/{status_topic}/tasks/{task}/history") == []
     lease = broker.request(work + "/claim", {"lease_ms": 30_000})
     complete(lease, task, "cancelled")
@@ -1041,7 +1049,7 @@ if __name__ == "__main__":
         broker = Broker(args.binary.resolve(), Path(path))
         try:
             background_index_recovery(broker)
-            cancellation_requests(broker)
+            cancellation_requests(broker, background_index=True)
             print(
                 "PASS: background index catch-up and recovery for appends and cancellation"
             )
