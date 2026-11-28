@@ -119,6 +119,9 @@ The SDK publishes a single work event for each task ID. Concurrent publishes of 
 | `POST /topics/{topic}/streams/{group}/commit` | Send `{"offset":42}` after processing. Advances through consecutive records of this topic. |
 | `POST /topics/{topic}/work/{group}/claim` | Send `{"lease_ms":30000}`. Returns `{record,generation,lease_until_ms}` or JSON `null`. |
 | `POST /topics/{topic}/work/{group}/settle` | Send the claimed `offset`, `generation`, and an `action` of `ack`, `renew`, `retry`, or `dead-letter`. Set `delay_ms` for renewal or delayed retry. Stale settlements return HTTP 409. |
+| `GET /topics/{topic}/work/{group}/dead-letters` | List summaries for the group's dead-lettered work. Use optional `after` and `limit` query parameters. |
+| `GET /topics/{topic}/work/{group}/dead-letters/{offset}` | Read the original record and dead-letter generation. Returns HTTP 404 if the entry is absent. |
+| `POST /topics/{topic}/work/{group}/dead-letters/{offset}/redrive` | Send `{"generation":3}` for the dead-letter generation to requeue. Returns `{"ok":true}` after durable acceptance. |
 | `POST /topics/{topic}/work/{group}/complete` | Acknowledge the claim and append its terminal event to `status_topic` atomically. Returns the status record’s `offset`. |
 | `GET /stats` | Process counters and journal storage statistics. |
 
@@ -261,6 +264,14 @@ Keep the producer’s `task_id` for the life of the task. Choose the terminal `e
 Use `RequestCancellation` or the HTTP cancel route with the service's work, status, and cancellation topics. Use a distinct cancellation topic per service and retain its records while work can still run or be retried. The broker checks for retained work and a terminal result under the same write lock it uses to accept the intent. It saves an event with the task ID and `event_id: "cancel"`, the format Relayna workers already read. Unknown work returns HTTP 404 or gRPC `NOT_FOUND`. A first request after a retained terminal result returns HTTP 409 or `FAILED_PRECONDITION`. While the work is retained, retrying an accepted intent returns the original offset even if the worker has since finished.
 
 Cancellation is cooperative. A worker checks the cancellation topic before starting work and while the handler runs. When cancellation wins, the worker cleans up and calls `Complete` with `status: "cancelled"`. A worker may still finish normally after the broker accepts an intent. Read the status topic for the final outcome.
+
+### Inspect and redrive dead letters
+
+After a worker settles a lease as `dead-letter`, operators can use `ListDeadLetters`, `GetDeadLetter`, and `RedriveDeadLetter` over gRPC or the equivalent HTTP routes. The list returns `offset`, `task_id`, `event_id`, `generation`, and the task's current work partition. It reads index metadata and returns up to 32 entries by default, with a limit of 1 to 64. Pass the last offset as `after` to continue in ascending order. Each page reflects the group's current state. Restart the scan to find work dead-lettered at an earlier offset while paging.
+
+Use the detail route to inspect the original payload. Redrive puts the original record back in the same group's ready queue at its original offset, using the task's current partition. The next claim gets a new lease generation. Existing status history, stream offsets, and other work groups keep their own state.
+
+Keep the offset and dead-letter generation from the inspection response for retries. The requeue and its receipt commit together. Repeating a successful request after restart or after the record is dead-lettered again returns success without requeueing the newer generation. Other unmatched generations return HTTP 409 or gRPC `FAILED_PRECONDITION`.
 
 ## Verify
 

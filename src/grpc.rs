@@ -259,6 +259,65 @@ impl Spooltail for Api {
         Ok(Response::new(Empty {}))
     }
 
+    async fn list_dead_letters(
+        &self,
+        request: Request<wire::DeadLetterListRequest>,
+    ) -> Result<Response<wire::DeadLetterPage>, Status> {
+        let q = request.into_inner();
+        let entries = self
+            .0
+            .run(move |s| {
+                s.list_dead_letters(
+                    &q.topic,
+                    &q.group,
+                    q.after.unwrap_or_default(),
+                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+                )
+            })
+            .await
+            .map_err(status)?;
+        let entries = entries
+            .into_iter()
+            .map(|entry| wire::DeadLetterSummary {
+                offset: entry.offset,
+                task_id: entry.task_id,
+                event_id: entry.event_id,
+                generation: entry.generation,
+                partition: entry.partition,
+            })
+            .collect();
+        Ok(Response::new(wire::DeadLetterPage { entries }))
+    }
+
+    async fn get_dead_letter(
+        &self,
+        request: Request<wire::DeadLetterRequest>,
+    ) -> Result<Response<wire::DeadLetter>, Status> {
+        let q = request.into_inner();
+        let entry = self
+            .0
+            .run(move |s| s.dead_letter(&q.topic, &q.group, q.offset))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(wire::DeadLetter {
+            record: Some(encode(entry.record).map_err(status)?),
+            generation: entry.generation,
+            partition: entry.partition,
+        }))
+    }
+
+    async fn redrive_dead_letter(
+        &self,
+        request: Request<wire::DeadLetterRedriveRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let q = request.into_inner();
+        self.0
+            .run(move |s| s.redrive_dead_letter(&q.topic, &q.group, q.offset, q.generation))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Empty {}))
+    }
+
     async fn next(&self, request: Request<StreamGroup>) -> Result<Response<NextResponse>, Status> {
         let q = request.into_inner();
         let record = self

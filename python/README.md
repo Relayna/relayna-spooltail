@@ -60,6 +60,10 @@ A browser that already received `T7-running` can resume the same task over SSE w
 
 For catch-up, use `next_batch(topic, group, limit=32)`. Process the returned `batch.records` in order, then call `await client.commit_batch(batch)`. Pass `count=n` to checkpoint only the first `n` records after their effects are durable. A page with no records needs no commit. The broker persists the cursor, so reconnecting with the same topic, group, and partition resumes from the last commit.
 
+## Redrive dead-lettered work
+
+List one page with `await client.list_dead_letters("work", "workers", limit=32)`. Inspect an entry's payload with `await client.get_dead_letter("work", "workers", entry.offset)`. To return the original work to the group, call `await client.redrive_dead_letter("work", "workers", entry.offset, entry.generation)`. Retry with the same generation if the response is lost. Use the last entry's offset as `after` for the next page.
+
 ## Audit a task
 
 The SDK joins retained journal inputs with outcomes from a local `AuditStore`. Use a separate on-disk `consumer.sqlite` for application state and audit records, and bind that file to one broker data directory. Several consumers can record outcomes in the file, each with a separate checkpoint per topic. Pass `None` to `read_after_batch` when you have no saved checkpoint and want to start at the earliest retained record.

@@ -37,7 +37,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use store::{Frame, Position, Prepared, Problem, Store, identifier};
-use subscriptions::WorkLease;
+use subscriptions::{DEFAULT_STREAM_BATCH_RECORDS, WorkLease};
 use tokio::sync::broadcast::error::RecvError;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 
@@ -571,6 +571,56 @@ async fn settle(
     .await?;
     Ok(Json(json!({"ok":true})))
 }
+
+#[derive(Deserialize)]
+struct DeadLetterPageQuery {
+    after: Option<i64>,
+    limit: Option<u32>,
+}
+
+async fn list_dead_letters(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Query(q): Query<DeadLetterPageQuery>,
+) -> Reply {
+    let entries = b
+        .run(move |s| {
+            s.list_dead_letters(
+                &topic,
+                &group,
+                q.after.unwrap_or_default(),
+                q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+            )
+        })
+        .await?;
+    Ok(Json(json!(entries)))
+}
+
+async fn get_dead_letter(
+    State(b): State<Broker>,
+    Path((topic, group, offset)): Path<(String, String, i64)>,
+) -> Reply {
+    let entry = b
+        .run(move |s| s.dead_letter(&topic, &group, offset))
+        .await?;
+    Ok(Json(json!(entry)))
+}
+
+#[derive(Deserialize)]
+struct Redrive {
+    generation: i64,
+}
+
+async fn redrive_dead_letter(
+    State(b): State<Broker>,
+    Path((topic, group, offset)): Path<(String, String, i64)>,
+    Json(q): Json<Redrive>,
+) -> Reply {
+    b.run(move |s| s.redrive_dead_letter(&topic, &group, offset, q.generation))
+        .await?;
+    Ok(Json(json!({"ok":true})))
+}
+
 async fn complete(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
@@ -785,6 +835,18 @@ async fn main() -> Result<()> {
         .route("/topics/{topic}/tasks/{task}/cancel", post(cancel_task))
         .route("/topics/{topic}/work/{group}/claim", post(claim))
         .route("/topics/{topic}/work/{group}/settle", post(settle))
+        .route(
+            "/topics/{topic}/work/{group}/dead-letters",
+            get(list_dead_letters),
+        )
+        .route(
+            "/topics/{topic}/work/{group}/dead-letters/{offset}",
+            get(get_dead_letter),
+        )
+        .route(
+            "/topics/{topic}/work/{group}/dead-letters/{offset}/redrive",
+            post(redrive_dead_letter),
+        )
         .route("/topics/{topic}/work/{group}/complete", post(complete))
         .route("/topics/{topic}/streams/{group}/next", get(next))
         .route("/topics/{topic}/streams/{group}/commit", post(commit))

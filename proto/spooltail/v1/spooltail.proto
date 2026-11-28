@@ -9,6 +9,9 @@ service Spooltail {
   rpc Append(Publish) returns (Offset);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
   rpc Settle(SettleRequest) returns (Empty);
+  rpc ListDeadLetters(DeadLetterListRequest) returns (DeadLetterPage);
+  rpc GetDeadLetter(DeadLetterRequest) returns (DeadLetter);
+  rpc RedriveDeadLetter(DeadLetterRedriveRequest) returns (Empty);
   rpc Complete(CompleteRequest) returns (Offset);
   rpc RequestCancellation(CancellationRequest) returns (Offset);
   rpc Next(StreamGroup) returns (NextResponse);
@@ -93,6 +96,43 @@ message SettleRequest {
   int64 generation = 4;
   SettlementAction action = 5;
   int64 delay_ms = 6;
+}
+message DeadLetterListRequest {
+  string topic = 1;
+  string group = 2;
+  // Exclusive work offset. Omit to start at the beginning.
+  optional int64 after = 3;
+  // Requested count, 1 through 64. Defaults to 32.
+  optional uint32 limit = 4;
+}
+message DeadLetterSummary {
+  int64 offset = 1;
+  string task_id = 2;
+  string event_id = 3;
+  // Generation at which this group's delivery was dead-lettered.
+  int64 generation = 4;
+  // Current work placement.
+  uint32 partition = 5;
+}
+message DeadLetterPage {
+  repeated DeadLetterSummary entries = 1;
+}
+message DeadLetterRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+}
+message DeadLetter {
+  Record record = 1;
+  int64 generation = 2;
+  uint32 partition = 3;
+}
+message DeadLetterRedriveRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+  // Retries for the same generation return success without requeueing again.
+  int64 generation = 4;
 }
 message CompleteRequest {
   string topic = 1;

@@ -70,6 +70,22 @@ class Lease:
     partition: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class DeadLetterSummary:
+    offset: int
+    task_id: str
+    event_id: str
+    generation: int
+    partition: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DeadLetter:
+    record: Record
+    generation: int
+    partition: int = 0
+
+
 class SettlementAction(IntEnum):
     ACK = wire.SETTLEMENT_ACTION_ACK
     RENEW = wire.SETTLEMENT_ACTION_RENEW
@@ -325,6 +341,47 @@ class SpooltailClient:
         )
         with _translate_conflict("lease expired, settled or superseded"):
             await self._stub.Settle(request, timeout=self._timeout)
+
+    async def list_dead_letters(
+        self,
+        topic: str,
+        group: str,
+        *,
+        after: int | None = None,
+        limit: int = 32,
+    ) -> list[DeadLetterSummary]:
+        """List currently dead-lettered work after the exclusive offset."""
+        page = await self._stub.ListDeadLetters(
+            wire.DeadLetterListRequest(topic=topic, group=group, after=after, limit=limit),
+            timeout=self._timeout,
+        )
+        return [
+            DeadLetterSummary(e.offset, e.task_id, e.event_id, e.generation, e.partition)
+            for e in page.entries
+        ]
+
+    async def get_dead_letter(self, topic: str, group: str, offset: int) -> DeadLetter | None:
+        """Read the original payload if it is still dead-lettered in this group."""
+        try:
+            entry = await self._stub.GetDeadLetter(
+                wire.DeadLetterRequest(topic=topic, group=group, offset=offset),
+                timeout=self._timeout,
+            )
+        except grpc.aio.AioRpcError as error:
+            if error.code() == grpc.StatusCode.NOT_FOUND:
+                return None
+            raise
+        return DeadLetter(_record(entry.record), entry.generation, entry.partition)
+
+    async def redrive_dead_letter(
+        self, topic: str, group: str, offset: int, generation: int
+    ) -> None:
+        """Requeue this dead-letter generation in the same work group."""
+        request = wire.DeadLetterRedriveRequest(
+            topic=topic, group=group, offset=offset, generation=generation
+        )
+        with _translate_conflict():
+            await self._stub.RedriveDeadLetter(request, timeout=self._timeout)
 
     async def complete(
         self, lease: Lease, status_topic: str, event: Mapping[str, Any]

@@ -263,6 +263,91 @@ def partition_expansion(broker):
     assert broker.publish("moved", "before", status="running") == old
 
 
+def native_dead_letters(broker):
+    topic = "dlq.tasks"
+    work = f"/topics/{topic}/work/workers"
+    dead = work + "/dead-letters"
+    other = f"/topics/{topic}/work/other"
+    broker.publish("invalid-run", "enqueue", topic, payload={"bad": True})
+    broker.publish("second-run", "enqueue", topic)
+    lease_args = {"lease_ms": 30_000}
+    first = broker.request(work + "/claim", lease_args)
+    second = broker.request(work + "/claim", lease_args)
+    offset = first["record"]["offset"]
+    detail = f"{dead}/{offset}"
+
+    def settle(lease, action, group=work):
+        return broker.request(
+            group + "/settle",
+            {
+                "offset": lease["record"]["offset"],
+                "generation": lease["generation"],
+                "action": action,
+            },
+        )
+
+    def redrive(generation, route=detail):
+        return broker.request(route + "/redrive", {"generation": generation})
+
+    settle(first, "dead-letter")
+    settle(second, "dead-letter")
+    assert broker.request(work + "/claim", lease_args) is None
+    assert broker.request(other + "/dead-letters") == []
+    other_lease = broker.request(other + "/claim", lease_args)
+    assert other_lease["record"] == first["record"]
+    settle(other_lease, "ack", group=other)
+    expect_http(404, lambda: broker.request(f"{other}/dead-letters/{offset}"))
+    expect_http(
+        409, lambda: redrive(first["generation"], f"{other}/dead-letters/{offset}")
+    )
+    expect_http(400, lambda: broker.request(dead + "?limit=65"))
+    expect_http(400, lambda: broker.request(dead + "?after=-1"))
+    reads = broker.request("/stats")["payload_reads"]
+    (entry,) = broker.request(dead + "?limit=1")
+    assert entry["offset"] == offset and entry["task_id"] == "invalid-run"
+    assert entry["event_id"] == "enqueue" and entry["generation"] == first["generation"]
+    (next_entry,) = broker.request(f"{dead}?after={offset}&limit=1")
+    assert next_entry["offset"] == second["record"]["offset"]
+    assert broker.request(f"{dead}?after={next_entry['offset']}") == []
+    assert broker.request("/stats")["payload_reads"] == reads
+
+    source = first.get("partition", 0)
+    destination = 2 if source == 0 else 0
+    broker.request(
+        "/tasks/invalid-run/move",
+        {"from_partition": source, "to_partition": destination},
+    )
+    letter = broker.request(detail)
+    assert (
+        letter["record"] == first["record"]
+        and letter["generation"] == first["generation"]
+    )
+    assert letter.get("partition", 0) == destination
+    expect_http(409, lambda: redrive(first["generation"] + 1))
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        assert list(pool.map(redrive, [first["generation"]] * 2)) == [{"ok": True}] * 2
+    expect_http(404, lambda: broker.request(detail))
+    broker.kill()
+    assert broker.start() == 0
+    claim = broker.request(work + "/claim", lease_args | {"partition": destination})
+    assert (
+        claim["record"] == first["record"] and claim["generation"] > first["generation"]
+    )
+    expect_http(409, lambda: settle(first, "ack"))
+    settle(claim, "dead-letter")
+    assert redrive(first["generation"]) == {"ok": True}
+    assert broker.request(detail)["generation"] == claim["generation"]
+    assert broker.request(work + "/claim", lease_args) is None
+    redrive(claim["generation"])
+    final = broker.request(work + "/claim", lease_args)
+    settle(final, "ack")
+    assert broker.request(work + "/claim", lease_args) is None
+    assert broker.request(dead) == [next_entry]
+    assert broker.request(f"/topics/{topic}/tasks/invalid-run/history") == [
+        first["record"]
+    ]
+
+
 def kill_after_journal_write(broker, operation):
     """Kill after the complete frame reaches the journal and before SQLite commits."""
     journal = max(broker.directory.glob("*.seg"))
@@ -746,10 +831,11 @@ if __name__ == "__main__":
             partition_expansion(broker)
             if (directory / "partition-indexes").exists():
                 crash_after_partition_commit(broker)
+            native_dead_letters(broker)
             print(
                 f"PASS: {args.events:,} fixture events; sample WebSocket resume {latency:.2f} ms; "
                 "both transport directions, independent groups, lease fencing, write/ack crash, "
-                "atomic completion and cancellation, retention gap, and partition expansion"
+                "atomic completion and cancellation, dead-letter redrive, retention gap, and partition expansion"
             )
         finally:
             broker.kill()

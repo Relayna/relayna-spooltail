@@ -20,6 +20,24 @@ pub struct Claim {
     pub partition: u32,
 }
 
+#[derive(Serialize)]
+pub struct DeadLetterSummary {
+    pub offset: i64,
+    pub task_id: String,
+    pub event_id: String,
+    pub generation: i64,
+    #[serde(skip_serializing_if = "crate::store::is_zero")]
+    pub partition: u32,
+}
+
+#[derive(Serialize)]
+pub struct DeadLetter {
+    pub record: Record,
+    pub generation: i64,
+    #[serde(skip_serializing_if = "crate::store::is_zero")]
+    pub partition: u32,
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorkLease {
     pub topic: String,
@@ -594,6 +612,101 @@ impl Store {
         if changed == 0 {
             return Err(Problem::Conflict("lease expired, settled or superseded".into()).into());
         }
+        Ok(())
+    }
+
+    pub fn list_dead_letters(
+        &self,
+        topic: &str,
+        group: &str,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<DeadLetterSummary>> {
+        valid_group(topic, group)?;
+        validate_batch_count(limit)?;
+        if after < 0 {
+            return Err(Problem::Invalid("after must be nonnegative".into()).into());
+        }
+        let mut statement = self.db.prepare_cached(
+            "SELECT l.offset,r.task,r.event_id,l.generation,r.work_partition
+             FROM leases l JOIN records r ON r.offset=l.offset AND r.topic=l.topic
+             WHERE l.topic=? AND l.name=? AND l.offset>? AND l.state='dead'
+             ORDER BY l.offset LIMIT ?",
+        )?;
+        let entries = statement
+            .query_map(params![topic, group, after, limit], |row| {
+                Ok(DeadLetterSummary {
+                    offset: row.get(0)?,
+                    task_id: row.get(1)?,
+                    event_id: row.get(2)?,
+                    generation: row.get(3)?,
+                    partition: row.get(4)?,
+                })
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(entries)
+    }
+
+    pub fn dead_letter(&self, topic: &str, group: &str, offset: i64) -> Result<DeadLetter> {
+        valid_group(topic, group)?;
+        if offset <= 0 {
+            return Err(Problem::Invalid("offset must be positive".into()).into());
+        }
+        let (generation, partition) = self
+            .db
+            .prepare_cached(
+                "SELECT l.generation,r.work_partition
+                 FROM leases l JOIN records r ON r.offset=l.offset AND r.topic=l.topic
+                 WHERE l.topic=? AND l.name=? AND l.offset=? AND l.state='dead'",
+            )?
+            .query_row(params![topic, group, offset], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?
+            .ok_or(Problem::Missing)?;
+        Ok(DeadLetter {
+            record: self.read(offset)?,
+            generation,
+            partition,
+        })
+    }
+
+    pub fn redrive_dead_letter(
+        &mut self,
+        topic: &str,
+        group: &str,
+        offset: i64,
+        generation: i64,
+    ) -> Result<()> {
+        self.ensure_writable()?;
+        valid_group(topic, group)?;
+        if offset <= 0 || generation <= 0 {
+            return Err(Problem::Invalid("offset and generation must be positive".into()).into());
+        }
+        let tx = self.db.transaction()?;
+        let receipt = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM dead_letter_redrives
+                           WHERE topic=? AND name=? AND offset=? AND generation=?)",
+            params![topic, group, offset, generation],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if receipt {
+            return Ok(());
+        }
+        let changed = tx.execute(
+            "UPDATE leases SET state='retry',visible_at=0
+             WHERE topic=? AND name=? AND offset=? AND generation=? AND state='dead'",
+            params![topic, group, offset, generation],
+        )?;
+        if changed == 0 {
+            return Err(Problem::Conflict("no dead letter matches this generation".into()).into());
+        }
+        // Commit the receipt with the requeue so a retry cannot reopen a later dead letter.
+        tx.execute(
+            "INSERT INTO dead_letter_redrives(topic,name,offset,generation) VALUES(?,?,?,?)",
+            params![topic, group, offset, generation],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 }

@@ -19,6 +19,8 @@ from relayna_spooltail import (
     AuditTimeline,
     ConflictError,
     CursorGapError,
+    DeadLetter,
+    DeadLetterSummary,
     Record,
     ReplayBatch,
     SettlementAction,
@@ -650,6 +652,48 @@ async def archive_timeline(directory):
             assert await audit_pages(AuditTimeline(client, store), limit=64) == fresh
 
 
+async def dead_letter_operations(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    roots = cert.read_bytes()
+    topic, group = "tasks", "workers"
+    event = {"task_id": "quarantined", "event_id": "enqueued", "value": 42}
+
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(f"localhost:{grpc_port}", root_certificates=roots) as client,
+    ):
+        offset = await client.publish(topic, event)
+        lease = await client.claim(topic, group)
+        assert lease is not None
+        assert await client.get_dead_letter(topic, group, offset) is None
+        await client.settle(lease, SettlementAction.DEAD_LETTER)
+        assert await client.list_dead_letters(topic, group, limit=1) == [
+            DeadLetterSummary(offset, "quarantined", "enqueued", lease.generation)
+        ]
+        assert await client.list_dead_letters(topic, group, after=offset) == []
+        assert await client.get_dead_letter(topic, group, offset) == DeadLetter(
+            Record(offset, event), lease.generation
+        )
+        await expect_error(
+            ConflictError,
+            client.redrive_dead_letter(topic, group, offset, lease.generation + 1),
+        )
+        await client.redrive_dead_letter(topic, group, offset, lease.generation)
+
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(f"localhost:{grpc_port}", root_certificates=roots) as client,
+    ):
+        await client.redrive_dead_letter(topic, group, offset, lease.generation)
+        assert await client.list_dead_letters(topic, group) == []
+        redriven = await client.claim(topic, group)
+        assert redriven is not None and redriven.generation > lease.generation
+        assert redriven.record == lease.record
+        await client.settle(redriven, SettlementAction.ACK)
+        assert await client.claim(topic, group) is None
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--audit-crash"]:
         audit_crash_child(Path(sys.argv[2]), sys.argv[3])
@@ -664,7 +708,9 @@ if __name__ == "__main__":
         asyncio.run(asyncio.wait_for(audit_timeline(Path(temp)), timeout=30))
     with tempfile.TemporaryDirectory(prefix="spooltail-archive-sdk-") as temp:
         asyncio.run(asyncio.wait_for(archive_timeline(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-dlq-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(dead_letter_operations(Path(temp)), timeout=30))
     print(
-        "PASS: Python SDK publish, lease, completion, cancellation, replay gaps, SSE resume, "
+        "PASS: Python SDK publish, lease, completion, cancellation, dead-letter redrive, replay gaps, SSE resume, "
         "partition moves, service placement, audit timeline recovery, and archive reads"
     )

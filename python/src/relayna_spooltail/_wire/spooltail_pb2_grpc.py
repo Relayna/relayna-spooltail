@@ -71,6 +71,21 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.SettleRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.Empty.FromString,
                 _registered_method=True)
+        self.ListDeadLetters = channel.unary_unary(
+                '/spooltail.v1.Spooltail/ListDeadLetters',
+                request_serializer=spooltail__pb2.DeadLetterListRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.DeadLetterPage.FromString,
+                _registered_method=True)
+        self.GetDeadLetter = channel.unary_unary(
+                '/spooltail.v1.Spooltail/GetDeadLetter',
+                request_serializer=spooltail__pb2.DeadLetterRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.DeadLetter.FromString,
+                _registered_method=True)
+        self.RedriveDeadLetter = channel.unary_unary(
+                '/spooltail.v1.Spooltail/RedriveDeadLetter',
+                request_serializer=spooltail__pb2.DeadLetterRedriveRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Empty.FromString,
+                _registered_method=True)
         self.Complete = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Complete',
                 request_serializer=spooltail__pb2.CompleteRequest.SerializeToString,
@@ -188,6 +203,24 @@ class SpooltailServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def Settle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListDeadLetters(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDeadLetter(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RedriveDeadLetter(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -319,6 +352,21 @@ def add_SpooltailServicer_to_server(servicer, server):
             'Settle': grpc.unary_unary_rpc_method_handler(
                     servicer.Settle,
                     request_deserializer=spooltail__pb2.SettleRequest.FromString,
+                    response_serializer=spooltail__pb2.Empty.SerializeToString,
+            ),
+            'ListDeadLetters': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListDeadLetters,
+                    request_deserializer=spooltail__pb2.DeadLetterListRequest.FromString,
+                    response_serializer=spooltail__pb2.DeadLetterPage.SerializeToString,
+            ),
+            'GetDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDeadLetter,
+                    request_deserializer=spooltail__pb2.DeadLetterRequest.FromString,
+                    response_serializer=spooltail__pb2.DeadLetter.SerializeToString,
+            ),
+            'RedriveDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.RedriveDeadLetter,
+                    request_deserializer=spooltail__pb2.DeadLetterRedriveRequest.FromString,
                     response_serializer=spooltail__pb2.Empty.SerializeToString,
             ),
             'Complete': grpc.unary_unary_rpc_method_handler(
@@ -585,6 +633,87 @@ class Spooltail(object):
             target,
             '/spooltail.v1.Spooltail/Settle',
             spooltail__pb2.SettleRequest.SerializeToString,
+            spooltail__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListDeadLetters(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/ListDeadLetters',
+            spooltail__pb2.DeadLetterListRequest.SerializeToString,
+            spooltail__pb2.DeadLetterPage.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/GetDeadLetter',
+            spooltail__pb2.DeadLetterRequest.SerializeToString,
+            spooltail__pb2.DeadLetter.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RedriveDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/RedriveDeadLetter',
+            spooltail__pb2.DeadLetterRedriveRequest.SerializeToString,
             spooltail__pb2.Empty.FromString,
             options,
             channel_credentials,

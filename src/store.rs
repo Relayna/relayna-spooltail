@@ -241,6 +241,11 @@ CREATE TABLE IF NOT EXISTS floors(topic TEXT PRIMARY KEY, first_offset INTEGER N
 CREATE TABLE IF NOT EXISTS cursors(topic TEXT, name TEXT, offset INTEGER NOT NULL, PRIMARY KEY(topic,name));
 CREATE TABLE IF NOT EXISTS leases(topic TEXT, name TEXT, offset INTEGER, generation INTEGER NOT NULL,
     visible_at INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(topic,name,offset));
+CREATE INDEX IF NOT EXISTS dead_leases ON leases(topic,name,offset) WHERE state='dead';
+CREATE TABLE IF NOT EXISTS dead_letter_redrives (
+    topic TEXT NOT NULL, name TEXT NOT NULL, offset INTEGER NOT NULL, generation INTEGER NOT NULL,
+    PRIMARY KEY(topic,name,offset,generation)
+) WITHOUT ROWID;
 ";
 
 fn migrate(db: &Connection) -> Result<()> {
