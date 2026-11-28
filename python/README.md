@@ -57,6 +57,7 @@ A browser that already received `T7-running` can resume the same task over SSE w
 - `await client.request_cancellation("work", "T7", status_topic="status", cancel_topic="control")` returns the durable intent offset. Configure the worker to watch the same control topic. Read the status topic for the worker's terminal result. A first request for an already-terminal task raises `ConflictError`.
 - `history` returns one page. Use the last record's `event["event_id"]` as the next page's `after` cursor. `subscribe` yields `ready` and `status` deliveries. Use `contextlib.aclosing` if leaving a subscription early. Both methods raise `CursorGapError` for an unavailable cursor and expose `earliest_event_id`, which can be `None`.
 - `next` and `commit` let an independent consumer read and checkpoint status records in order.
+- `work_stats(topic, group, partition=..., owner_service=...)` reads queue depth, age, expired leases, and retry rates. `stream_lag(topic, group, partition=...)` reads retained lag and retention-gap state for a stream checkpoint. The filters are optional.
 
 For catch-up, use `next_batch(topic, group, limit=32)`. Process the returned `batch.records` in order, then call `await client.commit_batch(batch)`. Pass `count=n` to checkpoint only the first `n` records after their effects are durable. A page with no records needs no commit. The broker persists the cursor, so reconnecting with the same topic, group, and partition resumes from the last commit.
 

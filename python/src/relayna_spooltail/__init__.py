@@ -23,7 +23,9 @@ from .client import (
     SpooltailError,
     StaleLeaseError,
     StreamBatch,
+    StreamLag,
     SubscriptionError,
+    WorkStats,
 )
 from .replay import NumericBatch, NumericRow
 
@@ -50,5 +52,7 @@ __all__ = [
     "SpooltailError",
     "StaleLeaseError",
     "StreamBatch",
+    "StreamLag",
     "SubscriptionError",
+    "WorkStats",
 ]

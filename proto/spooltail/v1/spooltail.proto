@@ -8,6 +8,7 @@ service Spooltail {
   rpc AuditHistory(AuditHistoryRequest) returns (AuditHistoryPage);
   rpc Append(Publish) returns (Offset);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
+  rpc GetWorkStats(WorkStatsRequest) returns (WorkStats);
   rpc Settle(SettleRequest) returns (Empty);
   rpc ListDeadLetters(DeadLetterListRequest) returns (DeadLetterPage);
   rpc GetDeadLetter(DeadLetterRequest) returns (DeadLetter);
@@ -15,6 +16,7 @@ service Spooltail {
   rpc Complete(CompleteRequest) returns (Offset);
   rpc RequestCancellation(CancellationRequest) returns (Offset);
   rpc Next(StreamGroup) returns (NextResponse);
+  rpc GetStreamLag(StreamGroup) returns (StreamLag);
   rpc Commit(CommitRequest) returns (Empty);
   rpc NextBatch(StreamBatchRequest) returns (StreamBatch);
   rpc CommitBatch(StreamBatchCommit) returns (Empty);
@@ -81,6 +83,25 @@ message ClaimResponse {
   int64 lease_until_ms = 3;
   // Current task placement; record.partition identifies the original append.
   uint32 partition = 4;
+}
+message WorkStatsRequest {
+  string topic = 1;
+  string group = 2;
+  // Filter by current task placement and saved owner, respectively.
+  optional uint32 partition = 3;
+  optional string owner_service = 4;
+}
+message WorkStats {
+  uint64 queue_depth = 1;
+  uint64 ready = 2;
+  uint64 leased = 3;
+  uint64 delayed = 4;
+  uint64 dead_lettered = 5;
+  uint64 expired_leases = 6;
+  optional uint64 oldest_ready_age_ms = 7;
+  uint64 expired_lease_redeliveries_total = 8;
+  uint64 retries_total = 9;
+  uint64 retries_per_minute = 10;
 }
 enum SettlementAction {
   SETTLEMENT_ACTION_UNSPECIFIED = 0;
@@ -158,6 +179,12 @@ message StreamGroup {
   string topic = 1;
   string group = 2;
   optional uint32 partition = 3;
+}
+message StreamLag {
+  int64 checkpoint = 1;
+  optional int64 latest_offset = 2;
+  uint64 lag = 3;
+  bool retention_gap = 4;
 }
 message NextResponse {
   // Absent when the stream group has caught up.

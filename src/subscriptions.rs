@@ -1,6 +1,7 @@
 use crate::{
     journal::Address,
     store::{Problem, Record, RecordLocation, Store, identifier},
+    work::record_owner,
 };
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -36,6 +37,14 @@ pub struct DeadLetter {
     pub generation: i64,
     #[serde(skip_serializing_if = "crate::store::is_zero")]
     pub partition: u32,
+}
+
+#[derive(Serialize)]
+pub(crate) struct StreamLag {
+    pub checkpoint: i64,
+    pub latest_offset: Option<i64>,
+    pub lag: u64,
+    pub retention_gap: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -226,6 +235,44 @@ impl Store {
         }
         let global = self.global_checkpoint(topic, group)?;
         Ok((Some(global.unwrap_or(self.floor(topic)? - 1)), false))
+    }
+
+    pub fn stream_lag(
+        &self,
+        topic: &str,
+        group: &str,
+        partition: Option<u32>,
+    ) -> Result<StreamLag> {
+        let (baseline, _) = self.stream_baseline(topic, group, partition)?;
+        let floor = self.floor(topic)?;
+        let checkpoint = match partition {
+            Some(partition) => self
+                .partition_checkpoint(topic, group, partition)?
+                .or(baseline),
+            None => self.global_checkpoint(topic, group)?,
+        }
+        .unwrap_or(floor - 1);
+        let filter = if partition.is_some() {
+            "partition=?4"
+        } else {
+            "?4 IS NULL"
+        };
+        let query = format!(
+            "SELECT (SELECT COUNT(*) FROM records WHERE topic=?1 AND {filter} AND offset>MAX(?2,?3-1)),
+                    (SELECT MAX(offset) FROM records WHERE topic=?1 AND {filter} AND offset>=?3),
+                    EXISTS(SELECT 1 FROM records WHERE topic=?1 AND {filter} AND offset>?2 AND offset<?3)"
+        );
+        Ok(self.db.prepare_cached(&query)?.query_row(
+            params![topic, checkpoint, floor, partition],
+            |r| {
+                Ok(StreamLag {
+                    checkpoint,
+                    lag: r.get::<_, i64>(0)? as u64,
+                    latest_offset: r.get(1)?,
+                    retention_gap: r.get(2)?,
+                })
+            },
+        )?)
     }
 
     fn partition_next_offset(
@@ -544,32 +591,23 @@ impl Store {
         self.admit_disk_write(0, false)?;
         let now = now()?;
         let tx = self.db.transaction()?;
-        let filter = if partition.is_some() {
-            "AND r.work_partition=?4"
-        } else {
-            "AND ?4 IS NULL"
-        };
-        let query = format!(
-            "SELECT r.offset,COALESCE(l.generation,0)+1,r.work_partition
-             FROM records r LEFT JOIN leases l ON l.topic=r.topic AND l.name=?1 AND l.offset=r.offset
-             WHERE r.topic=?2 {filter}
-               AND (l.offset IS NULL OR (l.state IN ('pending','retry') AND l.visible_at<=?3))
-               AND NOT EXISTS(SELECT 1 FROM appending WHERE work_offset=r.offset)
-             ORDER BY r.offset LIMIT 1"
-        );
-        let choice: Option<(i64, i64, u32)> = tx
-            .prepare_cached(&query)?
-            .query_row(params![group, topic, now, partition], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-            })
-            .optional()?;
-        let Some((offset, generation, partition)) = choice else {
+        let Some(choice) = self.work.choose(&tx, topic, group, now, partition)? else {
             return Ok(None);
         };
+        let offset = choice.offset;
+        let generation = choice.generation;
+        let partition = choice.partition;
+        let expired = choice
+            .expired
+            .then(|| record_owner(&tx, offset))
+            .transpose()?;
         let until = now + lease_ms;
         tx.execute("INSERT INTO leases VALUES(?,?,?, ?,?, 'pending') ON CONFLICT(topic,name,offset) DO UPDATE SET generation=excluded.generation,visible_at=excluded.visible_at,state='pending'",
                    params![topic,group,offset,generation,until])?;
         tx.commit()?;
+        if let Some((service, placed)) = expired {
+            self.work.note_expiration(topic, group, service, placed);
+        }
         Ok(Some(Claim {
             record: self.read(offset)?,
             generation,
@@ -579,7 +617,7 @@ impl Store {
     }
 
     pub fn settle(
-        &self,
+        &mut self,
         topic: &str,
         group: &str,
         offset: i64,
@@ -611,6 +649,10 @@ impl Store {
             params![target,now+delay_ms,i64::from(action=="retry"),topic,group,offset,generation,now,offset])?;
         if changed == 0 {
             return Err(Problem::Conflict("lease expired, settled or superseded".into()).into());
+        }
+        if action == "retry" {
+            let (owner, partition) = record_owner(&self.db, offset)?;
+            self.work.note_retry(topic, group, owner, partition);
         }
         Ok(())
     }

@@ -118,6 +118,8 @@ The SDK publishes a single work event for each task ID. Concurrent publishes of 
 | `GET /topics/{topic}/streams/{group}/next` | Read one record after this group’s durable checkpoint. Returns JSON `null` when caught up. |
 | `POST /topics/{topic}/streams/{group}/commit` | Send `{"offset":42}` after processing. Advances through consecutive records of this topic. |
 | `POST /topics/{topic}/work/{group}/claim` | Send `{"lease_ms":30000}`. Returns `{record,generation,lease_until_ms}` or JSON `null`. |
+| `GET /topics/{topic}/work/{group}/stats` | Inspect queue depth, oldest ready age, expired leases, and retry rates. Optionally filter by `partition` and `owner_service`. |
+| `GET /topics/{topic}/streams/{group}/lag` | Count retained records behind a group checkpoint. Pass `partition` for a partition-scoped group. |
 | `POST /topics/{topic}/work/{group}/settle` | Send the claimed `offset`, `generation`, and an `action` of `ack`, `renew`, `retry`, or `dead-letter`. Set `delay_ms` for renewal or delayed retry. Stale settlements return HTTP 409. |
 | `GET /topics/{topic}/work/{group}/dead-letters` | List summaries for the group's dead-lettered work. Use optional `after` and `limit` query parameters. |
 | `GET /topics/{topic}/work/{group}/dead-letters/{offset}` | Read the original record and dead-letter generation. Returns HTTP 404 if the entry is absent. |
@@ -227,6 +229,27 @@ SPOOLTAIL_SERVICE_PARTITIONS='{"urgent":[2,3],"billing":4}' SPOOLTAIL_DYNAMIC_PL
 With dynamic placement enabled, a new task goes to the eligible partition with the fewest outstanding publish requests. Hashing breaks ties. On a later publish, the broker can move an idle task within its pool when the current partition has at least four outstanding publishes and another has at most half as many. A task has a five-second cooldown after an automatic move. General tasks use the unreserved pool. A service with a single partition keeps its dedicated placement.
 
 The route update persists a new ownership version. Queued publishes recheck their version before writing. The broker lets an in-flight append finish before it can move that task. Existing events stay in their original journals, and existing leases can still complete. The HTTP `/stats` response reports `automatic_task_moves`.
+
+### Limit and schedule work by service
+
+```sh
+SPOOLTAIL_SERVICE_QUOTAS='{"billing":{"max_in_flight":20,"max_pending_publishes":8}}' \
+SPOOLTAIL_SERVICE_FAIRNESS=1 ./target/release/spooltail
+```
+
+Supply `owner_service` on the first publish for a task. Spooltail saves that owner across topics, including on a single-partition broker. Tasks already stored without an owner remain in the default lane. Quotas use the stored owner and apply across its topics and work groups. The publish hint assumes trusted producers.
+
+- `max_in_flight` caps the service's unexpired work leases. A claim skips a service at its limit and can still serve other eligible work. Acknowledgement, retry, completion, and expiry release capacity.
+- `max_pending_publishes` caps the service's concurrent append requests waiting for or using the journal. Excess requests receive HTTP 429 or gRPC `RESOURCE_EXHAUSTED`. Exact retries of committed events, cancellation requests, and lease completion can still proceed.
+- Omit a limit for unlimited capacity of that kind. Fairness is opt-in. Each claim scope, defined by topic, work group, and optional partition, serves the least recently served eligible owner with the oldest ready offset within that owner's lane. Unowned tasks share one lane. Turns survive restart. With fairness off, claims use offset order among eligible work.
+
+### Inspect work and stream lag
+
+Use the HTTP routes above or the gRPC `GetWorkStats` and `GetStreamLag` operations. Work stats count ready, leased, and delayed records in `queue_depth` and report dead letters separately. The ready count reflects visibility deadlines before service quota checks. `oldest_ready_age_ms` measures the time since the earliest ready offset was accepted. It is null for an empty ready queue or a legacy record without an acceptance time.
+
+`expired_leases` counts leases that have expired and can be reclaimed. `expired_lease_redeliveries_total` counts successful claims of expired leases since startup. `retries_total` counts accepted explicit retry settlements, and `retries_per_minute` counts them over the last 60 one-second buckets. Those counters reset on restart and are attributed to the service and work partition at the time of the operation.
+
+Stream lag counts retained, uncommitted records after the group's checkpoint, even when offsets are sparse. `retention_gap` indicates that retention removed unprocessed records. A lag query never creates or advances a checkpoint. Match the consumer's partition scope to inspect its lag.
 
 ### Use a SQLite index per partition
 

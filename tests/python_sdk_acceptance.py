@@ -666,6 +666,13 @@ async def dead_letter_operations(directory):
         offset = await client.publish(topic, event)
         lease = await client.claim(topic, group)
         assert lease is not None
+        stats = await client.work_stats(topic, group, partition=0)
+        assert stats.queue_depth == stats.leased == 1
+        assert stats.ready == stats.retries_total == 0 and stats.oldest_ready_age_ms is None
+        lag = await client.stream_lag(topic, "audit", partition=0)
+        assert (lag.checkpoint, lag.latest_offset, lag.lag, lag.retention_gap) == (
+            0, offset, 1, False
+        )
         assert await client.get_dead_letter(topic, group, offset) is None
         await client.settle(lease, SettlementAction.DEAD_LETTER)
         assert await client.list_dead_letters(topic, group, limit=1) == [

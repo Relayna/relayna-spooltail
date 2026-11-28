@@ -12,6 +12,7 @@ mod retire;
 mod space;
 mod store;
 mod subscriptions;
+mod work;
 
 use anyhow::{Context, Result};
 use axum::{
@@ -127,6 +128,11 @@ fn error_body(e: &anyhow::Error) -> (StatusCode, &'static str, Value) {
             "error",
             json!({"error":e.to_string()}),
         ),
+        Some(Problem::ServiceQuota) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            "error",
+            json!({"error":e.to_string()}),
+        ),
         Some(Problem::Missing) => (StatusCode::NOT_FOUND, "error", json!({"error":"not found"})),
         None => {
             eprintln!("broker error: {e:#}");
@@ -239,6 +245,7 @@ async fn publish_frame(
 ) -> Result<Position> {
     tokio::task::spawn_blocking(move || {
         let task = frame.key()?.0.to_owned();
+        let mut admission = None;
         let position = loop {
             let ticket = with_store(&b.store, |store| {
                 if cancellation.is_some() {
@@ -250,7 +257,11 @@ async fn publish_frame(
                 {
                     store.admit_disk_write(0, false)?;
                 }
-                store.writer_ticket(&task, owner_service.as_deref())
+                let ticket = store.writer_ticket(&task, owner_service.as_deref())?;
+                if cancellation.is_none() && frame.completion.is_none() && admission.is_none() {
+                    admission = store.admit_service_publish(&task, &frame)?;
+                }
+                Ok::<_, anyhow::Error>(ticket)
             })?;
             let partition = ticket.placement.partition;
             // Ownership can change while queued. Check both partition and epoch
@@ -553,6 +564,23 @@ async fn claim(
             .await?
     )))
 }
+
+#[derive(Deserialize)]
+struct WorkStatsQuery {
+    partition: Option<u32>,
+    owner_service: Option<String>,
+}
+
+async fn work_stats(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Query(q): Query<WorkStatsQuery>,
+) -> Result<Json<work::WorkStats>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.work_stats(&topic, &group, q.partition, q.owner_service.as_deref()))
+            .await?,
+    ))
+}
 async fn settle(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
@@ -677,6 +705,17 @@ struct PartitionQuery {
     partition: Option<u32>,
 }
 
+async fn stream_lag(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Query(q): Query<PartitionQuery>,
+) -> Result<Json<subscriptions::StreamLag>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.stream_lag(&topic, &group, q.partition))
+            .await?,
+    ))
+}
+
 async fn next(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
@@ -776,6 +815,7 @@ async fn main() -> Result<()> {
         _ => anyhow::bail!("usage: spooltail [--version | expire-before TOPIC FIRST_OFFSET]"),
     }
     read_service_rules(&mut store)?;
+    work::configure(&mut store)?;
     store.dynamic_placement = match std::env::var("SPOOLTAIL_DYNAMIC_PLACEMENT") {
         Ok(value) if value == "1" => true,
         Ok(value) if value == "0" => false,
@@ -834,6 +874,7 @@ async fn main() -> Result<()> {
         .route("/topics/{topic}/tasks/{task}/events", get(sse))
         .route("/topics/{topic}/tasks/{task}/cancel", post(cancel_task))
         .route("/topics/{topic}/work/{group}/claim", post(claim))
+        .route("/topics/{topic}/work/{group}/stats", get(work_stats))
         .route("/topics/{topic}/work/{group}/settle", post(settle))
         .route(
             "/topics/{topic}/work/{group}/dead-letters",
@@ -849,6 +890,7 @@ async fn main() -> Result<()> {
         )
         .route("/topics/{topic}/work/{group}/complete", post(complete))
         .route("/topics/{topic}/streams/{group}/next", get(next))
+        .route("/topics/{topic}/streams/{group}/lag", get(stream_lag))
         .route("/topics/{topic}/streams/{group}/commit", post(commit))
         .route("/partitions", get(partitions))
         .route("/partitions/{id}", put(ensure_partition))

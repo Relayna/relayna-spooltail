@@ -66,6 +66,11 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.ClaimRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.ClaimResponse.FromString,
                 _registered_method=True)
+        self.GetWorkStats = channel.unary_unary(
+                '/spooltail.v1.Spooltail/GetWorkStats',
+                request_serializer=spooltail__pb2.WorkStatsRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.WorkStats.FromString,
+                _registered_method=True)
         self.Settle = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Settle',
                 request_serializer=spooltail__pb2.SettleRequest.SerializeToString,
@@ -100,6 +105,11 @@ class SpooltailStub(object):
                 '/spooltail.v1.Spooltail/Next',
                 request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
                 response_deserializer=spooltail__pb2.NextResponse.FromString,
+                _registered_method=True)
+        self.GetStreamLag = channel.unary_unary(
+                '/spooltail.v1.Spooltail/GetStreamLag',
+                request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamLag.FromString,
                 _registered_method=True)
         self.Commit = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Commit',
@@ -202,6 +212,12 @@ class SpooltailServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetWorkStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Settle(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -239,6 +255,12 @@ class SpooltailServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def Next(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetStreamLag(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -349,6 +371,11 @@ def add_SpooltailServicer_to_server(servicer, server):
                     request_deserializer=spooltail__pb2.ClaimRequest.FromString,
                     response_serializer=spooltail__pb2.ClaimResponse.SerializeToString,
             ),
+            'GetWorkStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetWorkStats,
+                    request_deserializer=spooltail__pb2.WorkStatsRequest.FromString,
+                    response_serializer=spooltail__pb2.WorkStats.SerializeToString,
+            ),
             'Settle': grpc.unary_unary_rpc_method_handler(
                     servicer.Settle,
                     request_deserializer=spooltail__pb2.SettleRequest.FromString,
@@ -383,6 +410,11 @@ def add_SpooltailServicer_to_server(servicer, server):
                     servicer.Next,
                     request_deserializer=spooltail__pb2.StreamGroup.FromString,
                     response_serializer=spooltail__pb2.NextResponse.SerializeToString,
+            ),
+            'GetStreamLag': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetStreamLag,
+                    request_deserializer=spooltail__pb2.StreamGroup.FromString,
+                    response_serializer=spooltail__pb2.StreamLag.SerializeToString,
             ),
             'Commit': grpc.unary_unary_rpc_method_handler(
                     servicer.Commit,
@@ -618,6 +650,33 @@ class Spooltail(object):
             _registered_method=True)
 
     @staticmethod
+    def GetWorkStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/GetWorkStats',
+            spooltail__pb2.WorkStatsRequest.SerializeToString,
+            spooltail__pb2.WorkStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def Settle(request,
             target,
             options=(),
@@ -796,6 +855,33 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/Next',
             spooltail__pb2.StreamGroup.SerializeToString,
             spooltail__pb2.NextResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetStreamLag(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/GetStreamLag',
+            spooltail__pb2.StreamGroup.SerializeToString,
+            spooltail__pb2.StreamLag.FromString,
             options,
             channel_credentials,
             insecure,

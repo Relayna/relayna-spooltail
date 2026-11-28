@@ -56,7 +56,9 @@ impl Api {
 
 fn status(error: anyhow::Error) -> Status {
     match error.downcast_ref::<Problem>() {
-        Some(Problem::Capacity) => Status::resource_exhausted(error.to_string()),
+        Some(Problem::Capacity | Problem::ServiceQuota) => {
+            Status::resource_exhausted(error.to_string())
+        }
         Some(Problem::Missing) => Status::not_found(error.to_string()),
         Some(Problem::Invalid(_)) => Status::invalid_argument(error.to_string()),
         Some(Problem::Conflict(_)) => Status::failed_precondition(error.to_string()),
@@ -189,6 +191,30 @@ impl Spooltail for Api {
             generation: claim.generation,
             lease_until_ms: claim.lease_until_ms,
             partition: claim.partition,
+        }))
+    }
+
+    async fn get_work_stats(
+        &self,
+        request: Request<wire::WorkStatsRequest>,
+    ) -> Result<Response<wire::WorkStats>, Status> {
+        let q = request.into_inner();
+        let stats = self
+            .0
+            .run(move |s| s.work_stats(&q.topic, &q.group, q.partition, q.owner_service.as_deref()))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(wire::WorkStats {
+            queue_depth: stats.queue_depth,
+            ready: stats.ready,
+            leased: stats.leased,
+            delayed: stats.delayed,
+            dead_lettered: stats.dead_lettered,
+            expired_leases: stats.expired_leases,
+            oldest_ready_age_ms: stats.oldest_ready_age_ms,
+            expired_lease_redeliveries_total: stats.expired_lease_redeliveries_total,
+            retries_total: stats.retries_total,
+            retries_per_minute: stats.retries_per_minute,
         }))
     }
 
@@ -327,6 +353,24 @@ impl Spooltail for Api {
             .map_err(status)?;
         let record = record.map(encode).transpose().map_err(status)?;
         Ok(Response::new(NextResponse { record }))
+    }
+
+    async fn get_stream_lag(
+        &self,
+        request: Request<StreamGroup>,
+    ) -> Result<Response<wire::StreamLag>, Status> {
+        let q = request.into_inner();
+        let lag = self
+            .0
+            .run(move |s| s.stream_lag(&q.topic, &q.group, q.partition))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(wire::StreamLag {
+            checkpoint: lag.checkpoint,
+            latest_offset: lag.latest_offset,
+            lag: lag.lag,
+            retention_gap: lag.retention_gap,
+        }))
     }
 
     async fn commit(&self, request: Request<CommitRequest>) -> Result<Response<Empty>, Status> {

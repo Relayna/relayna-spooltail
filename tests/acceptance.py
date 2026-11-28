@@ -805,6 +805,124 @@ def expired(broker, floor):
         assert kind == "gap" and gap["data"] == data
 
 
+def service_quotas_and_metrics(broker):
+    broker.env["SPOOLTAIL_SERVICE_FAIRNESS"] = "1"
+    broker.start()
+
+    def publish_owned(topic, task, owner):
+        return broker.request(
+            f"/topics/{topic}/records?owner_service={owner}",
+            {
+                "task_id": task,
+                "event_id": "enqueued",
+            },
+        )["offset"]
+
+    def claim(topic, group="workers", lease_ms=30_000):
+        return broker.request(
+            f"/topics/{topic}/work/{group}/claim", {"lease_ms": lease_ms}
+        )
+
+    def settle(topic, lease, action="ack", delay_ms=0, group="workers"):
+        return broker.request(
+            f"/topics/{topic}/work/{group}/settle",
+            {
+                "offset": lease["record"]["offset"],
+                "generation": lease["generation"],
+                "action": action,
+                "delay_ms": delay_ms,
+            },
+        )
+
+    task_topic = "fair.tasks"
+    a1 = publish_owned(task_topic, "a1", "alpha")
+    a2 = publish_owned(task_topic, "a2", "alpha")
+    broker.publish("unrelated", "enqueue", "different.topic")
+    b1 = publish_owned(task_topic, "b1", "beta")
+    b2 = publish_owned(task_topic, "b2", "beta")
+    lease = claim(task_topic)
+    assert lease["record"]["offset"] == a1
+    settle(task_topic, lease)
+    broker.kill()
+    broker.env["SPOOLTAIL_SERVICE_QUOTAS"] = '{"limited":{"max_in_flight":1}}'
+    broker.start()
+    for offset in (b1, a2, b2):
+        lease = claim(task_topic)
+        assert lease["record"]["offset"] == offset
+        settle(task_topic, lease)
+    assert claim(task_topic) is None
+
+    limited = publish_owned("quota.left", "limited-left", "limited")
+    limited_right = publish_owned("quota.right", "limited-right", "limited")
+    spare = publish_owned("quota.right", "spare", "beta")
+    lease = claim("quota.left", lease_ms=1_000)
+    assert lease["record"]["offset"] == limited
+    assert claim("quota.left", group="other") is None
+    other = claim("quota.right")
+    assert other["record"]["offset"] == spare
+    settle("quota.right", other)
+    assert claim("quota.right") is None
+    stats = "/topics/quota.left/work/workers/stats?owner_service=limited&partition=0"
+    assert broker.request(stats)["leased"] == 1
+    deadline = time.monotonic() + 5
+    while (snapshot := broker.request(stats))["expired_leases"] == 0:
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert snapshot["queue_depth"] == snapshot["ready"] == 1
+    assert snapshot["oldest_ready_age_ms"] >= 0
+    assert snapshot["expired_lease_redeliveries_total"] == 0
+    new_lease = claim("quota.left")
+    assert new_lease["generation"] > lease["generation"]
+    settle("quota.left", new_lease, "retry", delay_ms=60_000)
+    snapshot = broker.request(stats)
+    assert snapshot["queue_depth"] == snapshot["delayed"] == 1
+    assert snapshot["ready"] == snapshot["expired_leases"] == 0
+    assert snapshot["oldest_ready_age_ms"] is None
+    assert snapshot["retries_total"] == snapshot["retries_per_minute"] == 1
+    assert snapshot["expired_lease_redeliveries_total"] == 1
+    assert (
+        broker.request("/topics/quota.left/work/workers/stats?owner_service=beta")[
+            "queue_depth"
+        ]
+        == 0
+    )
+    assert claim("quota.right")["record"]["offset"] == limited_right
+
+    stream = f"/topics/{task_topic}/streams/audit"
+    expected = {"checkpoint": 0, "latest_offset": b2, "lag": 4, "retention_gap": False}
+    assert broker.request(stream + "/lag?partition=0") == expected
+    assert broker.request(stream + "/next")["offset"] == a1
+    broker.request(stream + "/commit", {"offset": a1})
+    assert broker.request(stream + "/lag") == expected | {"checkpoint": a1, "lag": 3}
+    broker.kill()
+    broker.env["SPOOLTAIL_SERVICE_FAIRNESS"] = "0"
+    subprocess.run(
+        [broker.binary, "expire-before", task_topic, str(b1)],
+        env=broker.env,
+        check=True,
+    )
+    broker.start()
+    assert broker.request(stream + "/lag") == expected | {
+        "checkpoint": a1,
+        "lag": 2,
+        "retention_gap": True,
+    }
+    assert broker.request(f"/topics/{task_topic}/streams/new-group/lag") == expected | {
+        "checkpoint": b1 - 1,
+        "lag": 2,
+    }
+    assert claim("quota.right", group="other")["record"]["offset"] == spare
+
+    original = broker.publish("lag-moved", "first", "lag.multi")
+    broker.request("/partitions/2", method="PUT")
+    broker.request("/tasks/lag-moved/move", {"from_partition": 0, "to_partition": 2})
+    moved = broker.publish("lag-moved", "second", "lag.multi")
+    lag = "/topics/lag.multi/streams/audit/lag"
+    assert broker.request(lag + "?partition=0")["latest_offset"] == original
+    assert broker.request(lag + "?partition=2")["latest_offset"] == moved
+    assert broker.request(lag)["lag"] == 2
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, default=Path("target/release/spooltail"))
@@ -855,5 +973,13 @@ if __name__ == "__main__":
         broker = Broker(args.binary.resolve(), Path(path))
         try:
             document_summary_streams(broker)
+        finally:
+            broker.kill()
+
+    with tempfile.TemporaryDirectory() as path:
+        broker = Broker(args.binary.resolve(), Path(path))
+        try:
+            service_quotas_and_metrics(broker)
+            print("PASS: service fairness, lease quotas, work metrics, and stream lag")
         finally:
             broker.kill()

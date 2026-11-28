@@ -113,6 +113,28 @@ class BrokerStats:
     packing_space_pauses: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class WorkStats:
+    queue_depth: int
+    ready: int
+    leased: int
+    delayed: int
+    dead_lettered: int
+    expired_leases: int
+    oldest_ready_age_ms: int | None
+    expired_lease_redeliveries_total: int
+    retries_total: int
+    retries_per_minute: int
+
+
+@dataclass(frozen=True, slots=True)
+class StreamLag:
+    checkpoint: int
+    latest_offset: int | None
+    lag: int
+    retention_gap: bool
+
+
 def _publish(
     topic: str, event: Mapping[str, Any], *, owner_service: str | None = None
 ) -> wire.Publish:
@@ -341,6 +363,48 @@ class SpooltailClient:
         )
         with _translate_conflict("lease expired, settled or superseded"):
             await self._stub.Settle(request, timeout=self._timeout)
+
+    async def work_stats(
+        self, topic: str, group: str, *, partition: int | None = None,
+        owner_service: str | None = None,
+    ) -> WorkStats:
+        """Inspect depth, queue age, and retry activity for a work group."""
+        stats = await self._stub.GetWorkStats(
+            wire.WorkStatsRequest(
+                topic=topic, group=group, partition=partition, owner_service=owner_service
+            ),
+            timeout=self._timeout,
+        )
+        return WorkStats(
+            queue_depth=stats.queue_depth,
+            ready=stats.ready,
+            leased=stats.leased,
+            delayed=stats.delayed,
+            dead_lettered=stats.dead_lettered,
+            expired_leases=stats.expired_leases,
+            oldest_ready_age_ms=(
+                stats.oldest_ready_age_ms if stats.HasField("oldest_ready_age_ms") else None
+            ),
+            expired_lease_redeliveries_total=stats.expired_lease_redeliveries_total,
+            retries_total=stats.retries_total,
+            retries_per_minute=stats.retries_per_minute,
+        )
+
+    async def stream_lag(
+        self, topic: str, group: str, *, partition: int | None = None
+    ) -> StreamLag:
+        """Count retained records behind a stream group's checkpoint."""
+        with _translate_conflict():
+            lag = await self._stub.GetStreamLag(
+                wire.StreamGroup(topic=topic, group=group, partition=partition),
+                timeout=self._timeout,
+            )
+        return StreamLag(
+            checkpoint=lag.checkpoint,
+            latest_offset=lag.latest_offset if lag.HasField("latest_offset") else None,
+            lag=lag.lag,
+            retention_gap=lag.retention_gap,
+        )
 
     async def list_dead_letters(
         self,

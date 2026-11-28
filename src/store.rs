@@ -8,6 +8,7 @@ use crate::{
     retention, retire,
     space::Space,
     subscriptions::{WorkLease, now},
+    work::WorkPolicy,
 };
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -39,6 +40,8 @@ pub enum Problem {
     Gap { earliest: Option<String> },
     #[error("insufficient disk headroom, retry after freeing space")]
     Capacity,
+    #[error("service pending publish quota reached")]
+    ServiceQuota,
     #[error("resource not found")]
     Missing,
 }
@@ -214,6 +217,7 @@ pub struct Store {
     pub(crate) packed: Manifest,
     pub(crate) space: Space,
     pub(crate) audit_only: BTreeSet<String>,
+    pub(crate) work: WorkPolicy,
     journals: BTreeMap<u32, Partition>,
     service_partitions: BTreeMap<String, Vec<u32>>,
     pub dynamic_placement: bool,
@@ -242,6 +246,10 @@ CREATE TABLE IF NOT EXISTS cursors(topic TEXT, name TEXT, offset INTEGER NOT NUL
 CREATE TABLE IF NOT EXISTS leases(topic TEXT, name TEXT, offset INTEGER, generation INTEGER NOT NULL,
     visible_at INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(topic,name,offset));
 CREATE INDEX IF NOT EXISTS dead_leases ON leases(topic,name,offset) WHERE state='dead';
+CREATE TABLE IF NOT EXISTS work_service_turns (
+    topic TEXT NOT NULL, name TEXT NOT NULL, scope INTEGER NOT NULL, service TEXT NOT NULL,
+    served INTEGER NOT NULL, PRIMARY KEY(topic,name,scope,service)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS dead_letter_redrives (
     topic TEXT NOT NULL, name TEXT NOT NULL, offset INTEGER NOT NULL, generation INTEGER NOT NULL,
     PRIMARY KEY(topic,name,offset,generation)
@@ -282,7 +290,8 @@ fn migrate(db: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS partition_cursors (
             topic TEXT NOT NULL, name TEXT NOT NULL, partition INTEGER NOT NULL, offset INTEGER NOT NULL,
             PRIMARY KEY(topic,name,partition));
-         CREATE TEMP TABLE appending (task TEXT PRIMARY KEY, partition INTEGER NOT NULL, work_offset INTEGER UNIQUE, reserved_bytes INTEGER NOT NULL);",
+         CREATE TEMP TABLE appending (task TEXT PRIMARY KEY, partition INTEGER NOT NULL, work_offset INTEGER UNIQUE, reserved_bytes INTEGER NOT NULL);
+         CREATE TEMP TABLE service_lease_limits (service TEXT PRIMARY KEY, max_in_flight INTEGER NOT NULL) WITHOUT ROWID;",
     )?;
     let mut columns = db.prepare("SELECT name FROM pragma_table_info('task_routes')")?;
     let existing = columns
@@ -434,6 +443,7 @@ impl Store {
             packed,
             space: Space::default(),
             audit_only,
+            work: WorkPolicy::default(),
             _lock: lock,
             journals,
             service_partitions: BTreeMap::new(),
@@ -754,13 +764,16 @@ impl Store {
 
     pub fn route_for(&mut self, task: &str, owner_service: Option<&str>) -> Result<Placement> {
         self.ensure_writable()?;
-        if self.journals.len() == 1 && self.reserved_partitions.is_empty() {
+        if self.journals.len() == 1
+            && self.reserved_partitions.is_empty()
+            && owner_service.is_none()
+        {
             return Ok(Placement::initial(0));
         }
         if let Some(route) = self.existing_route(task)? {
             return self.consider_move(task, route);
         }
-        let owner = owner_service.filter(|owner| self.service_partitions.contains_key(*owner));
+        let owner = owner_service;
         let pool = self.eligible_partitions(owner);
         let partition = self.choose_partition(task, &pool).ok_or_else(|| {
             Problem::Conflict(
@@ -950,6 +963,10 @@ impl Store {
 
     pub(crate) fn is_completion(&self, offset: i64) -> Result<bool> {
         Ok(self.read_frame(offset)?.1.completion.is_some())
+    }
+
+    pub(crate) fn accepted_at(&self, offset: i64) -> Result<Option<i64>> {
+        Ok(self.read_frame(offset)?.1.accepted_at_ms)
     }
 
     pub(crate) fn read_indexed_page(&self, locations: Vec<RecordLocation>) -> Result<Vec<Record>> {
