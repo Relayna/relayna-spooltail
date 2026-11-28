@@ -8,9 +8,18 @@ service Spooltail {
   rpc AuditHistory(AuditHistoryRequest) returns (AuditHistoryPage);
   rpc Append(Publish) returns (Offset);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
+  rpc GetWorkStats(WorkStatsRequest) returns (WorkStats);
   rpc Settle(SettleRequest) returns (Empty);
+  rpc ListDeadLetters(DeadLetterListRequest) returns (DeadLetterPage);
+  rpc GetDeadLetter(DeadLetterRequest) returns (DeadLetter);
+  rpc RedriveDeadLetter(DeadLetterRedriveRequest) returns (Empty);
   rpc Complete(CompleteRequest) returns (Offset);
+  rpc RequestCancellation(CancellationRequest) returns (Offset);
   rpc Next(StreamGroup) returns (NextResponse);
+  rpc JoinStreamGroup(StreamJoinRequest) returns (StreamMembership);
+  rpc HeartbeatStreamGroup(StreamMemberRequest) returns (StreamMembership);
+  rpc LeaveStreamGroup(StreamMemberRequest) returns (Empty);
+  rpc GetStreamLag(StreamGroup) returns (StreamLag);
   rpc Commit(CommitRequest) returns (Empty);
   rpc NextBatch(StreamBatchRequest) returns (StreamBatch);
   rpc CommitBatch(StreamBatchCommit) returns (Empty);
@@ -78,6 +87,25 @@ message ClaimResponse {
   // Current task placement; record.partition identifies the original append.
   uint32 partition = 4;
 }
+message WorkStatsRequest {
+  string topic = 1;
+  string group = 2;
+  // Filter by current task placement and saved owner, respectively.
+  optional uint32 partition = 3;
+  optional string owner_service = 4;
+}
+message WorkStats {
+  uint64 queue_depth = 1;
+  uint64 ready = 2;
+  uint64 leased = 3;
+  uint64 delayed = 4;
+  uint64 dead_lettered = 5;
+  uint64 expired_leases = 6;
+  optional uint64 oldest_ready_age_ms = 7;
+  uint64 expired_lease_redeliveries_total = 8;
+  uint64 retries_total = 9;
+  uint64 retries_per_minute = 10;
+}
 enum SettlementAction {
   SETTLEMENT_ACTION_UNSPECIFIED = 0;
   SETTLEMENT_ACTION_ACK = 1;
@@ -93,12 +121,56 @@ message SettleRequest {
   SettlementAction action = 5;
   int64 delay_ms = 6;
 }
+message DeadLetterListRequest {
+  string topic = 1;
+  string group = 2;
+  // Exclusive work offset. Omit to start at the beginning.
+  optional int64 after = 3;
+  // Requested count, 1 through 64. Defaults to 32.
+  optional uint32 limit = 4;
+}
+message DeadLetterSummary {
+  int64 offset = 1;
+  string task_id = 2;
+  string event_id = 3;
+  // Generation at which this group's delivery was dead-lettered.
+  int64 generation = 4;
+  // Current work placement.
+  uint32 partition = 5;
+}
+message DeadLetterPage {
+  repeated DeadLetterSummary entries = 1;
+}
+message DeadLetterRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+}
+message DeadLetter {
+  Record record = 1;
+  int64 generation = 2;
+  uint32 partition = 3;
+}
+message DeadLetterRedriveRequest {
+  string topic = 1;
+  string group = 2;
+  int64 offset = 3;
+  // Retries for the same generation return success without requeueing again.
+  int64 generation = 4;
+}
 message CompleteRequest {
   string topic = 1;
   string group = 2;
   int64 offset = 3;
   int64 generation = 4;
   Publish status = 5;
+}
+message CancellationRequest {
+  // The work, status, and cancellation topics must be distinct.
+  string task_topic = 1;
+  string task_id = 2;
+  string status_topic = 3;
+  string cancel_topic = 4;
 }
 message Delivery {
   // One of ready, status, gap, or error.
@@ -110,6 +182,38 @@ message StreamGroup {
   string topic = 1;
   string group = 2;
   optional uint32 partition = 3;
+  StreamOwnership ownership = 4;
+}
+message StreamJoinRequest {
+  string topic = 1;
+  string group = 2;
+  // Use a unique ID per consumer instance and reuse it when retrying Join.
+  string member_id = 3;
+  int64 lease_ms = 4;
+}
+message StreamMemberRequest {
+  string topic = 1;
+  string group = 2;
+  int64 member_epoch = 3;
+}
+message StreamOwnership {
+  int64 member_epoch = 1;
+  int64 assignment_epoch = 2;
+}
+message StreamAssignment {
+  uint32 partition = 1;
+  int64 assignment_epoch = 2;
+}
+message StreamMembership {
+  int64 member_epoch = 1;
+  int64 lease_until_ms = 2;
+  repeated StreamAssignment assignments = 3;
+}
+message StreamLag {
+  int64 checkpoint = 1;
+  optional int64 latest_offset = 2;
+  uint64 lag = 3;
+  bool retention_gap = 4;
 }
 message NextResponse {
   // Absent when the stream group has caught up.
@@ -120,6 +224,7 @@ message CommitRequest {
   string group = 2;
   int64 offset = 3;
   optional uint32 partition = 4;
+  StreamOwnership ownership = 5;
 }
 message StreamBatchRequest {
   string topic = 1;
@@ -127,6 +232,7 @@ message StreamBatchRequest {
   optional uint32 partition = 3;
   // Requested record count, 1 through 64. When omitted, defaults to 32.
   optional uint32 limit = 4;
+  StreamOwnership ownership = 5;
 }
 message StreamBatch {
   // The exclusive starting offset. NextBatch uses the durable group checkpoint.
@@ -150,6 +256,7 @@ message StreamBatchCommit {
   // Offset of the last processed record in the consecutive prefix.
   int64 through = 5;
   uint32 count = 6;
+  StreamOwnership ownership = 7;
 }
 message StatsResponse {
   uint64 payload_reads = 1;

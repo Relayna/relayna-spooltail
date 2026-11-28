@@ -11,7 +11,9 @@ mod retention;
 mod retire;
 mod space;
 mod store;
+mod stream_members;
 mod subscriptions;
+mod work;
 
 use anyhow::{Context, Result};
 use axum::{
@@ -25,7 +27,7 @@ use axum::{
         IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
     },
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use live::Delivery;
 use serde::{Deserialize, Serialize};
@@ -37,7 +39,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use store::{Frame, Position, Prepared, Problem, Store, identifier};
-use subscriptions::WorkLease;
+use stream_members::{StreamAccess, StreamMembership, StreamOwnership};
+use subscriptions::{DEFAULT_STREAM_BATCH_RECORDS, WorkLease};
 use tokio::sync::broadcast::error::RecvError;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 
@@ -127,6 +130,11 @@ fn error_body(e: &anyhow::Error) -> (StatusCode, &'static str, Value) {
             "error",
             json!({"error":e.to_string()}),
         ),
+        Some(Problem::ServiceQuota) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            "error",
+            json!({"error":e.to_string()}),
+        ),
         Some(Problem::Missing) => (StatusCode::NOT_FOUND, "error", json!({"error":"not found"})),
         None => {
             eprintln!("broker error: {e:#}");
@@ -200,18 +208,62 @@ async fn publish(
     if let Some(service) = owner_service.as_deref() {
         identifier(service)?;
     }
+    publish_frame(b, Frame::new(topic, event, lease)?, owner_service, None).await
+}
+
+struct CancellationTarget {
+    task_topic: String,
+    status_topic: String,
+}
+
+impl CancellationTarget {
+    fn check(&self, store: &Store, task: &str, intent: &Frame) -> Result<()> {
+        let floor = store.floor(&self.task_topic)?;
+        if !store.has_task_records_after(&self.task_topic, task, floor - 1)? {
+            return Err(Problem::Missing.into());
+        }
+        // A retry can recover its receipt even if the worker has since finished.
+        if store.existing_event(intent)?.is_some() {
+            return Ok(());
+        }
+        match store.latest(&self.status_topic, task) {
+            Ok(record) if store::terminal_status(&record.event) => {
+                Err(Problem::Conflict("task is already terminal".into()).into())
+            }
+            Ok(_) => Ok(()),
+            Err(error) if matches!(error.downcast_ref::<Problem>(), Some(Problem::Missing)) => {
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+async fn publish_frame(
+    b: Broker,
+    mut frame: Frame,
+    owner_service: Option<String>,
+    cancellation: Option<CancellationTarget>,
+) -> Result<Position> {
     tokio::task::spawn_blocking(move || {
-        let mut frame = Frame::new(topic, event, lease)?;
         let task = frame.key()?.0.to_owned();
+        let mut admission = None;
         let position = loop {
             let ticket = with_store(&b.store, |store| {
-                if store.space.reserve > 0
+                if cancellation.is_some() {
+                    // A request for an unknown task must not pick its initial partition.
+                    store.task_partition(&task)?;
+                } else if store.space.reserve > 0
                     && frame.completion.is_none()
                     && store.existing_event(&frame)?.is_none()
                 {
                     store.admit_disk_write(0, false)?;
                 }
-                store.writer_ticket(&task, owner_service.as_deref())
+                let ticket = store.writer_ticket(&task, owner_service.as_deref())?;
+                if cancellation.is_none() && frame.completion.is_none() && admission.is_none() {
+                    admission = store.admit_service_publish(&task, &frame)?;
+                }
+                Ok::<_, anyhow::Error>(ticket)
             })?;
             let partition = ticket.placement.partition;
             // Ownership can change while queued. Check both partition and epoch
@@ -224,6 +276,10 @@ async fn publish(
                 }
                 if ticket.grouped && store.is_appending(&task)? {
                     return Ok(None);
+                }
+                if let Some(target) = &cancellation {
+                    // Other writes for this task must wait for the intent to commit.
+                    target.check(store, &task, &frame)?;
                 }
                 store.prepare_append(&mut frame, partition).map(Some)
             })?;
@@ -492,6 +548,11 @@ struct Completion {
     event: Value,
 }
 #[derive(Deserialize)]
+struct CancellationTopics {
+    status_topic: String,
+    cancel_topic: String,
+}
+#[derive(Deserialize)]
 struct Commit {
     offset: i64,
 }
@@ -504,6 +565,23 @@ async fn claim(
         b.run(move |s| s.claim(&topic, &group, q.lease_ms, q.partition))
             .await?
     )))
+}
+
+#[derive(Deserialize)]
+struct WorkStatsQuery {
+    partition: Option<u32>,
+    owner_service: Option<String>,
+}
+
+async fn work_stats(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Query(q): Query<WorkStatsQuery>,
+) -> Result<Json<work::WorkStats>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.work_stats(&topic, &group, q.partition, q.owner_service.as_deref()))
+            .await?,
+    ))
 }
 async fn settle(
     State(b): State<Broker>,
@@ -523,6 +601,56 @@ async fn settle(
     .await?;
     Ok(Json(json!({"ok":true})))
 }
+
+#[derive(Deserialize)]
+struct DeadLetterPageQuery {
+    after: Option<i64>,
+    limit: Option<u32>,
+}
+
+async fn list_dead_letters(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Query(q): Query<DeadLetterPageQuery>,
+) -> Reply {
+    let entries = b
+        .run(move |s| {
+            s.list_dead_letters(
+                &topic,
+                &group,
+                q.after.unwrap_or_default(),
+                q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+            )
+        })
+        .await?;
+    Ok(Json(json!(entries)))
+}
+
+async fn get_dead_letter(
+    State(b): State<Broker>,
+    Path((topic, group, offset)): Path<(String, String, i64)>,
+) -> Reply {
+    let entry = b
+        .run(move |s| s.dead_letter(&topic, &group, offset))
+        .await?;
+    Ok(Json(json!(entry)))
+}
+
+#[derive(Deserialize)]
+struct Redrive {
+    generation: i64,
+}
+
+async fn redrive_dead_letter(
+    State(b): State<Broker>,
+    Path((topic, group, offset)): Path<(String, String, i64)>,
+    Json(q): Json<Redrive>,
+) -> Reply {
+    b.run(move |s| s.redrive_dead_letter(&topic, &group, offset, q.generation))
+        .await?;
+    Ok(Json(json!({"ok":true})))
+}
+
 async fn complete(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
@@ -539,28 +667,139 @@ async fn complete(
     )))
 }
 
+async fn request_cancellation(
+    b: Broker,
+    task_topic: String,
+    task_id: String,
+    topics: CancellationTopics,
+) -> Result<Position> {
+    identifier(&task_topic)?;
+    identifier(&topics.status_topic)?;
+    if task_topic == topics.status_topic
+        || task_topic == topics.cancel_topic
+        || topics.status_topic == topics.cancel_topic
+    {
+        return Err(Problem::Invalid("cancellation requires three distinct topics".into()).into());
+    }
+    let intent = Frame::new(
+        topics.cancel_topic,
+        json!({"task_id": task_id, "event_id": "cancel"}),
+        None,
+    )?;
+    let target = CancellationTarget {
+        task_topic,
+        status_topic: topics.status_topic,
+    };
+    publish_frame(b, intent, None, Some(target)).await
+}
+
+async fn cancel_task(
+    State(b): State<Broker>,
+    Path((task_topic, task_id)): Parts,
+    Json(topics): Json<CancellationTopics>,
+) -> Result<(StatusCode, Json<Position>), ApiError> {
+    let receipt = request_cancellation(b, task_topic, task_id, topics).await?;
+    Ok((StatusCode::ACCEPTED, Json(receipt)))
+}
+
 #[derive(Deserialize)]
 struct PartitionQuery {
     partition: Option<u32>,
 }
 
-async fn next(
+#[derive(Deserialize)]
+struct StreamAccessQuery {
+    partition: Option<u32>,
+    member_epoch: Option<i64>,
+    assignment_epoch: Option<i64>,
+}
+
+impl StreamAccessQuery {
+    fn access(self) -> Result<StreamAccess> {
+        let ownership = match (self.member_epoch, self.assignment_epoch) {
+            (Some(member_epoch), Some(assignment_epoch)) => Some(StreamOwnership {
+                member_epoch,
+                assignment_epoch,
+            }),
+            (None, None) => None,
+            _ => {
+                return Err(
+                    Problem::Invalid("both stream ownership epochs are required".into()).into(),
+                );
+            }
+        };
+        Ok(StreamAccess {
+            partition: self.partition,
+            ownership,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct JoinStreamGroup {
+    member_id: String,
+    lease_ms: i64,
+}
+
+async fn join_stream_group(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Json(q): Json<JoinStreamGroup>,
+) -> Result<Json<StreamMembership>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.join_stream_group(&topic, &group, &q.member_id, q.lease_ms))
+            .await?,
+    ))
+}
+
+async fn heartbeat_stream_group(
+    State(b): State<Broker>,
+    Path((topic, group, member)): Path<(String, String, i64)>,
+) -> Result<Json<StreamMembership>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.heartbeat_stream_group(&topic, &group, member))
+            .await?,
+    ))
+}
+
+async fn leave_stream_group(
+    State(b): State<Broker>,
+    Path((topic, group, member)): Path<(String, String, i64)>,
+) -> Reply {
+    b.run(move |s| s.leave_stream_group(&topic, &group, member))
+        .await?;
+    Ok(Json(json!({"ok":true})))
+}
+
+async fn stream_lag(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
     Query(q): Query<PartitionQuery>,
+) -> Result<Json<subscriptions::StreamLag>, ApiError> {
+    Ok(Json(
+        b.run(move |s| s.stream_lag(&topic, &group, q.partition))
+            .await?,
+    ))
+}
+
+async fn next(
+    State(b): State<Broker>,
+    Path((topic, group)): Parts,
+    Query(q): Query<StreamAccessQuery>,
 ) -> Reply {
+    let access = q.access()?;
     Ok(Json(json!(
-        b.run(move |s| s.group_next(&topic, &group, q.partition))
-            .await?
+        b.run(move |s| s.group_next(&topic, &group, access)).await?
     )))
 }
 async fn commit(
     State(b): State<Broker>,
     Path((topic, group)): Parts,
-    Query(scope): Query<PartitionQuery>,
+    Query(scope): Query<StreamAccessQuery>,
     Json(q): Json<Commit>,
 ) -> Reply {
-    b.run(move |s| s.commit(&topic, &group, q.offset, scope.partition))
+    let access = scope.access()?;
+    b.run(move |s| s.commit(&topic, &group, q.offset, access))
         .await?;
     Ok(Json(json!({"ok":true})))
 }
@@ -643,6 +882,7 @@ async fn main() -> Result<()> {
         _ => anyhow::bail!("usage: spooltail [--version | expire-before TOPIC FIRST_OFFSET]"),
     }
     read_service_rules(&mut store)?;
+    work::configure(&mut store)?;
     store.dynamic_placement = match std::env::var("SPOOLTAIL_DYNAMIC_PLACEMENT") {
         Ok(value) if value == "1" => true,
         Ok(value) if value == "0" => false,
@@ -699,10 +939,37 @@ async fn main() -> Result<()> {
         .route("/topics/{topic}/tasks/{task}/latest", get(latest))
         .route("/topics/{topic}/tasks/{task}/history", get(history))
         .route("/topics/{topic}/tasks/{task}/events", get(sse))
+        .route("/topics/{topic}/tasks/{task}/cancel", post(cancel_task))
         .route("/topics/{topic}/work/{group}/claim", post(claim))
+        .route("/topics/{topic}/work/{group}/stats", get(work_stats))
         .route("/topics/{topic}/work/{group}/settle", post(settle))
+        .route(
+            "/topics/{topic}/work/{group}/dead-letters",
+            get(list_dead_letters),
+        )
+        .route(
+            "/topics/{topic}/work/{group}/dead-letters/{offset}",
+            get(get_dead_letter),
+        )
+        .route(
+            "/topics/{topic}/work/{group}/dead-letters/{offset}/redrive",
+            post(redrive_dead_letter),
+        )
         .route("/topics/{topic}/work/{group}/complete", post(complete))
         .route("/topics/{topic}/streams/{group}/next", get(next))
+        .route("/topics/{topic}/streams/{group}/lag", get(stream_lag))
+        .route(
+            "/topics/{topic}/streams/{group}/members",
+            post(join_stream_group),
+        )
+        .route(
+            "/topics/{topic}/streams/{group}/members/{member}/heartbeat",
+            post(heartbeat_stream_group),
+        )
+        .route(
+            "/topics/{topic}/streams/{group}/members/{member}",
+            delete(leave_stream_group),
+        )
         .route("/topics/{topic}/streams/{group}/commit", post(commit))
         .route("/partitions", get(partitions))
         .route("/partitions/{id}", put(ensure_partition))

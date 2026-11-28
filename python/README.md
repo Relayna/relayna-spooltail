@@ -54,10 +54,22 @@ A browser that already received `T7-running` can resume the same task over SSE w
 
 - `publish` and `complete` return an offset. Unary calls default to a five-second timeout. Retries are caller-controlled. On an ambiguous result, retry with the same event ID and payload, and for completion reuse the same lease.
 - `claim` returns a lease or `None`. Pass the lease to `complete` or to `settle` with a `SettlementAction`. An inactive lease raises `StaleLeaseError`. Other state conflicts raise `ConflictError`. Transport errors retain their gRPC status.
+- `await client.request_cancellation("work", "T7", status_topic="status", cancel_topic="control")` returns the durable intent offset. Configure the worker to watch the same control topic. Read the status topic for the worker's terminal result. A first request for an already-terminal task raises `ConflictError`.
 - `history` returns one page. Use the last record's `event["event_id"]` as the next page's `after` cursor. `subscribe` yields `ready` and `status` deliveries. Use `contextlib.aclosing` if leaving a subscription early. Both methods raise `CursorGapError` for an unavailable cursor and expose `earliest_event_id`, which can be `None`.
 - `next` and `commit` let an independent consumer read and checkpoint status records in order.
+- `work_stats(topic, group, partition=..., owner_service=...)` reads queue depth, age, expired leases, and retry rates. `stream_lag(topic, group, partition=...)` reads retained lag and retention-gap state for a stream checkpoint. The filters are optional.
 
 For catch-up, use `next_batch(topic, group, limit=32)`. Process the returned `batch.records` in order, then call `await client.commit_batch(batch)`. Pass `count=n` to checkpoint only the first `n` records after their effects are durable. A page with no records needs no commit. The broker persists the cursor, so reconnecting with the same topic, group, and partition resumes from the last commit.
+
+## Use broker-managed stream assignments
+
+Join with `await client.join_stream_group(topic, group, member_id, lease_ms=30_000)`. Use a unique member ID for each consumer instance. Renew it with `await client.heartbeat_stream_group(topic, group, member.member_epoch)` and use the returned `assignments` as the current set of partitions to process. Heartbeat independently of record processing so a slow handler can keep its lease.
+
+Pass an assignment to `next_batch(topic, group, assignment=assignment)`. `commit_batch(batch)` keeps the assignment used to fetch that batch. For `next` and `commit`, pass the same assignment to both methods. A stale assignment raises `ConflictError`. Refresh membership and process only partitions in the current assignment. Leave with `await client.leave_stream_group(topic, group, member.member_epoch)` when shutting down.
+
+## Redrive dead-lettered work
+
+List one page with `await client.list_dead_letters("work", "workers", limit=32)`. Inspect an entry's payload with `await client.get_dead_letter("work", "workers", entry.offset)`. To return the original work to the group, call `await client.redrive_dead_letter("work", "workers", entry.offset, entry.generation)`. Retry with the same generation if the response is lost. Use the last entry's offset as `after` for the next page.
 
 ## Audit a task
 

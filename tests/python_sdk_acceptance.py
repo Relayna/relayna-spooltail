@@ -19,6 +19,8 @@ from relayna_spooltail import (
     AuditTimeline,
     ConflictError,
     CursorGapError,
+    DeadLetter,
+    DeadLetterSummary,
     Record,
     ReplayBatch,
     SettlementAction,
@@ -200,6 +202,7 @@ async def exercise(directory):
             ]
 
     cancel_topic = "cancel.work"
+    cancel_control = "cancel.control"
     cancel_task = "cancel-task"
     cancelled = {
         "task_id": cancel_task,
@@ -215,6 +218,16 @@ async def exercise(directory):
         await client.publish(cancel_topic, work)
         lease_to_cancel = await client.claim(cancel_topic, "workers")
         assert lease_to_cancel is not None and lease_to_cancel.record.event == work
+        intent_offset = await client.request_cancellation(
+            cancel_topic,
+            cancel_task,
+            status_topic="cancel.status",
+            cancel_topic=cancel_control,
+        )
+        intent = await client.latest(cancel_control, cancel_task)
+        assert intent == Record(
+            intent_offset, {"task_id": cancel_task, "event_id": "cancel"}
+        )
         async with aclosing(client.subscribe("cancel.status", cancel_task, timeout=5)) as feed:
             assert (await anext(feed)).kind == "ready"
             cancel_offset = await client.complete(lease_to_cancel, "cancel.status", cancelled)
@@ -233,6 +246,24 @@ async def exercise(directory):
         latest_cancelled = await client.latest("cancel.status", cancel_task)
         assert latest_cancelled is not None
         assert (latest_cancelled.offset, latest_cancelled.event) == (cancel_offset, cancelled)
+        assert (
+            await client.request_cancellation(
+                cancel_topic,
+                cancel_task,
+                status_topic="cancel.status",
+                cancel_topic=cancel_control,
+            )
+            == intent_offset
+        )
+        await expect_error(
+            ConflictError,
+            client.request_cancellation(
+                cancel_topic,
+                cancel_task,
+                status_topic="cancel.status",
+                cancel_topic="other.control",
+            ),
+        )
         assert await client.complete(lease_to_cancel, "cancel.status", cancelled) == cancel_offset
         await expect_error(
             ConflictError,
@@ -621,6 +652,96 @@ async def archive_timeline(directory):
             assert await audit_pages(AuditTimeline(client, store), limit=64) == fresh
 
 
+async def dead_letter_operations(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    roots = cert.read_bytes()
+    topic, group = "tasks", "workers"
+    event = {"task_id": "quarantined", "event_id": "enqueued", "value": 42}
+
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(f"localhost:{grpc_port}", root_certificates=roots) as client,
+    ):
+        offset = await client.publish(topic, event)
+        lease = await client.claim(topic, group)
+        assert lease is not None
+        stats = await client.work_stats(topic, group, partition=0)
+        assert stats.queue_depth == stats.leased == 1
+        assert stats.ready == stats.retries_total == 0 and stats.oldest_ready_age_ms is None
+        lag = await client.stream_lag(topic, "audit", partition=0)
+        assert (lag.checkpoint, lag.latest_offset, lag.lag, lag.retention_gap) == (
+            0, offset, 1, False
+        )
+        assert await client.get_dead_letter(topic, group, offset) is None
+        await client.settle(lease, SettlementAction.DEAD_LETTER)
+        assert await client.list_dead_letters(topic, group, limit=1) == [
+            DeadLetterSummary(offset, "quarantined", "enqueued", lease.generation)
+        ]
+        assert await client.list_dead_letters(topic, group, after=offset) == []
+        assert await client.get_dead_letter(topic, group, offset) == DeadLetter(
+            Record(offset, event), lease.generation
+        )
+        await expect_error(
+            ConflictError,
+            client.redrive_dead_letter(topic, group, offset, lease.generation + 1),
+        )
+        await client.redrive_dead_letter(topic, group, offset, lease.generation)
+
+    async with (
+        start(config) as (_, grpc_port),
+        SpooltailClient(f"localhost:{grpc_port}", root_certificates=roots) as client,
+    ):
+        await client.redrive_dead_letter(topic, group, offset, lease.generation)
+        assert await client.list_dead_letters(topic, group) == []
+        redriven = await client.claim(topic, group)
+        assert redriven is not None and redriven.generation > lease.generation
+        assert redriven.record == lease.record
+        await client.settle(redriven, SettlementAction.ACK)
+        assert await client.claim(topic, group) is None
+
+
+async def managed_stream_membership(directory):
+    cert, key = identity(directory)
+    config = env(directory, cert, key)
+    async with (
+        start(config) as (_, port),
+        SpooltailClient(f"localhost:{port}", root_certificates=cert.read_bytes()) as client,
+    ):
+        topic, group = "managed", "audit"
+        initial = await client.publish(topic, {"task_id": "T1", "event_id": "initial"})
+        legacy = await client.next_batch(topic, group, partition=0)
+        assert legacy.records[0].offset == initial
+        await client.commit_batch(legacy)
+        await client.ensure_partition(2)
+        await client.move_task("T1", from_partition=0, to_partition=2)
+        offset = await client.publish(topic, {"task_id": "T1", "event_id": "moved"})
+        first = await client.join_stream_group(topic, group, "first")
+        retained, moving = first.assignments
+        assert (retained.partition, moving.partition) == (0, 2)
+        await client.join_stream_group(topic, "isolated", "first")
+        await expect_error(ConflictError, client.next(topic, "isolated", assignment=retained))
+        assert await client.next(topic, group, assignment=retained) is None
+        stale_batch = await client.next_batch(topic, group, assignment=moving)
+        assert [r.offset for r in stale_batch.records] == [offset]
+        await expect_error(ConflictError, client.next_batch(topic, group, partition=2))
+        second = await client.join_stream_group(topic, group, "second")
+        (destination,) = second.assignments
+        assert destination.partition == 2
+        await expect_error(ConflictError, client.commit_batch(stale_batch))
+        await expect_error(ConflictError, client.commit(topic, group, offset, assignment=moving))
+        delivered = await client.next_batch(topic, group, assignment=destination)
+        assert delivered.records == stale_batch.records
+        await client.commit_batch(delivered)
+        await expect_error(ConflictError, client.commit_batch(stale_batch))
+        await client.leave_stream_group(topic, group, second.member_epoch)
+        returned = await client.heartbeat_stream_group(topic, group, first.member_epoch)
+        assert returned.assignments[0] == retained
+        assert returned.assignments[1] != moving
+        assert await client.next(topic, group, assignment=returned.assignments[1]) is None
+        await expect_error(ConflictError, client.commit_batch(stale_batch))
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--audit-crash"]:
         audit_crash_child(Path(sys.argv[2]), sys.argv[3])
@@ -635,7 +756,11 @@ if __name__ == "__main__":
         asyncio.run(asyncio.wait_for(audit_timeline(Path(temp)), timeout=30))
     with tempfile.TemporaryDirectory(prefix="spooltail-archive-sdk-") as temp:
         asyncio.run(asyncio.wait_for(archive_timeline(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-dlq-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(dead_letter_operations(Path(temp)), timeout=30))
+    with tempfile.TemporaryDirectory(prefix="spooltail-managed-sdk-") as temp:
+        asyncio.run(asyncio.wait_for(managed_stream_membership(Path(temp)), timeout=30))
     print(
-        "PASS: Python SDK publish, lease, completion, cancellation, replay gaps, SSE resume, "
+        "PASS: Python SDK publish, lease, completion, cancellation, dead-letter redrive, replay gaps, SSE resume, "
         "partition moves, service placement, audit timeline recovery, and archive reads"
     )

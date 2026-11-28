@@ -12,6 +12,8 @@ from .client import (
     BrokerStats,
     ConflictError,
     CursorGapError,
+    DeadLetter,
+    DeadLetterSummary,
     Delivery,
     Lease,
     Record,
@@ -20,8 +22,12 @@ from .client import (
     SpooltailClient,
     SpooltailError,
     StaleLeaseError,
+    StreamAssignment,
     StreamBatch,
+    StreamLag,
+    StreamMembership,
     SubscriptionError,
+    WorkStats,
 )
 from .replay import NumericBatch, NumericRow
 
@@ -35,6 +41,8 @@ __all__ = [
     "BrokerStats",
     "ConflictError",
     "CursorGapError",
+    "DeadLetter",
+    "DeadLetterSummary",
     "Delivery",
     "Lease",
     "NumericBatch",
@@ -45,6 +53,10 @@ __all__ = [
     "SpooltailClient",
     "SpooltailError",
     "StaleLeaseError",
+    "StreamAssignment",
     "StreamBatch",
+    "StreamLag",
+    "StreamMembership",
     "SubscriptionError",
+    "WorkStats",
 ]

@@ -1,6 +1,8 @@
 use crate::{
     journal::Address,
     store::{Problem, Record, RecordLocation, Store, identifier},
+    stream_members::StreamAccess,
+    work::record_owner,
 };
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -18,6 +20,32 @@ pub struct Claim {
     pub lease_until_ms: i64,
     #[serde(skip_serializing_if = "crate::store::is_zero")]
     pub partition: u32,
+}
+
+#[derive(Serialize)]
+pub struct DeadLetterSummary {
+    pub offset: i64,
+    pub task_id: String,
+    pub event_id: String,
+    pub generation: i64,
+    #[serde(skip_serializing_if = "crate::store::is_zero")]
+    pub partition: u32,
+}
+
+#[derive(Serialize)]
+pub struct DeadLetter {
+    pub record: Record,
+    pub generation: i64,
+    #[serde(skip_serializing_if = "crate::store::is_zero")]
+    pub partition: u32,
+}
+
+#[derive(Serialize)]
+pub(crate) struct StreamLag {
+    pub checkpoint: i64,
+    pub latest_offset: Option<i64>,
+    pub lag: u64,
+    pub retention_gap: bool,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -94,7 +122,7 @@ pub(crate) fn validate_batch_count(count: u32) -> Result<()> {
 }
 
 impl Store {
-    fn global_checkpoint(&self, topic: &str, group: &str) -> Result<Option<i64>> {
+    pub(crate) fn global_checkpoint(&self, topic: &str, group: &str) -> Result<Option<i64>> {
         Ok(self
             .db
             .query_row(
@@ -210,6 +238,44 @@ impl Store {
         Ok((Some(global.unwrap_or(self.floor(topic)? - 1)), false))
     }
 
+    pub fn stream_lag(
+        &self,
+        topic: &str,
+        group: &str,
+        partition: Option<u32>,
+    ) -> Result<StreamLag> {
+        let (baseline, _) = self.stream_baseline(topic, group, partition)?;
+        let floor = self.floor(topic)?;
+        let checkpoint = match partition {
+            Some(partition) => self
+                .partition_checkpoint(topic, group, partition)?
+                .or(baseline),
+            None => self.global_checkpoint(topic, group)?,
+        }
+        .unwrap_or(floor - 1);
+        let filter = if partition.is_some() {
+            "partition=?4"
+        } else {
+            "?4 IS NULL"
+        };
+        let query = format!(
+            "SELECT (SELECT COUNT(*) FROM records WHERE topic=?1 AND {filter} AND offset>MAX(?2,?3-1)),
+                    (SELECT MAX(offset) FROM records WHERE topic=?1 AND {filter} AND offset>=?3),
+                    EXISTS(SELECT 1 FROM records WHERE topic=?1 AND {filter} AND offset>?2 AND offset<?3)"
+        );
+        Ok(self.db.prepare_cached(&query)?.query_row(
+            params![topic, checkpoint, floor, partition],
+            |r| {
+                Ok(StreamLag {
+                    checkpoint,
+                    lag: r.get::<_, i64>(0)? as u64,
+                    latest_offset: r.get(1)?,
+                    retention_gap: r.get(2)?,
+                })
+            },
+        )?)
+    }
+
     fn partition_next_offset(
         &self,
         topic: &str,
@@ -278,8 +344,11 @@ impl Store {
         &self,
         topic: &str,
         group: &str,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
     ) -> Result<Option<Record>> {
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let (Some(partition), Some(baseline)) = (partition, baseline) else {
             return self.global_next(topic, group);
@@ -300,8 +369,11 @@ impl Store {
         topic: &str,
         group: &str,
         offset: i64,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
     ) -> Result<()> {
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let (Some(partition), Some(baseline)) = (partition, baseline) else {
             return self.global_commit(topic, group, offset);
@@ -406,10 +478,13 @@ impl Store {
         &self,
         topic: &str,
         group: &str,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
         limit: u32,
     ) -> Result<(i64, Vec<Record>)> {
         validate_batch_count(limit)?;
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let scope = partition
             .zip(baseline)
@@ -459,7 +534,7 @@ impl Store {
         &mut self,
         topic: &str,
         group: &str,
-        partition: Option<u32>,
+        access: impl Into<StreamAccess>,
         after: i64,
         through: i64,
         count: u32,
@@ -471,6 +546,9 @@ impl Store {
             )
             .into());
         }
+        let access = access.into();
+        self.check_stream_access(topic, group, access)?;
+        let partition = access.partition;
         let (baseline, initialized) = self.stream_baseline(topic, group, partition)?;
         let scope = partition
             .zip(baseline)
@@ -526,32 +604,23 @@ impl Store {
         self.admit_disk_write(0, false)?;
         let now = now()?;
         let tx = self.db.transaction()?;
-        let filter = if partition.is_some() {
-            "AND r.work_partition=?4"
-        } else {
-            "AND ?4 IS NULL"
-        };
-        let query = format!(
-            "SELECT r.offset,COALESCE(l.generation,0)+1,r.work_partition
-             FROM records r LEFT JOIN leases l ON l.topic=r.topic AND l.name=?1 AND l.offset=r.offset
-             WHERE r.topic=?2 {filter}
-               AND (l.offset IS NULL OR (l.state IN ('pending','retry') AND l.visible_at<=?3))
-               AND NOT EXISTS(SELECT 1 FROM appending WHERE work_offset=r.offset)
-             ORDER BY r.offset LIMIT 1"
-        );
-        let choice: Option<(i64, i64, u32)> = tx
-            .prepare_cached(&query)?
-            .query_row(params![group, topic, now, partition], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-            })
-            .optional()?;
-        let Some((offset, generation, partition)) = choice else {
+        let Some(choice) = self.work.choose(&tx, topic, group, now, partition)? else {
             return Ok(None);
         };
+        let offset = choice.offset;
+        let generation = choice.generation;
+        let partition = choice.partition;
+        let expired = choice
+            .expired
+            .then(|| record_owner(&tx, offset))
+            .transpose()?;
         let until = now + lease_ms;
         tx.execute("INSERT INTO leases VALUES(?,?,?, ?,?, 'pending') ON CONFLICT(topic,name,offset) DO UPDATE SET generation=excluded.generation,visible_at=excluded.visible_at,state='pending'",
                    params![topic,group,offset,generation,until])?;
         tx.commit()?;
+        if let Some((service, placed)) = expired {
+            self.work.note_expiration(topic, group, service, placed);
+        }
         Ok(Some(Claim {
             record: self.read(offset)?,
             generation,
@@ -561,7 +630,7 @@ impl Store {
     }
 
     pub fn settle(
-        &self,
+        &mut self,
         topic: &str,
         group: &str,
         offset: i64,
@@ -594,6 +663,105 @@ impl Store {
         if changed == 0 {
             return Err(Problem::Conflict("lease expired, settled or superseded".into()).into());
         }
+        if action == "retry" {
+            let (owner, partition) = record_owner(&self.db, offset)?;
+            self.work.note_retry(topic, group, owner, partition);
+        }
+        Ok(())
+    }
+
+    pub fn list_dead_letters(
+        &self,
+        topic: &str,
+        group: &str,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<DeadLetterSummary>> {
+        valid_group(topic, group)?;
+        validate_batch_count(limit)?;
+        if after < 0 {
+            return Err(Problem::Invalid("after must be nonnegative".into()).into());
+        }
+        let mut statement = self.db.prepare_cached(
+            "SELECT l.offset,r.task,r.event_id,l.generation,r.work_partition
+             FROM leases l JOIN records r ON r.offset=l.offset AND r.topic=l.topic
+             WHERE l.topic=? AND l.name=? AND l.offset>? AND l.state='dead'
+             ORDER BY l.offset LIMIT ?",
+        )?;
+        let entries = statement
+            .query_map(params![topic, group, after, limit], |row| {
+                Ok(DeadLetterSummary {
+                    offset: row.get(0)?,
+                    task_id: row.get(1)?,
+                    event_id: row.get(2)?,
+                    generation: row.get(3)?,
+                    partition: row.get(4)?,
+                })
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(entries)
+    }
+
+    pub fn dead_letter(&self, topic: &str, group: &str, offset: i64) -> Result<DeadLetter> {
+        valid_group(topic, group)?;
+        if offset <= 0 {
+            return Err(Problem::Invalid("offset must be positive".into()).into());
+        }
+        let (generation, partition) = self
+            .db
+            .prepare_cached(
+                "SELECT l.generation,r.work_partition
+                 FROM leases l JOIN records r ON r.offset=l.offset AND r.topic=l.topic
+                 WHERE l.topic=? AND l.name=? AND l.offset=? AND l.state='dead'",
+            )?
+            .query_row(params![topic, group, offset], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?
+            .ok_or(Problem::Missing)?;
+        Ok(DeadLetter {
+            record: self.read(offset)?,
+            generation,
+            partition,
+        })
+    }
+
+    pub fn redrive_dead_letter(
+        &mut self,
+        topic: &str,
+        group: &str,
+        offset: i64,
+        generation: i64,
+    ) -> Result<()> {
+        self.ensure_writable()?;
+        valid_group(topic, group)?;
+        if offset <= 0 || generation <= 0 {
+            return Err(Problem::Invalid("offset and generation must be positive".into()).into());
+        }
+        let tx = self.db.transaction()?;
+        let receipt = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM dead_letter_redrives
+                           WHERE topic=? AND name=? AND offset=? AND generation=?)",
+            params![topic, group, offset, generation],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if receipt {
+            return Ok(());
+        }
+        let changed = tx.execute(
+            "UPDATE leases SET state='retry',visible_at=0
+             WHERE topic=? AND name=? AND offset=? AND generation=? AND state='dead'",
+            params![topic, group, offset, generation],
+        )?;
+        if changed == 0 {
+            return Err(Problem::Conflict("no dead letter matches this generation".into()).into());
+        }
+        // Commit the receipt with the requeue so a retry cannot reopen a later dead letter.
+        tx.execute(
+            "INSERT INTO dead_letter_redrives(topic,name,offset,generation) VALUES(?,?,?,?)",
+            params![topic, group, offset, generation],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 }

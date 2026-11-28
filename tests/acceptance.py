@@ -47,7 +47,7 @@ class Broker:
             self.process.stdout.close()
             self.process = None
 
-    def request(self, route, body=None, *, method=None):
+    def request(self, route, body=None, *, method=None, expected_status=200):
         data = None if body is None else json.dumps(body).encode()
         req = Request(
             f"http://{self.address}{route}",
@@ -56,6 +56,7 @@ class Broker:
             headers={"Content-Type": "application/json"},
         )
         with urlopen(req, timeout=10) as res:
+            assert res.status == expected_status
             return json.load(res)
 
     def sse(self, task, after=None, *, topic="status"):
@@ -262,7 +263,92 @@ def partition_expansion(broker):
     assert broker.publish("moved", "before", status="running") == old
 
 
-def kill_after_journal_write(broker, operation):
+def native_dead_letters(broker):
+    topic = "dlq.tasks"
+    work = f"/topics/{topic}/work/workers"
+    dead = work + "/dead-letters"
+    other = f"/topics/{topic}/work/other"
+    broker.publish("invalid-run", "enqueue", topic, payload={"bad": True})
+    broker.publish("second-run", "enqueue", topic)
+    lease_args = {"lease_ms": 30_000}
+    first = broker.request(work + "/claim", lease_args)
+    second = broker.request(work + "/claim", lease_args)
+    offset = first["record"]["offset"]
+    detail = f"{dead}/{offset}"
+
+    def settle(lease, action, group=work):
+        return broker.request(
+            group + "/settle",
+            {
+                "offset": lease["record"]["offset"],
+                "generation": lease["generation"],
+                "action": action,
+            },
+        )
+
+    def redrive(generation, route=detail):
+        return broker.request(route + "/redrive", {"generation": generation})
+
+    settle(first, "dead-letter")
+    settle(second, "dead-letter")
+    assert broker.request(work + "/claim", lease_args) is None
+    assert broker.request(other + "/dead-letters") == []
+    other_lease = broker.request(other + "/claim", lease_args)
+    assert other_lease["record"] == first["record"]
+    settle(other_lease, "ack", group=other)
+    expect_http(404, lambda: broker.request(f"{other}/dead-letters/{offset}"))
+    expect_http(
+        409, lambda: redrive(first["generation"], f"{other}/dead-letters/{offset}")
+    )
+    expect_http(400, lambda: broker.request(dead + "?limit=65"))
+    expect_http(400, lambda: broker.request(dead + "?after=-1"))
+    reads = broker.request("/stats")["payload_reads"]
+    (entry,) = broker.request(dead + "?limit=1")
+    assert entry["offset"] == offset and entry["task_id"] == "invalid-run"
+    assert entry["event_id"] == "enqueue" and entry["generation"] == first["generation"]
+    (next_entry,) = broker.request(f"{dead}?after={offset}&limit=1")
+    assert next_entry["offset"] == second["record"]["offset"]
+    assert broker.request(f"{dead}?after={next_entry['offset']}") == []
+    assert broker.request("/stats")["payload_reads"] == reads
+
+    source = first.get("partition", 0)
+    destination = 2 if source == 0 else 0
+    broker.request(
+        "/tasks/invalid-run/move",
+        {"from_partition": source, "to_partition": destination},
+    )
+    letter = broker.request(detail)
+    assert (
+        letter["record"] == first["record"]
+        and letter["generation"] == first["generation"]
+    )
+    assert letter.get("partition", 0) == destination
+    expect_http(409, lambda: redrive(first["generation"] + 1))
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        assert list(pool.map(redrive, [first["generation"]] * 2)) == [{"ok": True}] * 2
+    expect_http(404, lambda: broker.request(detail))
+    broker.kill()
+    assert broker.start() == 0
+    claim = broker.request(work + "/claim", lease_args | {"partition": destination})
+    assert (
+        claim["record"] == first["record"] and claim["generation"] > first["generation"]
+    )
+    expect_http(409, lambda: settle(first, "ack"))
+    settle(claim, "dead-letter")
+    assert redrive(first["generation"]) == {"ok": True}
+    assert broker.request(detail)["generation"] == claim["generation"]
+    assert broker.request(work + "/claim", lease_args) is None
+    redrive(claim["generation"])
+    final = broker.request(work + "/claim", lease_args)
+    settle(final, "ack")
+    assert broker.request(work + "/claim", lease_args) is None
+    assert broker.request(dead) == [next_entry]
+    assert broker.request(f"/topics/{topic}/tasks/invalid-run/history") == [
+        first["record"]
+    ]
+
+
+def kill_after_journal_write(broker, operation, *, background_index=False):
     """Kill after the complete frame reaches the journal and before SQLite commits."""
     journal = max(broker.directory.glob("*.seg"))
     before = journal.stat().st_size
@@ -296,9 +382,13 @@ def kill_after_journal_write(broker, operation):
                 assert time.monotonic() < deadline
             assert zlib.crc32(body) == checksum
             os.fsync(f.fileno())
+        # The background index can be blocked while a journaled append is acknowledged.
+        receipt = pending.result(timeout=5) if background_index else None
         broker.kill()
         lock.rollback()
-        assert pending.exception(timeout=5) is not None
+        if not background_index:
+            assert pending.exception(timeout=5) is not None
+        return receipt
 
 
 def crash_after_write(broker):
@@ -364,6 +454,80 @@ def atomic_completion(broker, terminal):
     )
     expect_http(409, lambda: broker.request(other + "/complete", body))
     assert broker.request(f"/topics/{topic}/streams/audit/next")["offset"] == offset
+
+
+def cancellation_requests(broker, *, background_index=False):
+    task_topic = "cancellation.tasks"
+    status_topic = "cancellation.status"
+    cancel_topic = "cancellation.control"
+    work = f"/topics/{task_topic}/work/workers"
+    topics = {"status_topic": status_topic, "cancel_topic": cancel_topic}
+
+    def cancel(task):
+        return broker.request(
+            f"/topics/{task_topic}/tasks/{task}/cancel", topics, expected_status=202
+        )
+
+    def complete(lease, task, status):
+        return broker.request(
+            work + "/complete",
+            {
+                "offset": lease["record"]["offset"],
+                "generation": lease["generation"],
+                "status_topic": status_topic,
+                "event": {"task_id": task, "event_id": "result", "status": status},
+            },
+        )
+
+    expect_http(404, lambda: cancel("unknown"))
+    expect_http(
+        400,
+        lambda: broker.request(
+            f"/topics/{task_topic}/tasks/unknown/cancel",
+            topics | {"cancel_topic": task_topic},
+        ),
+    )
+    task = "cancel-after-restart"
+    broker.publish(task, "queued", task_topic)
+    acknowledged = kill_after_journal_write(
+        broker, lambda: cancel(task), background_index=background_index
+    )
+    assert broker.start() >= 1
+    (intent,) = broker.request(f"/topics/{cancel_topic}/tasks/{task}/history")
+    receipt = cancel(task)
+    assert intent == receipt | {"event": {"task_id": task, "event_id": "cancel"}}
+    if background_index:
+        assert receipt == acknowledged
+    assert broker.request(f"/topics/{status_topic}/tasks/{task}/history") == []
+    lease = broker.request(work + "/claim", {"lease_ms": 30_000})
+    complete(lease, task, "cancelled")
+    assert cancel(task) == receipt
+    assert broker.request(work + "/claim", {"lease_ms": 30_000}) is None
+
+    task = "already-finished"
+    broker.publish(task, "queued", task_topic)
+    lease = broker.request(work + "/claim", {"lease_ms": 30_000})
+    complete(lease, task, "completed")
+    expect_http(409, lambda: cancel(task))
+    assert broker.request(f"/topics/{cancel_topic}/tasks/{task}/history") == []
+
+    task = "racing-completion"
+    broker.publish(task, "queued", task_topic)
+    lease = broker.request(work + "/claim", {"lease_ms": 30_000})
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        finish = pool.submit(complete, lease, task, "completed")
+        requests = [pool.submit(cancel, task) for _ in range(2)]
+        finished = finish.result()
+        outcomes = []
+        for request in requests:
+            try:
+                outcomes.append(request.result())
+            except HTTPError as error:
+                assert error.code == 409
+                outcomes.append(None)
+    assert outcomes[0] == outcomes[1]
+    if outcomes[0] is not None:
+        assert outcomes[0]["offset"] < finished["offset"]
 
 
 def crash_during_completion(broker):
@@ -649,6 +813,203 @@ def expired(broker, floor):
         assert kind == "gap" and gap["data"] == data
 
 
+def service_quotas_and_metrics(broker):
+    broker.env["SPOOLTAIL_SERVICE_FAIRNESS"] = "1"
+    broker.start()
+
+    def publish_owned(topic, task, owner):
+        return broker.request(
+            f"/topics/{topic}/records?owner_service={owner}",
+            {
+                "task_id": task,
+                "event_id": "enqueued",
+            },
+        )["offset"]
+
+    def claim(topic, group="workers", lease_ms=30_000):
+        return broker.request(
+            f"/topics/{topic}/work/{group}/claim", {"lease_ms": lease_ms}
+        )
+
+    def settle(topic, lease, action="ack", delay_ms=0, group="workers"):
+        return broker.request(
+            f"/topics/{topic}/work/{group}/settle",
+            {
+                "offset": lease["record"]["offset"],
+                "generation": lease["generation"],
+                "action": action,
+                "delay_ms": delay_ms,
+            },
+        )
+
+    task_topic = "fair.tasks"
+    a1 = publish_owned(task_topic, "a1", "alpha")
+    a2 = publish_owned(task_topic, "a2", "alpha")
+    broker.publish("unrelated", "enqueue", "different.topic")
+    b1 = publish_owned(task_topic, "b1", "beta")
+    b2 = publish_owned(task_topic, "b2", "beta")
+    lease = claim(task_topic)
+    assert lease["record"]["offset"] == a1
+    settle(task_topic, lease)
+    broker.kill()
+    broker.env["SPOOLTAIL_SERVICE_QUOTAS"] = '{"limited":{"max_in_flight":1}}'
+    broker.start()
+    for offset in (b1, a2, b2):
+        lease = claim(task_topic)
+        assert lease["record"]["offset"] == offset
+        settle(task_topic, lease)
+    assert claim(task_topic) is None
+
+    limited = publish_owned("quota.left", "limited-left", "limited")
+    limited_right = publish_owned("quota.right", "limited-right", "limited")
+    spare = publish_owned("quota.right", "spare", "beta")
+    lease = claim("quota.left", lease_ms=1_000)
+    assert lease["record"]["offset"] == limited
+    assert claim("quota.left", group="other") is None
+    other = claim("quota.right")
+    assert other["record"]["offset"] == spare
+    settle("quota.right", other)
+    assert claim("quota.right") is None
+    stats = "/topics/quota.left/work/workers/stats?owner_service=limited&partition=0"
+    assert broker.request(stats)["leased"] == 1
+    deadline = time.monotonic() + 5
+    while (snapshot := broker.request(stats))["expired_leases"] == 0:
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert snapshot["queue_depth"] == snapshot["ready"] == 1
+    assert snapshot["oldest_ready_age_ms"] >= 0
+    assert snapshot["expired_lease_redeliveries_total"] == 0
+    new_lease = claim("quota.left")
+    assert new_lease["generation"] > lease["generation"]
+    settle("quota.left", new_lease, "retry", delay_ms=60_000)
+    snapshot = broker.request(stats)
+    assert snapshot["queue_depth"] == snapshot["delayed"] == 1
+    assert snapshot["ready"] == snapshot["expired_leases"] == 0
+    assert snapshot["oldest_ready_age_ms"] is None
+    assert snapshot["retries_total"] == snapshot["retries_per_minute"] == 1
+    assert snapshot["expired_lease_redeliveries_total"] == 1
+    assert (
+        broker.request("/topics/quota.left/work/workers/stats?owner_service=beta")[
+            "queue_depth"
+        ]
+        == 0
+    )
+    assert claim("quota.right")["record"]["offset"] == limited_right
+
+    stream = f"/topics/{task_topic}/streams/audit"
+    expected = {"checkpoint": 0, "latest_offset": b2, "lag": 4, "retention_gap": False}
+    assert broker.request(stream + "/lag?partition=0") == expected
+    assert broker.request(stream + "/next")["offset"] == a1
+    broker.request(stream + "/commit", {"offset": a1})
+    assert broker.request(stream + "/lag") == expected | {"checkpoint": a1, "lag": 3}
+    broker.kill()
+    broker.env["SPOOLTAIL_SERVICE_FAIRNESS"] = "0"
+    subprocess.run(
+        [broker.binary, "expire-before", task_topic, str(b1)],
+        env=broker.env,
+        check=True,
+    )
+    broker.start()
+    assert broker.request(stream + "/lag") == expected | {
+        "checkpoint": a1,
+        "lag": 2,
+        "retention_gap": True,
+    }
+    assert broker.request(f"/topics/{task_topic}/streams/new-group/lag") == expected | {
+        "checkpoint": b1 - 1,
+        "lag": 2,
+    }
+    assert claim("quota.right", group="other")["record"]["offset"] == spare
+
+    original = broker.publish("lag-moved", "first", "lag.multi")
+    broker.request("/partitions/2", method="PUT")
+    broker.request("/tasks/lag-moved/move", {"from_partition": 0, "to_partition": 2})
+    moved = broker.publish("lag-moved", "second", "lag.multi")
+    lag = "/topics/lag.multi/streams/audit/lag"
+    assert broker.request(lag + "?partition=0")["latest_offset"] == original
+    assert broker.request(lag + "?partition=2")["latest_offset"] == moved
+    assert broker.request(lag)["lag"] == 2
+
+
+def managed_stream_groups(broker):
+    broker.start()
+    topic = "managed.status"
+    group = f"/topics/{topic}/streams/audit"
+    members = group + "/members"
+
+    def join(member_id, lease_ms=30_000):
+        return broker.request(members, {"member_id": member_id, "lease_ms": lease_ms})
+
+    def heartbeat(member):
+        return broker.request(
+            f"{members}/{member['member_epoch']}/heartbeat", method="POST"
+        )
+
+    def leave(member):
+        return broker.request(f"{members}/{member['member_epoch']}", method="DELETE")
+
+    def scope(member, partition):
+        assignment = next(
+            a for a in member["assignments"] if a["partition"] == partition
+        )
+        return (
+            f"?partition={partition}&member_epoch={member['member_epoch']}"
+            f"&assignment_epoch={assignment['assignment_epoch']}"
+        )
+
+    initial = broker.publish("moved", "initial", topic)
+    assert broker.request(group + "/next")["offset"] == initial
+    broker.request(group + "/commit", {"offset": initial})
+    predecessor = broker.publish("moved", "source", topic)
+    broker.request("/partitions/2", method="PUT")
+    broker.request("/tasks/moved/move", {"from_partition": 0, "to_partition": 2})
+    moved = broker.publish("moved", "destination", topic)
+
+    first = join("first")
+    assert join("first") == first
+    source = scope(first, 0)
+    original_destination = scope(first, 2)
+    assert broker.request(group + "/next" + original_destination) is None
+    expect_http(409, lambda: broker.request(group + "/next?partition=0"))
+    expect_http(409, lambda: broker.request(group + "/commit", {"offset": initial}))
+    assert broker.request(group + "/lag?partition=0")["checkpoint"] == initial
+
+    second = join("second", lease_ms=1_000)
+    destination = scope(second, 2)
+    assert heartbeat(first)["assignments"] == [first["assignments"][0]]
+    expect_http(409, lambda: broker.request(group + "/next" + original_destination))
+    assert broker.request(group + "/next" + source)["offset"] == predecessor
+    broker.request(group + "/commit" + source, {"offset": predecessor})
+    assert broker.request(group + "/next" + destination)["offset"] == moved
+
+    time.sleep(max(0, second["lease_until_ms"] / 1000 - time.time()) + 0.02)
+    expect_http(409, lambda: broker.request(group + "/next" + destination))
+    expect_http(409, lambda: heartbeat(second))
+    reassigned = heartbeat(first)
+    current_destination = scope(reassigned, 2)
+    assert (
+        current_destination != original_destination and scope(reassigned, 0) == source
+    )
+    expect_http(409, lambda: broker.request(group + "/next" + original_destination))
+    assert broker.request(group + "/next" + current_destination)["offset"] == moved
+    broker.request(group + "/commit" + current_destination, {"offset": moved})
+    expect_http(
+        409, lambda: broker.request(group + "/commit" + destination, {"offset": moved})
+    )
+
+    broker.kill()
+    broker.start()
+    assert broker.request(group + "/next" + current_destination) is None
+    broker.request("/partitions/3", method="PUT")
+    expanded = heartbeat(first)
+    assert [a["partition"] for a in expanded["assignments"]] == [0, 2, 3]
+    assert scope(expanded, 2) == current_destination
+    assert leave(first) == leave(first) == {"ok": True}
+    expect_http(409, lambda: broker.request(group + "/next" + current_destination))
+    expect_http(409, lambda: broker.request(group + "/next?partition=2"))
+    assert join("first")["member_epoch"] != first["member_epoch"]
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, default=Path("target/release/spooltail"))
@@ -669,15 +1030,17 @@ if __name__ == "__main__":
             crash_after_write(broker)
             for terminal in ("completed", "cancelled"):
                 atomic_completion(broker, terminal)
+            cancellation_requests(broker)
             crash_during_completion(broker)
             expired(broker, floor)
             partition_expansion(broker)
             if (directory / "partition-indexes").exists():
                 crash_after_partition_commit(broker)
+            native_dead_letters(broker)
             print(
                 f"PASS: {args.events:,} fixture events; sample WebSocket resume {latency:.2f} ms; "
                 "both transport directions, independent groups, lease fencing, write/ack crash, "
-                "atomic completion and cancellation, retention gap, and partition expansion"
+                "atomic completion and cancellation, dead-letter redrive, retention gap, and partition expansion"
             )
         finally:
             broker.kill()
@@ -686,8 +1049,9 @@ if __name__ == "__main__":
         broker = Broker(args.binary.resolve(), Path(path))
         try:
             background_index_recovery(broker)
+            cancellation_requests(broker, background_index=True)
             print(
-                "PASS: background index catch-up and recovery after acknowledged appends"
+                "PASS: background index catch-up and recovery for appends and cancellation"
             )
         finally:
             broker.kill()
@@ -696,5 +1060,21 @@ if __name__ == "__main__":
         broker = Broker(args.binary.resolve(), Path(path))
         try:
             document_summary_streams(broker)
+        finally:
+            broker.kill()
+
+    with tempfile.TemporaryDirectory() as path:
+        broker = Broker(args.binary.resolve(), Path(path))
+        try:
+            service_quotas_and_metrics(broker)
+            print("PASS: service fairness, lease quotas, work metrics, and stream lag")
+        finally:
+            broker.kill()
+
+    with tempfile.TemporaryDirectory() as path:
+        broker = Broker(args.binary.resolve(), Path(path))
+        try:
+            managed_stream_groups(broker)
+            print("PASS: stream assignment, rebalance, fencing, and checkpoint handoff")
         finally:
             broker.kill()

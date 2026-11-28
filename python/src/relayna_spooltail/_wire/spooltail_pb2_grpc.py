@@ -66,9 +66,29 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.ClaimRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.ClaimResponse.FromString,
                 _registered_method=True)
+        self.GetWorkStats = channel.unary_unary(
+                '/spooltail.v1.Spooltail/GetWorkStats',
+                request_serializer=spooltail__pb2.WorkStatsRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.WorkStats.FromString,
+                _registered_method=True)
         self.Settle = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Settle',
                 request_serializer=spooltail__pb2.SettleRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Empty.FromString,
+                _registered_method=True)
+        self.ListDeadLetters = channel.unary_unary(
+                '/spooltail.v1.Spooltail/ListDeadLetters',
+                request_serializer=spooltail__pb2.DeadLetterListRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.DeadLetterPage.FromString,
+                _registered_method=True)
+        self.GetDeadLetter = channel.unary_unary(
+                '/spooltail.v1.Spooltail/GetDeadLetter',
+                request_serializer=spooltail__pb2.DeadLetterRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.DeadLetter.FromString,
+                _registered_method=True)
+        self.RedriveDeadLetter = channel.unary_unary(
+                '/spooltail.v1.Spooltail/RedriveDeadLetter',
+                request_serializer=spooltail__pb2.DeadLetterRedriveRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.Empty.FromString,
                 _registered_method=True)
         self.Complete = channel.unary_unary(
@@ -76,10 +96,35 @@ class SpooltailStub(object):
                 request_serializer=spooltail__pb2.CompleteRequest.SerializeToString,
                 response_deserializer=spooltail__pb2.Offset.FromString,
                 _registered_method=True)
+        self.RequestCancellation = channel.unary_unary(
+                '/spooltail.v1.Spooltail/RequestCancellation',
+                request_serializer=spooltail__pb2.CancellationRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Offset.FromString,
+                _registered_method=True)
         self.Next = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Next',
                 request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
                 response_deserializer=spooltail__pb2.NextResponse.FromString,
+                _registered_method=True)
+        self.JoinStreamGroup = channel.unary_unary(
+                '/spooltail.v1.Spooltail/JoinStreamGroup',
+                request_serializer=spooltail__pb2.StreamJoinRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamMembership.FromString,
+                _registered_method=True)
+        self.HeartbeatStreamGroup = channel.unary_unary(
+                '/spooltail.v1.Spooltail/HeartbeatStreamGroup',
+                request_serializer=spooltail__pb2.StreamMemberRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamMembership.FromString,
+                _registered_method=True)
+        self.LeaveStreamGroup = channel.unary_unary(
+                '/spooltail.v1.Spooltail/LeaveStreamGroup',
+                request_serializer=spooltail__pb2.StreamMemberRequest.SerializeToString,
+                response_deserializer=spooltail__pb2.Empty.FromString,
+                _registered_method=True)
+        self.GetStreamLag = channel.unary_unary(
+                '/spooltail.v1.Spooltail/GetStreamLag',
+                request_serializer=spooltail__pb2.StreamGroup.SerializeToString,
+                response_deserializer=spooltail__pb2.StreamLag.FromString,
                 _registered_method=True)
         self.Commit = channel.unary_unary(
                 '/spooltail.v1.Spooltail/Commit',
@@ -182,7 +227,31 @@ class SpooltailServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetWorkStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Settle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListDeadLetters(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDeadLetter(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RedriveDeadLetter(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -194,7 +263,37 @@ class SpooltailServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RequestCancellation(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Next(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def JoinStreamGroup(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HeartbeatStreamGroup(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LeaveStreamGroup(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetStreamLag(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -305,9 +404,29 @@ def add_SpooltailServicer_to_server(servicer, server):
                     request_deserializer=spooltail__pb2.ClaimRequest.FromString,
                     response_serializer=spooltail__pb2.ClaimResponse.SerializeToString,
             ),
+            'GetWorkStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetWorkStats,
+                    request_deserializer=spooltail__pb2.WorkStatsRequest.FromString,
+                    response_serializer=spooltail__pb2.WorkStats.SerializeToString,
+            ),
             'Settle': grpc.unary_unary_rpc_method_handler(
                     servicer.Settle,
                     request_deserializer=spooltail__pb2.SettleRequest.FromString,
+                    response_serializer=spooltail__pb2.Empty.SerializeToString,
+            ),
+            'ListDeadLetters': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListDeadLetters,
+                    request_deserializer=spooltail__pb2.DeadLetterListRequest.FromString,
+                    response_serializer=spooltail__pb2.DeadLetterPage.SerializeToString,
+            ),
+            'GetDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDeadLetter,
+                    request_deserializer=spooltail__pb2.DeadLetterRequest.FromString,
+                    response_serializer=spooltail__pb2.DeadLetter.SerializeToString,
+            ),
+            'RedriveDeadLetter': grpc.unary_unary_rpc_method_handler(
+                    servicer.RedriveDeadLetter,
+                    request_deserializer=spooltail__pb2.DeadLetterRedriveRequest.FromString,
                     response_serializer=spooltail__pb2.Empty.SerializeToString,
             ),
             'Complete': grpc.unary_unary_rpc_method_handler(
@@ -315,10 +434,35 @@ def add_SpooltailServicer_to_server(servicer, server):
                     request_deserializer=spooltail__pb2.CompleteRequest.FromString,
                     response_serializer=spooltail__pb2.Offset.SerializeToString,
             ),
+            'RequestCancellation': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestCancellation,
+                    request_deserializer=spooltail__pb2.CancellationRequest.FromString,
+                    response_serializer=spooltail__pb2.Offset.SerializeToString,
+            ),
             'Next': grpc.unary_unary_rpc_method_handler(
                     servicer.Next,
                     request_deserializer=spooltail__pb2.StreamGroup.FromString,
                     response_serializer=spooltail__pb2.NextResponse.SerializeToString,
+            ),
+            'JoinStreamGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.JoinStreamGroup,
+                    request_deserializer=spooltail__pb2.StreamJoinRequest.FromString,
+                    response_serializer=spooltail__pb2.StreamMembership.SerializeToString,
+            ),
+            'HeartbeatStreamGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.HeartbeatStreamGroup,
+                    request_deserializer=spooltail__pb2.StreamMemberRequest.FromString,
+                    response_serializer=spooltail__pb2.StreamMembership.SerializeToString,
+            ),
+            'LeaveStreamGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.LeaveStreamGroup,
+                    request_deserializer=spooltail__pb2.StreamMemberRequest.FromString,
+                    response_serializer=spooltail__pb2.Empty.SerializeToString,
+            ),
+            'GetStreamLag': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetStreamLag,
+                    request_deserializer=spooltail__pb2.StreamGroup.FromString,
+                    response_serializer=spooltail__pb2.StreamLag.SerializeToString,
             ),
             'Commit': grpc.unary_unary_rpc_method_handler(
                     servicer.Commit,
@@ -554,6 +698,33 @@ class Spooltail(object):
             _registered_method=True)
 
     @staticmethod
+    def GetWorkStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/GetWorkStats',
+            spooltail__pb2.WorkStatsRequest.SerializeToString,
+            spooltail__pb2.WorkStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def Settle(request,
             target,
             options=(),
@@ -569,6 +740,87 @@ class Spooltail(object):
             target,
             '/spooltail.v1.Spooltail/Settle',
             spooltail__pb2.SettleRequest.SerializeToString,
+            spooltail__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListDeadLetters(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/ListDeadLetters',
+            spooltail__pb2.DeadLetterListRequest.SerializeToString,
+            spooltail__pb2.DeadLetterPage.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/GetDeadLetter',
+            spooltail__pb2.DeadLetterRequest.SerializeToString,
+            spooltail__pb2.DeadLetter.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RedriveDeadLetter(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/RedriveDeadLetter',
+            spooltail__pb2.DeadLetterRedriveRequest.SerializeToString,
             spooltail__pb2.Empty.FromString,
             options,
             channel_credentials,
@@ -608,6 +860,33 @@ class Spooltail(object):
             _registered_method=True)
 
     @staticmethod
+    def RequestCancellation(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/RequestCancellation',
+            spooltail__pb2.CancellationRequest.SerializeToString,
+            spooltail__pb2.Offset.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def Next(request,
             target,
             options=(),
@@ -624,6 +903,114 @@ class Spooltail(object):
             '/spooltail.v1.Spooltail/Next',
             spooltail__pb2.StreamGroup.SerializeToString,
             spooltail__pb2.NextResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def JoinStreamGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/JoinStreamGroup',
+            spooltail__pb2.StreamJoinRequest.SerializeToString,
+            spooltail__pb2.StreamMembership.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def HeartbeatStreamGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/HeartbeatStreamGroup',
+            spooltail__pb2.StreamMemberRequest.SerializeToString,
+            spooltail__pb2.StreamMembership.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LeaveStreamGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/LeaveStreamGroup',
+            spooltail__pb2.StreamMemberRequest.SerializeToString,
+            spooltail__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetStreamLag(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/spooltail.v1.Spooltail/GetStreamLag',
+            spooltail__pb2.StreamGroup.SerializeToString,
+            spooltail__pb2.StreamLag.FromString,
             options,
             channel_credentials,
             insecure,

@@ -1,5 +1,7 @@
 //! gRPC service over the same store and subscription machinery as the HTTP API.
-use crate::{Broker, Problem, WorkLease, feed, publish, store};
+use crate::{
+    Broker, CancellationTopics, Problem, WorkLease, feed, publish, request_cancellation, store,
+};
 use anyhow::{Context, Result};
 use prost::Message;
 use serde_json::Value;
@@ -20,15 +22,17 @@ mod replay;
 mod wire {
     tonic::include_proto!("spooltail.v1");
 }
+use crate::stream_members::{StreamAccess, StreamMembership, StreamOwnership};
 use crate::subscriptions::{
     DEFAULT_STREAM_BATCH_RECORDS, MAX_STREAM_BATCH_BYTES, validate_batch_count,
 };
 use wire::spooltail_server::{Spooltail, SpooltailServer};
 use wire::{
-    AuditHistoryPage, AuditHistoryRequest, ClaimRequest, ClaimResponse, CommitRequest,
-    CompleteRequest, Delivery, Empty, MoveTaskRequest, NextResponse, Offset, Page, Partition,
-    Partitions, Publish, Record, SettleRequest, SettlementAction, StatsResponse, StreamBatch,
-    StreamBatchCommit, StreamBatchRequest, StreamGroup, Task, TaskId, TopicReplayRequest,
+    AuditHistoryPage, AuditHistoryRequest, CancellationRequest, ClaimRequest, ClaimResponse,
+    CommitRequest, CompleteRequest, Delivery, Empty, MoveTaskRequest, NextResponse, Offset, Page,
+    Partition, Partitions, Publish, Record, SettleRequest, SettlementAction, StatsResponse,
+    StreamBatch, StreamBatchCommit, StreamBatchRequest, StreamGroup, Task, TaskId,
+    TopicReplayRequest,
 };
 
 struct Api(Broker);
@@ -53,7 +57,9 @@ impl Api {
 
 fn status(error: anyhow::Error) -> Status {
     match error.downcast_ref::<Problem>() {
-        Some(Problem::Capacity) => Status::resource_exhausted(error.to_string()),
+        Some(Problem::Capacity | Problem::ServiceQuota) => {
+            Status::resource_exhausted(error.to_string())
+        }
         Some(Problem::Missing) => Status::not_found(error.to_string()),
         Some(Problem::Invalid(_)) => Status::invalid_argument(error.to_string()),
         Some(Problem::Conflict(_)) => Status::failed_precondition(error.to_string()),
@@ -98,6 +104,31 @@ fn encode_batch(after: i64, records: Vec<store::Record>) -> Result<Response<Stre
 fn decode(bytes: &[u8]) -> Result<Value> {
     serde_json::from_slice(bytes)
         .map_err(|error| Problem::Invalid(format!("invalid event JSON: {error}")).into())
+}
+
+fn stream_access(partition: Option<u32>, ownership: Option<wire::StreamOwnership>) -> StreamAccess {
+    StreamAccess {
+        partition,
+        ownership: ownership.map(|owner| StreamOwnership {
+            member_epoch: owner.member_epoch,
+            assignment_epoch: owner.assignment_epoch,
+        }),
+    }
+}
+
+fn encode_membership(member: StreamMembership) -> wire::StreamMembership {
+    wire::StreamMembership {
+        member_epoch: member.member_epoch,
+        lease_until_ms: member.lease_until_ms,
+        assignments: member
+            .assignments
+            .into_iter()
+            .map(|assignment| wire::StreamAssignment {
+                partition: assignment.partition,
+                assignment_epoch: assignment.assignment_epoch,
+            })
+            .collect(),
+    }
 }
 
 #[tonic::async_trait]
@@ -189,6 +220,30 @@ impl Spooltail for Api {
         }))
     }
 
+    async fn get_work_stats(
+        &self,
+        request: Request<wire::WorkStatsRequest>,
+    ) -> Result<Response<wire::WorkStats>, Status> {
+        let q = request.into_inner();
+        let stats = self
+            .0
+            .run(move |s| s.work_stats(&q.topic, &q.group, q.partition, q.owner_service.as_deref()))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(wire::WorkStats {
+            queue_depth: stats.queue_depth,
+            ready: stats.ready,
+            leased: stats.leased,
+            delayed: stats.delayed,
+            dead_lettered: stats.dead_lettered,
+            expired_leases: stats.expired_leases,
+            oldest_ready_age_ms: stats.oldest_ready_age_ms,
+            expired_lease_redeliveries_total: stats.expired_lease_redeliveries_total,
+            retries_total: stats.retries_total,
+            retries_per_minute: stats.retries_per_minute,
+        }))
+    }
+
     async fn complete(
         &self,
         request: Request<CompleteRequest>,
@@ -205,6 +260,24 @@ impl Spooltail for Api {
         };
         let event = decode(&terminal.event_json).map_err(status)?;
         let position = publish(self.0.clone(), terminal.topic, event, Some(lease), None)
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Offset {
+            offset: position.offset,
+            partition: position.partition,
+        }))
+    }
+
+    async fn request_cancellation(
+        &self,
+        request: Request<CancellationRequest>,
+    ) -> Result<Response<Offset>, Status> {
+        let q = request.into_inner();
+        let topics = CancellationTopics {
+            status_topic: q.status_topic,
+            cancel_topic: q.cancel_topic,
+        };
+        let position = request_cancellation(self.0.clone(), q.task_topic, q.task_id, topics)
             .await
             .map_err(status)?;
         Ok(Response::new(Offset {
@@ -238,21 +311,143 @@ impl Spooltail for Api {
         Ok(Response::new(Empty {}))
     }
 
+    async fn list_dead_letters(
+        &self,
+        request: Request<wire::DeadLetterListRequest>,
+    ) -> Result<Response<wire::DeadLetterPage>, Status> {
+        let q = request.into_inner();
+        let entries = self
+            .0
+            .run(move |s| {
+                s.list_dead_letters(
+                    &q.topic,
+                    &q.group,
+                    q.after.unwrap_or_default(),
+                    q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
+                )
+            })
+            .await
+            .map_err(status)?;
+        let entries = entries
+            .into_iter()
+            .map(|entry| wire::DeadLetterSummary {
+                offset: entry.offset,
+                task_id: entry.task_id,
+                event_id: entry.event_id,
+                generation: entry.generation,
+                partition: entry.partition,
+            })
+            .collect();
+        Ok(Response::new(wire::DeadLetterPage { entries }))
+    }
+
+    async fn get_dead_letter(
+        &self,
+        request: Request<wire::DeadLetterRequest>,
+    ) -> Result<Response<wire::DeadLetter>, Status> {
+        let q = request.into_inner();
+        let entry = self
+            .0
+            .run(move |s| s.dead_letter(&q.topic, &q.group, q.offset))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(wire::DeadLetter {
+            record: Some(encode(entry.record).map_err(status)?),
+            generation: entry.generation,
+            partition: entry.partition,
+        }))
+    }
+
+    async fn redrive_dead_letter(
+        &self,
+        request: Request<wire::DeadLetterRedriveRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let q = request.into_inner();
+        self.0
+            .run(move |s| s.redrive_dead_letter(&q.topic, &q.group, q.offset, q.generation))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Empty {}))
+    }
+
     async fn next(&self, request: Request<StreamGroup>) -> Result<Response<NextResponse>, Status> {
         let q = request.into_inner();
         let record = self
             .0
-            .run(move |s| s.group_next(&q.topic, &q.group, q.partition))
+            .run(move |s| s.group_next(&q.topic, &q.group, stream_access(q.partition, q.ownership)))
             .await
             .map_err(status)?;
         let record = record.map(encode).transpose().map_err(status)?;
         Ok(Response::new(NextResponse { record }))
     }
 
+    async fn join_stream_group(
+        &self,
+        request: Request<wire::StreamJoinRequest>,
+    ) -> Result<Response<wire::StreamMembership>, Status> {
+        let q = request.into_inner();
+        let member = self
+            .0
+            .run(move |s| s.join_stream_group(&q.topic, &q.group, &q.member_id, q.lease_ms))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(encode_membership(member)))
+    }
+
+    async fn heartbeat_stream_group(
+        &self,
+        request: Request<wire::StreamMemberRequest>,
+    ) -> Result<Response<wire::StreamMembership>, Status> {
+        let q = request.into_inner();
+        let member = self
+            .0
+            .run(move |s| s.heartbeat_stream_group(&q.topic, &q.group, q.member_epoch))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(encode_membership(member)))
+    }
+
+    async fn leave_stream_group(
+        &self,
+        request: Request<wire::StreamMemberRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let q = request.into_inner();
+        self.0
+            .run(move |s| s.leave_stream_group(&q.topic, &q.group, q.member_epoch))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn get_stream_lag(
+        &self,
+        request: Request<StreamGroup>,
+    ) -> Result<Response<wire::StreamLag>, Status> {
+        let q = request.into_inner();
+        let lag = self
+            .0
+            .run(move |s| s.stream_lag(&q.topic, &q.group, q.partition))
+            .await
+            .map_err(status)?;
+        Ok(Response::new(wire::StreamLag {
+            checkpoint: lag.checkpoint,
+            latest_offset: lag.latest_offset,
+            lag: lag.lag,
+            retention_gap: lag.retention_gap,
+        }))
+    }
+
     async fn commit(&self, request: Request<CommitRequest>) -> Result<Response<Empty>, Status> {
         let q = request.into_inner();
         self.0
-            .run(move |s| s.commit(&q.topic, &q.group, q.offset, q.partition))
+            .run(move |s| {
+                s.commit(
+                    &q.topic,
+                    &q.group,
+                    q.offset,
+                    stream_access(q.partition, q.ownership),
+                )
+            })
             .await
             .map_err(status)?;
         Ok(Response::new(Empty {}))
@@ -269,7 +464,7 @@ impl Spooltail for Api {
                 s.next_batch(
                     &q.topic,
                     &q.group,
-                    q.partition,
+                    stream_access(q.partition, q.ownership),
                     q.limit.unwrap_or(DEFAULT_STREAM_BATCH_RECORDS),
                 )
             })
@@ -285,7 +480,14 @@ impl Spooltail for Api {
         let q = request.into_inner();
         self.0
             .run(move |s| {
-                s.commit_batch(&q.topic, &q.group, q.partition, q.after, q.through, q.count)
+                s.commit_batch(
+                    &q.topic,
+                    &q.group,
+                    stream_access(q.partition, q.ownership),
+                    q.after,
+                    q.through,
+                    q.count,
+                )
             })
             .await
             .map_err(status)?;

@@ -83,7 +83,7 @@ SPOOLTAIL_GRPC_LISTEN=127.0.0.1:7443 SPOOLTAIL_GRPC_TLS=off \
   ./target/release/spooltail
 ```
 
-Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1/spooltail.proto). Service clients use `Append`, `Latest`, `History`, `Subscribe`, `Claim`, `Settle`, and `Complete`. Stream groups can use `Next` and `Commit` for one record at a time, or `NextBatch` and `CommitBatch` for a page. `Ping` checks the connection and `Stats` reports broker counters. Event fields retain their JSON encoding inside the Protobuf messages. `Claim` and `Next` return an absent record when there is nothing to deliver.
+Generate client stubs from the [Spooltail v1 Protobuf schema](proto/spooltail/v1/spooltail.proto). Service clients use `Append`, `Latest`, `History`, `Subscribe`, `Claim`, `Settle`, `Complete`, and `RequestCancellation`. Stream groups can use `Next` and `Commit` for one record at a time, or `NextBatch` and `CommitBatch` for a page. `Ping` checks the connection and `Stats` reports broker counters. Event fields retain their JSON encoding inside the Protobuf messages. `Claim` and `Next` return an absent record when there is nothing to deliver.
 
 `NextBatch` returns the group's saved checkpoint and up to 32 records by default. Request 1 to 64 records. Each encoded response is capped at 2 MiB, so a page can contain fewer records than requested. After processing a consecutive prefix, pass the returned checkpoint as `after`, the last processed record's offset as `through`, and the number of processed records as `count` to `CommitBatch`. The broker advances the checkpoint durably in its embedded SQLite database. A retry succeeds while the checkpoint is still at `through`. Fetch again after a checkpoint conflict. An empty page needs no commit.
 
@@ -113,11 +113,20 @@ The SDK publishes a single work event for each task ID. Concurrent publishes of 
 | `GET /topics/{topic}/tasks/{task}/latest` | Return `{offset,event}` or HTTP 404. |
 | `GET /topics/{topic}/tasks/{task}/history?after=E41` | Return up to 64 retained records in order. For the next page, pass the last record’s event ID. An empty array means caught up. |
 | `GET /topics/{topic}/tasks/{task}/events` | SSE, with an exclusive `Last-Event-ID` cursor or an initial `?after=` value. The header takes precedence. |
+| `POST /topics/{work_topic}/tasks/{task}/cancel` | Send `{"status_topic":"status","cancel_topic":"control"}`. Returns HTTP 202 and the durable cancellation intent offset. |
 | `GET /ws` | WebSocket upgrade. Send `subscribe` or `unsubscribe` with a topic and task. Up to 32 task subscriptions per socket. |
 | `GET /topics/{topic}/streams/{group}/next` | Read one record after this group’s durable checkpoint. Returns JSON `null` when caught up. |
 | `POST /topics/{topic}/streams/{group}/commit` | Send `{"offset":42}` after processing. Advances through consecutive records of this topic. |
 | `POST /topics/{topic}/work/{group}/claim` | Send `{"lease_ms":30000}`. Returns `{record,generation,lease_until_ms}` or JSON `null`. |
+| `GET /topics/{topic}/work/{group}/stats` | Inspect queue depth, oldest ready age, expired leases, and retry rates. Optionally filter by `partition` and `owner_service`. |
+| `GET /topics/{topic}/streams/{group}/lag` | Count retained records behind a group checkpoint. Pass `partition` for a partition-scoped group. |
+| `POST /topics/{topic}/streams/{group}/members` | Join a managed stream group with `member_id` and `lease_ms`. Returns the member epoch, deadline, and assigned partitions. |
+| `POST /topics/{topic}/streams/{group}/members/{member_epoch}/heartbeat` | Renew membership and return the current partition assignments. |
+| `DELETE /topics/{topic}/streams/{group}/members/{member_epoch}` | Leave the group and redistribute the member's partitions. |
 | `POST /topics/{topic}/work/{group}/settle` | Send the claimed `offset`, `generation`, and an `action` of `ack`, `renew`, `retry`, or `dead-letter`. Set `delay_ms` for renewal or delayed retry. Stale settlements return HTTP 409. |
+| `GET /topics/{topic}/work/{group}/dead-letters` | List summaries for the group's dead-lettered work. Use optional `after` and `limit` query parameters. |
+| `GET /topics/{topic}/work/{group}/dead-letters/{offset}` | Read the original record and dead-letter generation. Returns HTTP 404 if the entry is absent. |
+| `POST /topics/{topic}/work/{group}/dead-letters/{offset}/redrive` | Send `{"generation":3}` for the dead-letter generation to requeue. Returns `{"ok":true}` after durable acceptance. |
 | `POST /topics/{topic}/work/{group}/complete` | Acknowledge the claim and append its terminal event to `status_topic` atomically. Returns the status record’s `offset`. |
 | `GET /stats` | Process counters and journal storage statistics. |
 
@@ -193,7 +202,7 @@ Creating the same partition ID again is safe. A move changes where future events
 | Read or commit stream progress | Add `?partition=1` to both the `next` and `commit` paths. The group keeps a separate checkpoint for each partition. |
 | Call from gRPC | Use `ListPartitions`, `EnsurePartition`, `TaskPartition`, and `MoveTask`. `Claim`, `Next`, `Commit`, and both batch replay operations accept an optional `partition`. |
 
-Unscoped stream groups continue to read in broker-wide offset order across all partitions. Stop the unscoped reader before switching its group to partition-scoped reads. The first scoped read uses the saved unscoped checkpoint as its starting point, then that group uses scoped operations. Assign one logical reader per partition in each group and poll all partitions. After a task move, a destination reader waits until its group commits the task's preceding record on the source partition.
+Unscoped stream groups continue to read in broker-wide offset order across all partitions. Stop the unscoped reader before switching its group to partition-scoped reads. The first scoped read uses the saved unscoped checkpoint as its starting point, then that group uses scoped operations. With manual assignment, assign one logical reader per partition and poll all partitions. Managed groups receive assignments from the broker. After a task move, a destination reader waits until its group commits the task's preceding record on the source partition.
 
 Each partition has its own journal writer. All writers share the broker process and SQLite index. Moving tasks redistributes future journal writes and partition-scoped claims. Historical reads still use the original journal. The offline `expire-before` command continues to set one logical floor per topic. Use the partition-aware broker binary for subsequent restarts of a partitioned volume.
 
@@ -224,6 +233,37 @@ With dynamic placement enabled, a new task goes to the eligible partition with t
 
 The route update persists a new ownership version. Queued publishes recheck their version before writing. The broker lets an in-flight append finish before it can move that task. Existing events stay in their original journals, and existing leases can still complete. The HTTP `/stats` response reports `automatic_task_moves`.
 
+### Limit and schedule work by service
+
+```sh
+SPOOLTAIL_SERVICE_QUOTAS='{"billing":{"max_in_flight":20,"max_pending_publishes":8}}' \
+SPOOLTAIL_SERVICE_FAIRNESS=1 ./target/release/spooltail
+```
+
+Supply `owner_service` on the first publish for a task. Spooltail saves that owner across topics, including on a single-partition broker. Tasks already stored without an owner remain in the default lane. Quotas use the stored owner and apply across its topics and work groups. The publish hint assumes trusted producers.
+
+- `max_in_flight` caps the service's unexpired work leases. A claim skips a service at its limit and can still serve other eligible work. Acknowledgement, retry, completion, and expiry release capacity.
+- `max_pending_publishes` caps the service's concurrent append requests waiting for or using the journal. Excess requests receive HTTP 429 or gRPC `RESOURCE_EXHAUSTED`. Exact retries of committed events, cancellation requests, and lease completion can still proceed.
+- Omit a limit for unlimited capacity of that kind. Fairness is opt-in. Each claim scope, defined by topic, work group, and optional partition, serves the least recently served eligible owner with the oldest ready offset within that owner's lane. Unowned tasks share one lane. Turns survive restart. With fairness off, claims use offset order among eligible work.
+
+### Inspect work and stream lag
+
+Use the HTTP routes above or the gRPC `GetWorkStats` and `GetStreamLag` operations. Work stats count ready, leased, and delayed records in `queue_depth` and report dead letters separately. The ready count reflects visibility deadlines before service quota checks. `oldest_ready_age_ms` measures the time since the earliest ready offset was accepted. It is null for an empty ready queue or a legacy record without an acceptance time.
+
+`expired_leases` counts leases that have expired and can be reclaimed. `expired_lease_redeliveries_total` counts successful claims of expired leases since startup. `retries_total` counts accepted explicit retry settlements, and `retries_per_minute` counts them over the last 60 one-second buckets. Those counters reset on restart and are attributed to the service and work partition at the time of the operation.
+
+Stream lag counts retained, uncommitted records after the group's checkpoint, even when offsets are sparse. `retention_gap` indicates that retention removed unprocessed records. A lag query never creates or advances a checkpoint. Match the consumer's partition scope to inspect its lag.
+
+### Manage stream consumer groups
+
+Use `JoinStreamGroup` over gRPC or the HTTP members route to enable managed assignment for one topic and stream group. Use a unique `member_id` per running consumer instance and reuse it when retrying a join. A repeat join for a live member returns its membership. Heartbeats renew its lease and return the full current assignment. Send heartbeats regularly during processing, for example every third of the lease duration. An expired member must join again to obtain a new membership.
+
+Spooltail balances all registered journal partitions across live members. Joins, leaves, and heartbeats redistribute partitions after membership changes. A surviving member picks up an expired member's partitions on heartbeat. Newly registered partitions are assigned on the next join or heartbeat. Checkpoints remain attached to partitions and the broker preserves assignments that can stay in place. Memberships and their deadlines survive broker restart.
+
+For HTTP `next` and `commit`, pass `partition`, `member_epoch`, and `assignment_epoch` as query parameters. For gRPC `Next`, `Commit`, `NextBatch`, and `CommitBatch`, pass the partition and `ownership`. Keep the token from the original fetch when committing. Revoked, expired, or missing ownership is rejected with HTTP 409 or gRPC `FAILED_PRECONDITION`. Stop processing a partition when it leaves your assignment or its token is rejected. Delivery remains at least once, so downstream effects still need idempotency.
+
+Joining turns that group into a managed partitioned group and retains its saved progress. Existing partition checkpoints take precedence. An existing unscoped checkpoint becomes the starting point for every partition when switching from unscoped mode. Stop manual readers before the switch, and use a broker version that supports managed groups on that volume afterward.
+
 ### Use a SQLite index per partition
 
 Set `SPOOLTAIL_INDEX_MODE=partitioned` on startup to give each partition its own SQLite index. The setting is saved on the volume. An existing volume retains its offsets, tasks, leases, checkpoints, and journal files. Keep using a partition-aware binary with that volume. Fresh volumes use the shared index by default, or you can select it explicitly with `SPOOLTAIL_INDEX_MODE=shared`.
@@ -253,7 +293,21 @@ Suppose a worker claims task `T7` from `inference.tasks` in group `workers` and 
 }
 ```
 
-Keep the producer’s `task_id` for the life of the task. Choose the terminal `event_id` once and reuse the entire request if the response is lost. The claim’s `generation` identifies the worker’s lease attempt. An exact retry returns the same status offset, even after restart or lease expiry. A stale claim, a different task, or a conflicting use of the same event ID returns HTTP 409. The terminal status can be `completed`, `failed`, or `cancelled`. Each settles the claim and wakes readers of the status topic. Broker 0.0.6 adds `cancelled` using the existing `Complete` RPC and JSON event format. The SDK service owns cancellation requests and stores any cancellation intent separately. The broker commits only the terminal event submitted by the active lease. External effects performed by a worker still need their own idempotency guarantees.
+Keep the producer’s `task_id` for the life of the task. Choose the terminal `event_id` once and reuse the entire request if the response is lost. The claim’s `generation` identifies the worker’s lease attempt. An exact retry returns the same status offset, even after restart or lease expiry. A stale claim, a different task, or a conflicting use of the same event ID returns HTTP 409. The terminal status can be `completed`, `failed`, or `cancelled`. Each settles the claim and wakes readers of the status topic. The broker commits the terminal event submitted by the active lease. External effects performed by a worker still need their own idempotency guarantees.
+
+### Request task cancellation
+
+Use `RequestCancellation` or the HTTP cancel route with the service's work, status, and cancellation topics. Use a distinct cancellation topic per service and retain its records while work can still run or be retried. The broker checks for retained work and a terminal result under the same write lock it uses to accept the intent. It saves an event with the task ID and `event_id: "cancel"`, the format Relayna workers already read. Unknown work returns HTTP 404 or gRPC `NOT_FOUND`. A first request after a retained terminal result returns HTTP 409 or `FAILED_PRECONDITION`. While the work is retained, retrying an accepted intent returns the original offset even if the worker has since finished.
+
+Cancellation is cooperative. A worker checks the cancellation topic before starting work and while the handler runs. When cancellation wins, the worker cleans up and calls `Complete` with `status: "cancelled"`. A worker may still finish normally after the broker accepts an intent. Read the status topic for the final outcome.
+
+### Inspect and redrive dead letters
+
+After a worker settles a lease as `dead-letter`, operators can use `ListDeadLetters`, `GetDeadLetter`, and `RedriveDeadLetter` over gRPC or the equivalent HTTP routes. The list returns `offset`, `task_id`, `event_id`, `generation`, and the task's current work partition. It reads index metadata and returns up to 32 entries by default, with a limit of 1 to 64. Pass the last offset as `after` to continue in ascending order. Each page reflects the group's current state. Restart the scan to find work dead-lettered at an earlier offset while paging.
+
+Use the detail route to inspect the original payload. Redrive puts the original record back in the same group's ready queue at its original offset, using the task's current partition. The next claim gets a new lease generation. Existing status history, stream offsets, and other work groups keep their own state.
+
+Keep the offset and dead-letter generation from the inspection response for retries. The requeue and its receipt commit together. Repeating a successful request after restart or after the record is dead-lettered again returns success without requeueing the newer generation. Other unmatched generations return HTTP 409 or gRPC `FAILED_PRECONDITION`.
 
 ## Verify
 

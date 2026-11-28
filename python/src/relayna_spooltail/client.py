@@ -45,12 +45,27 @@ class SubscriptionError(SpooltailError):
 
 
 @dataclass(frozen=True, slots=True)
+class StreamAssignment:
+    partition: int
+    member_epoch: int
+    assignment_epoch: int
+
+
+@dataclass(frozen=True, slots=True)
+class StreamMembership:
+    member_epoch: int
+    lease_until_ms: int
+    assignments: tuple[StreamAssignment, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class StreamBatch:
     topic: str
     group: str
     after: int
     records: tuple[Record, ...]
     partition: int | None = None
+    assignment: StreamAssignment | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +82,22 @@ class Lease:
     record: Record
     generation: int
     lease_until_ms: int
+    partition: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DeadLetterSummary:
+    offset: int
+    task_id: str
+    event_id: str
+    generation: int
+    partition: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DeadLetter:
+    record: Record
+    generation: int
     partition: int = 0
 
 
@@ -97,6 +128,28 @@ class BrokerStats:
     packing_space_pauses: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class WorkStats:
+    queue_depth: int
+    ready: int
+    leased: int
+    delayed: int
+    dead_lettered: int
+    expired_leases: int
+    oldest_ready_age_ms: int | None
+    expired_lease_redeliveries_total: int
+    retries_total: int
+    retries_per_minute: int
+
+
+@dataclass(frozen=True, slots=True)
+class StreamLag:
+    checkpoint: int
+    latest_offset: int | None
+    lag: int
+    retention_gap: bool
+
+
 def _publish(
     topic: str, event: Mapping[str, Any], *, owner_service: str | None = None
 ) -> wire.Publish:
@@ -122,6 +175,29 @@ def _task(topic: str, task_id: str, after: str | None = None) -> wire.Task:
     if after is not None:
         request.after = after
     return request
+
+
+def _membership(response: wire.StreamMembership) -> StreamMembership:
+    return StreamMembership(
+        response.member_epoch,
+        response.lease_until_ms,
+        tuple(
+            StreamAssignment(entry.partition, response.member_epoch, entry.assignment_epoch)
+            for entry in response.assignments
+        ),
+    )
+
+
+def _stream_scope(
+    partition: int | None, assignment: StreamAssignment | None
+) -> tuple[int | None, wire.StreamOwnership | None]:
+    if assignment is None:
+        return partition, None
+    if partition is not None and partition != assignment.partition:
+        raise ValueError("partition does not match the stream assignment")
+    return assignment.partition, wire.StreamOwnership(
+        member_epoch=assignment.member_epoch, assignment_epoch=assignment.assignment_epoch
+    )
 
 
 @contextmanager
@@ -326,6 +402,89 @@ class SpooltailClient:
         with _translate_conflict("lease expired, settled or superseded"):
             await self._stub.Settle(request, timeout=self._timeout)
 
+    async def work_stats(
+        self, topic: str, group: str, *, partition: int | None = None,
+        owner_service: str | None = None,
+    ) -> WorkStats:
+        """Inspect depth, queue age, and retry activity for a work group."""
+        stats = await self._stub.GetWorkStats(
+            wire.WorkStatsRequest(
+                topic=topic, group=group, partition=partition, owner_service=owner_service
+            ),
+            timeout=self._timeout,
+        )
+        return WorkStats(
+            queue_depth=stats.queue_depth,
+            ready=stats.ready,
+            leased=stats.leased,
+            delayed=stats.delayed,
+            dead_lettered=stats.dead_lettered,
+            expired_leases=stats.expired_leases,
+            oldest_ready_age_ms=(
+                stats.oldest_ready_age_ms if stats.HasField("oldest_ready_age_ms") else None
+            ),
+            expired_lease_redeliveries_total=stats.expired_lease_redeliveries_total,
+            retries_total=stats.retries_total,
+            retries_per_minute=stats.retries_per_minute,
+        )
+
+    async def stream_lag(
+        self, topic: str, group: str, *, partition: int | None = None
+    ) -> StreamLag:
+        """Count retained records behind a stream group's checkpoint."""
+        with _translate_conflict():
+            lag = await self._stub.GetStreamLag(
+                wire.StreamGroup(topic=topic, group=group, partition=partition),
+                timeout=self._timeout,
+            )
+        return StreamLag(
+            checkpoint=lag.checkpoint,
+            latest_offset=lag.latest_offset if lag.HasField("latest_offset") else None,
+            lag=lag.lag,
+            retention_gap=lag.retention_gap,
+        )
+
+    async def list_dead_letters(
+        self,
+        topic: str,
+        group: str,
+        *,
+        after: int | None = None,
+        limit: int = 32,
+    ) -> list[DeadLetterSummary]:
+        """List currently dead-lettered work after the exclusive offset."""
+        page = await self._stub.ListDeadLetters(
+            wire.DeadLetterListRequest(topic=topic, group=group, after=after, limit=limit),
+            timeout=self._timeout,
+        )
+        return [
+            DeadLetterSummary(e.offset, e.task_id, e.event_id, e.generation, e.partition)
+            for e in page.entries
+        ]
+
+    async def get_dead_letter(self, topic: str, group: str, offset: int) -> DeadLetter | None:
+        """Read the original payload if it is still dead-lettered in this group."""
+        try:
+            entry = await self._stub.GetDeadLetter(
+                wire.DeadLetterRequest(topic=topic, group=group, offset=offset),
+                timeout=self._timeout,
+            )
+        except grpc.aio.AioRpcError as error:
+            if error.code() == grpc.StatusCode.NOT_FOUND:
+                return None
+            raise
+        return DeadLetter(_record(entry.record), entry.generation, entry.partition)
+
+    async def redrive_dead_letter(
+        self, topic: str, group: str, offset: int, generation: int
+    ) -> None:
+        """Requeue this dead-letter generation in the same work group."""
+        request = wire.DeadLetterRedriveRequest(
+            topic=topic, group=group, offset=offset, generation=generation
+        )
+        with _translate_conflict():
+            await self._stub.RedriveDeadLetter(request, timeout=self._timeout)
+
     async def complete(
         self, lease: Lease, status_topic: str, event: Mapping[str, Any]
     ) -> int:
@@ -341,40 +500,85 @@ class SpooltailClient:
             response = await self._stub.Complete(request, timeout=self._timeout)
         return response.offset
 
+    async def request_cancellation(
+        self, task_topic: str, task_id: str, *, status_topic: str, cancel_topic: str
+    ) -> int:
+        """Record cooperative cancellation intent and return its durable offset."""
+        request = wire.CancellationRequest(
+            task_topic=task_topic,
+            task_id=task_id,
+            status_topic=status_topic,
+            cancel_topic=cancel_topic,
+        )
+        with _translate_conflict():
+            response = await self._stub.RequestCancellation(
+                request, timeout=self._timeout
+            )
+        return response.offset
+
+    async def join_stream_group(
+        self, topic: str, group: str, member_id: str, *, lease_ms: int = 30_000
+    ) -> StreamMembership:
+        """Join a managed group using a unique ID for this consumer instance."""
+        request = wire.StreamJoinRequest(topic=topic, group=group, member_id=member_id, lease_ms=lease_ms)
+        with _translate_conflict():
+            response = await self._stub.JoinStreamGroup(request, timeout=self._timeout)
+        return _membership(response)
+
+    async def heartbeat_stream_group(
+        self, topic: str, group: str, member_epoch: int
+    ) -> StreamMembership:
+        """Renew a live membership and fetch the complete current assignment."""
+        request = wire.StreamMemberRequest(topic=topic, group=group, member_epoch=member_epoch)
+        with _translate_conflict():
+            response = await self._stub.HeartbeatStreamGroup(request, timeout=self._timeout)
+        return _membership(response)
+
+    async def leave_stream_group(self, topic: str, group: str, member_epoch: int) -> None:
+        """Release this membership and rebalance its partitions."""
+        request = wire.StreamMemberRequest(topic=topic, group=group, member_epoch=member_epoch)
+        await self._stub.LeaveStreamGroup(request, timeout=self._timeout)
+
     async def next(
-        self, topic: str, group: str, *, partition: int | None = None
+        self, topic: str, group: str, *, partition: int | None = None,
+        assignment: StreamAssignment | None = None,
     ) -> Record | None:
         """Read the next record after a stream group's durable checkpoint."""
+        partition, ownership = _stream_scope(partition, assignment)
         with _translate_conflict():
             response = await self._stub.Next(
-                wire.StreamGroup(topic=topic, group=group, partition=partition),
+                wire.StreamGroup(topic=topic, group=group, partition=partition, ownership=ownership),
                 timeout=self._timeout,
             )
         return _record(response.record) if response.HasField("record") else None
 
     async def commit(
-        self, topic: str, group: str, offset: int, *, partition: int | None = None
+        self, topic: str, group: str, offset: int, *, partition: int | None = None,
+        assignment: StreamAssignment | None = None,
     ) -> None:
         """Advance a stream group's checkpoint through its next record."""
+        partition, ownership = _stream_scope(partition, assignment)
         request = wire.CommitRequest(
-            topic=topic, group=group, offset=offset, partition=partition
+            topic=topic, group=group, offset=offset, partition=partition, ownership=ownership
         )
         with _translate_conflict():
             await self._stub.Commit(request, timeout=self._timeout)
 
     async def next_batch(
-        self, topic: str, group: str, *, limit: int = 32, partition: int | None = None
+        self, topic: str, group: str, *, limit: int = 32, partition: int | None = None,
+        assignment: StreamAssignment | None = None,
     ) -> StreamBatch:
         """Fetch up to 64 records after a group's durable checkpoint."""
         if not 1 <= limit <= 64:
             raise ValueError("limit must be between 1 and 64")
+        partition, ownership = _stream_scope(partition, assignment)
         request = wire.StreamBatchRequest(
-            topic=topic, group=group, partition=partition, limit=limit
+            topic=topic, group=group, partition=partition, limit=limit, ownership=ownership
         )
         with _translate_conflict():
             response = await self._stub.NextBatch(request, timeout=self._timeout)
         return StreamBatch(
-            topic, group, response.after, tuple(map(_record, response.records)), partition
+            topic, group, response.after, tuple(map(_record, response.records)), partition, assignment
         )
 
     async def commit_batch(self, batch: StreamBatch, *, count: int | None = None) -> None:
@@ -383,10 +587,12 @@ class SpooltailClient:
             count = len(batch.records)
         if not 1 <= count <= len(batch.records):
             raise ValueError("count must select a nonempty prefix of the batch")
+        partition, ownership = _stream_scope(batch.partition, batch.assignment)
         request = wire.StreamBatchCommit(
             topic=batch.topic,
             group=batch.group,
-            partition=batch.partition,
+            partition=partition,
+            ownership=ownership,
             after=batch.after,
             through=batch.records[count - 1].offset,
             count=count,
